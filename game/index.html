@@ -135,10 +135,11 @@
   const bgWidth = texture.source[0].width;
   const bgHeight = texture.source[0].height;
         
-  // Crop to remove the green band entirely and keep road + curb only
-  // Crop: keep only the visual playfield (remove top green band and bottom credit bar)
-  const CROP_TOP_PCT = 0.72;     // start around where the playfield begins
-  const CROP_BOTTOM_PCT = 0.985; // stop before the purple credit strip
+  // Crop to remove the top green band and bottom credit bar, while keeping a TALLER
+  // slice of the scene so the playfield can fill the 80% canvas height.
+  // Tweaked based on your screenshot: include more of the buildings/grass.
+  const CROP_TOP_PCT = 0.865;    // move crop down to remove most sky
+  const CROP_BOTTOM_PCT = 0.982; // stop above the purple credit strip
   const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
   const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
   this.bg.setCrop(0, cropY, bgWidth, cropH);
@@ -240,6 +241,12 @@
         
   console.log('Baden City Ransom scene ready. Background cropped to road.');
         
+        // Ensure background continues to fit if the canvas size changes
+        this.scale.on('resize', (gameSize) => {
+          const w = gameSize.width, h = gameSize.height;
+          this.bg.setDisplaySize(w, h);
+        });
+
         // Play authentic RCR background music
         if (this.sound.get('street_music')) {
           this.sound.play('street_music', { loop: true, volume: 0.3 });
@@ -310,11 +317,7 @@
         this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, this.scale.width - 50);
         this.alex.y = Phaser.Math.Clamp(this.alex.y, ymin, ymax);
         
-        // Update sizing if the canvas resizes (RESIZE mode)
-        this.scale.on('resize', (gameSize)=>{
-          const w = gameSize.width, h = gameSize.height;
-          this.bg.setDisplaySize(w, h);
-        });
+  // ... (resize listener moved to create())
         
         // Simple enemy AI
         this.enemies.forEach(enemy => {
