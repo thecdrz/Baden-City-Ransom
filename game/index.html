@@ -136,15 +136,18 @@
   const bgHeight = texture.source[0].height;
         
   // Crop to remove the green band entirely and keep road + curb only
-  const ROAD_TOP = 0.60;   // portion from top where road region begins
-  const ROAD_HEIGHT = 0.40; // include down to the bottom
-  this.bg.setCrop(0, Math.floor(bgHeight * ROAD_TOP), bgWidth, Math.floor(bgHeight * ROAD_HEIGHT));
+  // Crop: keep only the visual playfield (remove top green band and bottom credit bar)
+  const CROP_TOP_PCT = 0.72;     // start around where the playfield begins
+  const CROP_BOTTOM_PCT = 0.985; // stop before the purple credit strip
+  const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
+  const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
+  this.bg.setCrop(0, cropY, bgWidth, cropH);
   // Size background to current canvas size
   const cw = this.scale.width;
   const ch = this.scale.height;
   this.bg.setDisplaySize(cw, ch);
         
-        console.log(`Background: ${bgWidth}x${bgHeight}, showing middle third`);
+  console.log(`Background: ${bgWidth}x${bgHeight}, cropY=${cropY}, cropH=${cropH}`);
         
   // Create Alex player positioned near ground
   this.alex = this.add.sprite(200, ch - 160, 'alex', 0);
