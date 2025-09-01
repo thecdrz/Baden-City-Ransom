@@ -5,28 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Baden City Ransom</title>
   <style>
-    :root { --bg:#0a0f1a; --panel:#0f1624; --border:#1d2940; --fg:#e7f1ff; --muted:#9aa3ad; --accent:#ffd166; --accent2:#7cfc9a; }
+    :root {
+      --bg:#f5f6fa; --bg-grad:#f0f4fb; --panel:#ffffff; --border:#e5e7eb;
+      --fg:#1f2937; --muted:#6b7280; --accent:#2563eb; --accent2:#10b981;
+    }
     html, body { height: 100%; }
-    body { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; background: radial-gradient(1200px 600px at 50% -80px, #12203a 0%, var(--bg) 60%); color: var(--fg); }
+    body {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      background: radial-gradient(1000px 500px at 50% -120px, var(--bg-grad) 0%, var(--bg) 60%);
+      color: var(--fg);
+    }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    header { padding: 48px 20px 16px; text-align: center; }
-    h1 { margin: 0; font-size: 34px; letter-spacing: 0.5px; }
+    header { padding: 44px 20px 14px; text-align: center; }
+    h1 { margin: 0; font-size: 34px; letter-spacing: 0.4px; color: #111827; }
     p { margin: 6px 0; color: var(--muted); }
-    main { max-width: 1100px; margin: 0 auto; padding: 10px 20px 60px; }
-    .hero { display:grid; grid-template-columns: 1.2fr 1fr; gap: 28px; align-items:center; }
-    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
-    .hero .art { aspect-ratio: 4/3; display:grid; place-items:center; background: #0c1220; }
-    .hero .art img { max-width:100%; max-height:100%; image-rendering: pixelated; }
-    .section { margin-top: 26px; }
+    main { max-width: 1100px; margin: 0 auto; padding: 10px 20px 56px; }
+    .hero { display:grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items:center; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: visible; box-shadow: 0 8px 24px rgba(17,24,39,0.08); }
+    .hero .art { display:flex; align-items:center; justify-content:center; background: #faf7ef; padding: 10px; }
+    .hero .art img { width: 100%; height: auto; max-height: 60vh; image-rendering: pixelated; }
+    .section { margin-top: 18px; }
     .pad { padding: 16px 18px; }
-    .ctaRow { display:flex; gap:12px; flex-wrap:wrap; margin-top: 12px; }
-    .btn { display:inline-block; padding:12px 18px; background:#152037; color:var(--fg); border-radius:10px; border:1px solid var(--border); font-weight:600; }
-    .btn:hover { background:#1b2a48; }
-    .btn.accent { background: #2a2a10; color: #000; border-color:#3a3a12; box-shadow: inset 0 0 0 1px #ffe08a; }
-    .btn.accent:hover { background:#3a3a14; }
-    .kbd { display:inline-block; padding:0 6px; border:1px solid #3a465a; border-bottom-width:2px; border-radius:4px; background:#0f1420; color:#cfe0ff; font-size:12px; }
+    .ctaRow { display:flex; gap:12px; flex-wrap:wrap; margin-top: 14px; }
+    .btn { display:inline-block; padding:12px 18px; background:#f8fafc; color:var(--fg); border-radius:10px; border:1px solid var(--border); font-weight:600; }
+    .btn:hover { background:#eef2f7; }
+    .btn.accent { background: var(--accent); color: #fff; border-color:#1d4ed8; box-shadow: 0 2px 0 rgba(0,0,0,0.06); }
+    .btn.accent:hover { background:#1e4fd8; }
+    .kbd { display:inline-block; padding:0 6px; border:1px solid #cbd5e1; border-bottom-width:2px; border-radius:4px; background:#f1f5f9; color:#111827; font-size:12px; }
     footer { text-align:center; color:var(--muted); padding: 26px 0 36px; }
+  .subtitle { margin:0 0 6px 0; font-size:22px; }
     @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -41,7 +50,7 @@
         <img alt="Baden City Ransom Title" src="./assets/BCR-StartScreen.png" />
       </div>
       <div class="panel pad">
-        <h2 style="margin:0 0 6px 0; font-size:22px;">Retro Beat ’Em Up, Right in Your Browser</h2>
+        <h2 class="subtitle">Retro Beat ’Em Up, Right in Your Browser</h2>
         <p>Walk the streets, punch and kick punks, and enjoy authentic NES vibes with crisp pixels and chiptune flair.</p>
         <div class="section">
           <strong>Controls</strong>
