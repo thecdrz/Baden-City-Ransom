@@ -554,8 +554,7 @@
           if (this.isAttacking) return;
           this.isAttacking = true;
           this.alex.play(kind === 'kick' ? 'alex-kick' : 'alex-punch');
-          // Play a feedback sound
-          try { this.sound.play('punch_sound', { volume: 0.5 }); } catch(e) {}
+          // (temp) No SFX to avoid overlapping music; add a short SFX file later
           // Build a simple hitbox in front of Alex once per press
           const reach = (kind === 'kick') ? 26 : 22;
           const w = (kind === 'kick') ? 22 : 18;
