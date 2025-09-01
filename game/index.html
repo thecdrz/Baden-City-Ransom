@@ -403,6 +403,7 @@
   const alexImg = this.textures.get('alex').source?.[0];
   const sheetW = alexImg?.width || 0;
   const sheetH = alexImg?.height || 0;
+  // Use the original on-sheet layout math that matched earlier working mappings
   const cols = sheetW ? Math.max(1, Math.floor((sheetW - SHEET.margin + SHEET.spacing) / (SHEET.fw + SHEET.spacing))) : 8;
   const rows = sheetH ? Math.max(1, Math.floor((sheetH - SHEET.margin + SHEET.spacing) / (SHEET.fh + SHEET.spacing))) : 6;
   const idx = (r,c) => (Math.max(0, Math.min(rows-1, r)) * cols) + Math.max(0, Math.min(cols-1, c));
@@ -422,14 +423,16 @@
     return out;
   };
   const map = parseMap() || {
-    // Defaults tuned so kick no longer hits the jump row.
+    // Preserve previously working punch; adjust kick/jump to different rows by default
     walk:  { row: 0, from: 0, to: Math.min(1, cols-1) },
     punch: { row: 1, from: 0, to: Math.min(2, cols-1) },
-    // Use the same action row for kick, offset columns for variety.
-    kick:  { row: 1, from: Math.min(1, cols-1), to: Math.min(3, cols-1) },
-    // Keep jump minimal/stable; we’ll show first frame only below.
-    jump:  { row: 2, from: 0, to: Math.min(1, cols-1) }
+    kick:  { row: 2, from: 0, to: Math.min(2, cols-1) },
+    jump:  { row: 3, from: 0, to: 0 }
   };
+  // Avoid reusing the same action row between punch/kick/jump when possible
+  const clampRow = (r) => Math.max(0, Math.min(rows-1, r));
+  if (map.kick.row === map.punch.row) map.kick.row = clampRow(map.punch.row + 1);
+  if (map.jump.row === map.punch.row || map.jump.row === map.kick.row) map.jump.row = clampRow(Math.max(map.punch.row, map.kick.row) + 1);
   const range = (k) => {
     const m = map[k]; if (!m) return [{ key: 'alex', frame: 0 }];
     const frames = [];
@@ -438,8 +441,8 @@
   };
   this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 1, repeat: -1 });
   this.anims.create({ key: 'alex-walk', frames: range('walk'), frameRate: 8, repeat: -1 });
-  this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 12, repeat: 0 });
-  this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 12, repeat: 0 });
+  this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 10, repeat: 0 });
+  this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 10, repeat: 0 });
   // Jump: a single stable airborne frame; no yoyo to avoid odd flicker
   this.anims.create({ key: 'alex-jump',  frames: [{ key: 'alex', frame: idx(map.jump.row, map.jump.from) }], frameRate: 1, repeat: -1 });
         
@@ -613,7 +616,7 @@
         }
         
         // Combat
-        const tryAttack = (kind) => {
+  const tryAttack = (kind) => {
           if (this.isAttacking) return;
           this.isAttacking = true;
           this.alex.play(kind === 'kick' ? 'alex-kick' : 'alex-punch');
@@ -651,7 +654,9 @@
           this.enemies.forEach(e => applyHit(e, dmg, 5));
           if (this.boss) applyHit(this.boss, dmg, 8);
 
-          this.alex.once('animationcomplete', () => { this.isAttacking = false; this.alex.setAngle(0); });
+          // Only clear attacking when the specific attack animation completes
+          const ev = `animationcomplete-${kind === 'kick' ? 'alex-kick' : 'alex-punch'}`;
+          this.alex.once(ev, () => { this.isAttacking = false; this.alex.setAngle(0); });
         };
 
         if (Phaser.Input.Keyboard.JustDown(this.keys.A)) { tryAttack('punch'); }
