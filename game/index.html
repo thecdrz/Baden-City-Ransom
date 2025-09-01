@@ -367,19 +367,8 @@
     this.alex.setScale(playerScale);
   // Camera follows the player for smooth scrolling
   this.cameras.main.startFollow(this.alex, true, 0.12, 0.12);
-        // If using Knight, normalize to ~32px pixel height so it matches NES scale
-        try {
-          if (haveKnight && this.textures.exists('kn_idle')) {
-            const fh = this.textures.get('kn_idle')?.frames?.[0]?.height || this.textures.get('kn_idle')?.frameTotal && this.textures.get('kn_idle').get(0)?.height || null;
-            const srcH = fh || this.textures.get('kn_idle').getSourceImage()?.height || 32;
-            const desiredPxH = 32;
-            this._playerScaleAdjust = desiredPxH / (srcH || 32);
-            const pxScale2 = this.bg.scaleX;
-            this.alex.setScale(pxScale2 * (this._playerScaleAdjust || 1.0));
-          } else {
-            this._playerScaleAdjust = 1.0;
-          }
-        } catch(e) { this._playerScaleAdjust = 1.0; }
+        // Normalize scale baseline
+        this._playerScaleAdjust = 1.0;
         this.alex.health = 100;
         this.alex.money = 26.50; // Match reference format
         
@@ -433,10 +422,13 @@
     return out;
   };
   const map = parseMap() || {
+    // Defaults tuned so kick no longer hits the jump row.
     walk:  { row: 0, from: 0, to: Math.min(1, cols-1) },
     punch: { row: 1, from: 0, to: Math.min(2, cols-1) },
-    kick:  { row: 2, from: 0, to: Math.min(2, cols-1) },
-    jump:  { row: 3, from: 0, to: Math.min(1, cols-1) }
+    // Use the same action row for kick, offset columns for variety.
+    kick:  { row: 1, from: Math.min(1, cols-1), to: Math.min(3, cols-1) },
+    // Keep jump minimal/stable; we’ll show first frame only below.
+    jump:  { row: 2, from: 0, to: Math.min(1, cols-1) }
   };
   const range = (k) => {
     const m = map[k]; if (!m) return [{ key: 'alex', frame: 0 }];
@@ -446,9 +438,10 @@
   };
   this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 1, repeat: -1 });
   this.anims.create({ key: 'alex-walk', frames: range('walk'), frameRate: 8, repeat: -1 });
-  this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 10, repeat: 0 });
-  this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 10, repeat: 0 });
-  this.anims.create({ key: 'alex-jump',  frames: range('jump'),  frameRate: 6,  yoyo: true, repeat: -1 });
+  this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 12, repeat: 0 });
+  this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 12, repeat: 0 });
+  // Jump: a single stable airborne frame; no yoyo to avoid odd flicker
+  this.anims.create({ key: 'alex-jump',  frames: [{ key: 'alex', frame: idx(map.jump.row, map.jump.from) }], frameRate: 1, repeat: -1 });
         
         // Create enemy animations for each type - simplified
     const enemyAnimTypes = ['enemy1', 'enemy2', 'enemy3'];
