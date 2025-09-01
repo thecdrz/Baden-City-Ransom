@@ -102,17 +102,17 @@
         });
         
         // Load enemies with matching dimensions
-        this.load.spritesheet('enemy1', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 1.png', {
+  this.load.spritesheet('enemy1', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies %26 Bosses - Gang Member - Type 1.png', {
           frameWidth: 16,
           frameHeight: 24
         });
         
-        this.load.spritesheet('enemy2', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 2.png', {
+  this.load.spritesheet('enemy2', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies %26 Bosses - Gang Member - Type 2.png', {
           frameWidth: 16,
           frameHeight: 24
         });
         
-        this.load.spritesheet('enemy3', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 3.png', {
+  this.load.spritesheet('enemy3', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies %26 Bosses - Gang Member - Type 3.png', {
           frameWidth: 16,
           frameHeight: 24
         });
@@ -168,7 +168,7 @@
         
   console.log(`Background: ${bgWidth}x${bgHeight}, cropY=${cropY}, cropH=${cropH}`);
         
-  // Player scale relative to background so pixels match; multiplied to taste
+  // Player scale relative to background so pixels match
   const pixelScale = this.bg.scaleX;
   const PLAYER_SCALE_MULT = 1.0; // match background pixel size exactly
   const playerScale = pixelScale * PLAYER_SCALE_MULT;
@@ -258,9 +258,13 @@
         this.cursors = this.input.keyboard.createCursorKeys();
         this.keys = this.input.keyboard.addKeys('A,S,D,SPACE');
         
-        // Game state
-        this.isMoving = false;
-        this.isAttacking = false;
+  // Game state
+  this.isMoving = false;
+  this.isAttacking = false;
+  // Simple jump physics
+  this.alex.vy = 0;
+  this.GRAVITY = 0.55;
+  this.JUMP_VELOCITY = -9.5;
         
   console.log('Baden City Ransom scene ready. Background cropped to road.');
         
@@ -277,14 +281,22 @@
           // Recompute player scale to match pixel size and keep feet on ground
           const pixelScale = this.bg.scaleX;
           const playerScale = pixelScale * 1.0;
-          this.alex.setScale(playerScale); this.alex.y = h - 18;
-          this.ryan.setScale(playerScale); this.ryan.y = h - 18;
-          this.enemies.forEach(e=>{ e.setScale(playerScale); e.y = h - 18; });
+          const groundY = h - 18;
+          this.alex.setScale(playerScale);
+          // keep feet on ground while preserving vertical velocity if jumping
+          if (this.alex.y >= groundY) { this.alex.y = groundY; this.alex.vy = 0; }
+          this.ryan.setScale(playerScale); if (this.ryan.y > groundY) this.ryan.y = groundY;
+          this.enemies.forEach(e=>{ e.setScale(playerScale); if (e.y > groundY) e.y = groundY; });
         });
-
-        // Play authentic RCR background music
-        if (this.sound.get('street_music')) {
-          this.sound.play('street_music', { loop: true, volume: 0.3 });
+        // Play authentic street music for this outdoor level
+        this.sound.stopAll();
+        this.music = this.sound.add('street_music', { loop: true, volume: 0.35 });
+        const startMusic = () => { if (!this.music.isPlaying) this.music.play(); };
+        if (this.sound.locked) {
+          this.sound.once('unlocked', startMusic);
+          this.input.once('pointerdown', startMusic);
+        } else {
+          startMusic();
         }
         
         // Function to show messages in dialogue bar
@@ -312,13 +324,19 @@
           this._parallaxX -= 0.4;
         }
         
-        if (this.cursors.up.isDown) {
-          this.alex.y -= speed;
-          moving = true;
-        } else if (this.cursors.down.isDown) {
-          this.alex.y += speed;
-          moving = true;
+        if (this.cursors.up.isDown) { this.alex.y -= speed; moving = true; }
+        else if (this.cursors.down.isDown) { this.alex.y += speed; moving = true; }
+
+        // Jump with D if on ground
+        const groundY = this.scale.height - 18;
+        const onGround = this.alex.y >= groundY - 0.5;
+        if (Phaser.Input.Keyboard.JustDown(this.keys.D) && onGround) {
+          this.alex.vy = this.JUMP_VELOCITY;
         }
+        // Apply gravity
+        this.alex.y += this.alex.vy;
+        this.alex.vy += this.GRAVITY;
+        if (this.alex.y >= groundY) { this.alex.y = groundY; this.alex.vy = 0; }
         
         // Animation handling
         if (moving && !this.isAttacking) {
