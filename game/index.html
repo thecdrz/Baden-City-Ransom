@@ -121,6 +121,74 @@
       return;
     }
 
+    // Optional Title/Splash Scene
+    class TitleScene extends Phaser.Scene {
+      constructor(){ super({ key: 'TitleScene' }); }
+      preload(){
+        const url = (p) => encodeURI(p);
+        // Try URL param override first, else attempt a series of likely filenames
+        const params = new URLSearchParams(location.search);
+        const custom = params.get('titleImg');
+        const candidates = [
+          custom,
+          '../assets/misc/Baden City Ransom Start.png',
+          '../assets/misc/Baden City Ransom - Start.png',
+          '../assets/misc/Start Screen.png',
+          '../assets/misc/StartScreen.png',
+          '../assets/misc/Title.png',
+          '../assets/misc/Title Screen.png',
+          '../assets/misc/splash.png',
+          '../assets/Start Screen.png',
+          '../assets/StartScreen.png',
+          '../assets/title.png',
+          '../assets/splash.png',
+          '../assets/misc/BoxArt.png'
+        ].filter(Boolean);
+        // Load all candidates with unique keys; we’ll pick the first that exists
+        candidates.forEach((src, i) => this.load.image(`title_${i}`, url(src)));
+        // Keep quiet on missing ones
+        this.load.on('loaderror', () => {});
+      }
+      create(){
+        const { width:w, height:h } = this.scale.gameSize;
+        // pick first loaded texture
+        const pickKey = () => {
+          const list = this.textures.list;
+          for (let i=0;i<40;i++) {
+            const k = `title_${i}`;
+            if (this.textures.exists(k)) return k;
+          }
+          return null;
+        };
+        const chosen = pickKey();
+        const img = chosen ? this.add.image(w/2, h/2, chosen) : this.add.rectangle(w/2, h/2, w*0.9, h*0.6, 0x101020).setStrokeStyle(4, 0xffffff);
+        img.setOrigin(0.5,0.5);
+        const fit = () => {
+          const iw = img.width || 1, ih = img.height || 1;
+          const sx = w/iw, sy = h/ih;
+          const s = Math.min(sx, sy);
+          img.setScale(s);
+          img.setPosition(this.scale.width/2, this.scale.height/2);
+        };
+        fit();
+        this.scale.on('resize', () => fit());
+
+        // Game name overlay
+        this.add.text(w/2, h*0.12, 'Baden City Ransom', {
+          fontFamily:'monospace', fontSize:'32px', color:'#ffffff', stroke:'#000', strokeThickness:6
+        }).setOrigin(0.5,0).setDepth(10);
+
+        const txt = this.add.text(w/2, h*0.88, 'Press Enter or Click to Start', {
+          fontFamily:'monospace', fontSize:'24px', color:'#ffff00', stroke:'#000', strokeThickness:4
+        }).setOrigin(0.5,1).setDepth(10);
+
+        const start = () => this.scene.start('BadenCityRansomGame');
+        this.input.once('pointerdown', start);
+        this.input.keyboard.once('keydown-ENTER', start);
+        this.input.keyboard.once('keydown-SPACE', start);
+      }
+    }
+
     class BadenCityRansomGame extends Phaser.Scene {
       constructor() {
   super({ key: 'BadenCityRansomGame' });
@@ -423,16 +491,13 @@
     return out;
   };
   const map = parseMap() || {
-    // Preserve previously working punch; adjust kick/jump to different rows by default
+    // Defaults that are safe on the classic Alex sheet
     walk:  { row: 0, from: 0, to: Math.min(1, cols-1) },
     punch: { row: 1, from: 0, to: Math.min(2, cols-1) },
     kick:  { row: 2, from: 0, to: Math.min(2, cols-1) },
-    jump:  { row: 3, from: 0, to: 0 }
+    // Use a safe frame for jump to avoid invalid placeholders
+    jump:  { row: 0, from: 0, to: 0 }
   };
-  // Avoid reusing the same action row between punch/kick/jump when possible
-  const clampRow = (r) => Math.max(0, Math.min(rows-1, r));
-  if (map.kick.row === map.punch.row) map.kick.row = clampRow(map.punch.row + 1);
-  if (map.jump.row === map.punch.row || map.jump.row === map.kick.row) map.jump.row = clampRow(Math.max(map.punch.row, map.kick.row) + 1);
   const range = (k) => {
     const m = map[k]; if (!m) return [{ key: 'alex', frame: 0 }];
     const frames = [];
@@ -504,7 +569,8 @@
       `cw:${this.scale.width} ch:${this.scale.height}`,
       `bgKey:${useKey} bgScale:${this.bg.scaleX.toFixed(2)}`,
       `parallax:${Math.round(this._parallaxX)}`,
-      `alex:${Math.round(this.alex.x)},${Math.round(this.alex.y)}`
+      `alex:${Math.round(this.alex.x)},${Math.round(this.alex.y)}`,
+      `sheet ${cols}x${rows}  map w:${map.walk.row}:${map.walk.from}-${map.walk.to} p:${map.punch.row}:${map.punch.from}-${map.punch.to} k:${map.kick.row}:${map.kick.from}-${map.kick.to} j:${map.jump.row}:${map.jump.from}-${map.jump.to}`
     ].join('  ');
     dbg.setText(s);
   };
@@ -715,11 +781,11 @@
     // Game configuration with adjusted canvas for bigger UI bars
     const config = {
       type: Phaser.AUTO,
-  width: 800,
-  height: 480, // 80% of a 600 reference height
-  parent: 'canvasWrap',
-  backgroundColor: '#000000',
-  scene: BadenCityRansomGame,
+      width: 800,
+      height: 480, // 80% of a 600 reference height
+      parent: 'canvasWrap',
+      backgroundColor: '#000000',
+      scene: [TitleScene, BadenCityRansomGame],
       render: {
         pixelArt: true,
         antialias: false,
