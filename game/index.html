@@ -501,7 +501,8 @@
     // Defaults that are safe on the classic Alex sheet
     walk:  { row: 0, from: 0, to: Math.min(1, cols-1) },
     punch: { row: 1, from: 0, to: Math.min(2, cols-1) },
-    kick:  { row: 2, from: 0, to: Math.min(2, cols-1) },
+    // Move kick off the crouch row; try row 3 by default
+    kick:  { row: 3, from: 0, to: Math.min(2, cols-1) },
     // Use a safe frame for jump to avoid invalid placeholders
     jump:  { row: 0, from: 0, to: 0 }
   };
@@ -513,6 +514,8 @@
   };
   this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 1, repeat: -1 });
   this.anims.create({ key: 'alex-walk', frames: range('walk'), frameRate: 8, repeat: -1 });
+  // Run uses the same frames as walk but faster
+  this.anims.create({ key: 'alex-run', frames: range('walk'), frameRate: 14, repeat: -1 });
   this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 10, repeat: 0 });
   this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 10, repeat: 0 });
   // Jump: a single stable airborne frame; no yoyo to avoid odd flicker
@@ -556,6 +559,8 @@
   // Game state
   this.isMoving = false;
   this.isAttacking = false;
+  // Double-tap to run state
+  this.runState = { isRunning:false, dir:0, lastTap:{ left:0, right:0 }, threshold: 280 };
   // Lane movement + jump physics (jump height separate from lane Y)
   // Constrain to detected road band; fallback to constant if detection unavailable
   this.ROAD_TOP_PCT = 0.65;
@@ -576,7 +581,7 @@
       `cw:${this.scale.width} ch:${this.scale.height}`,
       `bgKey:${useKey} bgScale:${this.bg.scaleX.toFixed(2)}`,
       `parallax:${Math.round(this._parallaxX)}`,
-      `alex:${Math.round(this.alex.x)},${Math.round(this.alex.y)}`,
+      `alex:${Math.round(this.alex.x)},${Math.round(this.alex.y)} run:${this.runState?.isRunning?'Y':'N'}`,
       `sheet ${cols}x${rows}  map w:${map.walk.row}:${map.walk.from}-${map.walk.to} p:${map.punch.row}:${map.punch.from}-${map.punch.to} k:${map.kick.row}:${map.kick.from}-${map.kick.to} j:${map.jump.row}:${map.jump.from}-${map.jump.to}`
     ].join('  ');
     dbg.setText(s);
@@ -638,20 +643,38 @@
       }
       
       update(time) {
-        // Alex movement
+        // Alex movement with double-tap run
         let moving = false;
-        const speed = 2;
-        
-  if (!this.isAttacking && this.cursors.left.isDown) {
+        const now = time;
+        // detect taps
+        const tap = (side) => {
+          const last = this.runState.lastTap[side] || 0;
+          const dt = now - last;
+          this.runState.lastTap[side] = now;
+          if (dt > 0 && dt < this.runState.threshold) {
+            this.runState.isRunning = true;
+            this.runState.dir = (side==='left'?-1:1);
+          }
+        };
+        if (Phaser.Input.Keyboard.JustDown(this.cursors.left)) tap('left');
+        if (Phaser.Input.Keyboard.JustDown(this.cursors.right)) tap('right');
+
+        const baseSpeed = 2;
+        const speed = (this.runState.isRunning ? 3.8 : baseSpeed);
+
+        if (!this.isAttacking && this.cursors.left.isDown) {
           this.alex.x -= speed;
           this.alex.setFlipX(true);
           moving = true;
-          
-  } else if (!this.isAttacking && this.cursors.right.isDown) {
+          if (this.runState.isRunning && this.runState.dir !== -1) this.runState.isRunning = false;
+        } else if (!this.isAttacking && this.cursors.right.isDown) {
           this.alex.x += speed;
           this.alex.setFlipX(false);
           moving = true;
-          
+          if (this.runState.isRunning && this.runState.dir !== 1) this.runState.isRunning = false;
+        } else {
+          // No horizontal input: stop running
+          this.runState.isRunning = false;
         }
         
         // Lane up/down movement along the road
@@ -679,9 +702,8 @@
             this.alex.play('alex-jump');
           }
         } else if (moving && !this.isAttacking) {
-          if (this.alex.anims.currentAnim?.key !== 'alex-walk') {
-            this.alex.play('alex-walk');
-          }
+          const want = this.runState.isRunning ? 'alex-run' : 'alex-walk';
+          if (this.alex.anims.currentAnim?.key !== want) this.alex.play(want);
         } else if (!this.isAttacking) {
           if (this.alex.anims.currentAnim?.key !== 'alex-idle') {
             this.alex.play('alex-idle');
@@ -732,8 +754,8 @@
           this.alex.once(ev, () => { this.isAttacking = false; this.alex.setAngle(0); });
         };
 
-        if (Phaser.Input.Keyboard.JustDown(this.keys.A)) { tryAttack('punch'); }
-        if (Phaser.Input.Keyboard.JustDown(this.keys.S)) { tryAttack('kick'); }
+  if (Phaser.Input.Keyboard.JustDown(this.keys.A)) { this.runState.isRunning=false; tryAttack('punch'); }
+  if (Phaser.Input.Keyboard.JustDown(this.keys.S)) { this.runState.isRunning=false; tryAttack('kick'); }
         
     // Keep Alex inside world bounds
   const displayWNow = this._bgNaturalW * this.bg.scaleX;
