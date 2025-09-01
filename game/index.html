@@ -538,27 +538,26 @@
         // Create enemy gang members
   step('spawn enemies');
   this.enemies = [];
-        const enemyTypes = ['enemy1', 'enemy2', 'enemy3'];
-        const spawnEvery = 380; // world units between spawns
-        const totalSpawns = Math.min(24, Math.floor(displayW / spawnEvery));
-        for (let i = 0; i < totalSpawns; i++) {
-          const enemyType = enemyTypes[i % enemyTypes.length];
-          if (this.textures.exists(enemyType)) {
-            const ex = 500 + i * spawnEvery;
-            const enemy = this.add.sprite(ex, ch - 18, enemyType, 0).setOrigin(0.5, 1);
-            enemy.setScale(playerScale);
-            enemy.health = 30;
-            enemy.type = enemyType;
-            enemy.aiTimer = 0;
-            this.enemies.push(enemy);
-          }
+        // Focus on a single enemy for tight combat iteration
+        const enemyType = 'enemy1';
+        if (this.textures.exists(enemyType)) {
+          const ex = Math.max(420, Math.min(displayW - 160, 700));
+          const enemy = this.add.sprite(ex, ch - 18, enemyType, 0).setOrigin(0.5, 1);
+          enemy.setScale(playerScale);
+          enemy.health = 60;
+          enemy.type = enemyType;
+          enemy.aiTimer = 0;
+          enemy.speed = 0.9;
+          enemy.attackCooldown = 0; // ms
+          enemy.attackCadence = 900; // ms between attacks
+          enemy.attackReach = 24; // horizontal reach
+          enemy.attackWidth = 20;
+          enemy.attackHeight = 18;
+          this.enemies.push(enemy);
         }
-  // Create Boss (Moose)
-  step('spawn boss');
-  if (!this.textures.exists('boss')) console.warn('Missing boss texture; skipping boss');
-  const bossX = Math.max(800, displayW - 160);
-  this.boss = this.textures.exists('boss') ? this.add.sprite(bossX, ch - 18, 'boss', 0).setOrigin(0.5, 1) : null;
-  if (this.boss) { this.boss.setScale(playerScale); this.boss.health = 120; this.boss.type = 'boss'; this.boss.aiTimer = 0; }
+  // Skip boss for now (focus on 1v1)
+  step('skip boss');
+  this.boss = null;
         
         // Create Alex animations using heuristic row/column ranges with URL override support
   step('anims');
@@ -768,6 +767,8 @@
   this.GRAVITY = 0.28; // slightly slower fall for longer airtime
   this.JUMP_VELOCITY = -12.0; // slightly softer takeoff
   this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
+  // Player hurt / invulnerability window
+  this.playerInvulUntil = 0; // timestamp in ms
         
   console.log('Baden City Ransom scene ready. Background cropped to road.');
   // Lightweight on-screen debug overlay (updates on resize)
@@ -1027,43 +1028,54 @@
         
   // ... (resize listener moved to create())
         
-        // Simple enemy AI
+        // Single-enemy chase + attack AI
+        const hurtPlayer = (dmg, knock=8, dir=1) => {
+          const nowMs = time;
+          if (nowMs < this.playerInvulUntil) return; // i-frames
+          this.alex.health = Math.max(0, (this.alex.health||0) - dmg);
+          this.playerInvulUntil = nowMs + 600; // 600ms i-frames
+          this.alex.setTintFill(0xffff77);
+          this.time.delayedCall(100, () => this.alex.clearTint());
+          // knockback along X and tiny vertical wobble
+          this.alex.x += (dir<0?-1:1) * knock;
+          this.cameras.main.shake(90, 0.004);
+          this.synth.click(900, 0.04, 0.12);
+          if (this.alex.health === 0) {
+            this.showMessage('You were knocked out!');
+            try { this.scene.launch('PauseOverlay'); this.scene.pause(); } catch(_) {}
+          }
+        };
         this.enemies.forEach(enemy => {
-          if (time > enemy.aiTimer) {
-            // Move towards Alex occasionally
-            if (Math.random() < 0.3) {
-              if (enemy.x > this.alex.x) {
-                enemy.x -= 0.5;
-                enemy.setFlipX(true);
-              } else {
-                enemy.x += 0.5;
-                enemy.setFlipX(false);
+          if (!enemy || enemy._defeated) return;
+          // face the player and chase
+          const dx = this.alex.x - enemy.x;
+          const dy = (this.alexBaseY - enemy.y);
+          enemy.setFlipX(dx < 0);
+          const alignedY = Math.abs(dy) <= 12; // lane alignment
+          const distX = Math.abs(dx);
+          const reach = enemy.attackReach;
+          // move towards player until in range
+          if (distX > reach + 2 || !alignedY) {
+            enemy.x += Math.sign(dx) * enemy.speed;
+            // drift vertically to align lanes
+            if (!alignedY) enemy.y += Math.sign(this.alexBaseY - enemy.y) * 0.6;
+            if (enemy.anims.currentAnim?.key !== `${enemy.type}-walk`) enemy.play(`${enemy.type}-walk`);
+          } else {
+            if (enemy.anims.currentAnim?.key !== `${enemy.type}-idle`) enemy.play(`${enemy.type}-idle`);
+            // attempt attack if cooldown over
+            if (time >= (enemy.attackCooldown||0)) {
+              // attack hitbox in front of enemy
+              const w = enemy.attackWidth, h = enemy.attackHeight;
+              const ox = enemy.flipX ? -reach : reach;
+              const hitRect = new Phaser.Geom.Rectangle(enemy.x + ox - w/2, enemy.y - h - 6, w, h);
+              const pb = this.alex.getBounds();
+              if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
+                hurtPlayer(10, 10, enemy.flipX?-1:1);
               }
-              
-              if (enemy.anims.currentAnim?.key !== `${enemy.type}-walk`) {
-                enemy.play(`${enemy.type}-walk`);
-              }
-            } else {
-              if (enemy.anims.currentAnim?.key !== `${enemy.type}-idle`) {
-                enemy.play(`${enemy.type}-idle`);
-              }
+              enemy.attackCooldown = time + enemy.attackCadence;
             }
-            
-            enemy.aiTimer = time + 1000; // Update AI every second
           }
         });
-        // Boss AI – steady chase
-        if (this.boss && !this.boss._defeated && time > this.boss.aiTimer) {
-          const speed = 1.2;
-          if (Math.abs(this.boss.x - this.alex.x) > 10) {
-            if (this.boss.x > this.alex.x) { this.boss.x -= speed; this.boss.setFlipX(true); }
-            else { this.boss.x += speed; this.boss.setFlipX(false); }
-            if (this.boss.anims.currentAnim?.key !== 'boss-walk') this.boss.play('boss-walk');
-          } else {
-            if (this.boss.anims.currentAnim?.key !== 'boss-idle') this.boss.play('boss-idle');
-          }
-          this.boss.aiTimer = time + 200; // more responsive
-        }
         
         // Update HUD elements
         document.getElementById('health').innerHTML = this.alex.health;

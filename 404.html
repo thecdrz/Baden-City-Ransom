@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Not Found — Baden City Ransom</title>
+  <meta name="robots" content="noindex" />
+  <style>
+    html, body { height:100%; }
+    body { margin:0; display:grid; place-items:center; font-family: Consolas, Monaco, 'Courier New', monospace; background:#0b0d12; color:#e7f1ff; }
+    a { color:#ffd166; }
+    .wrap { text-align:center; padding:24px; }
+  </style>
+  <script>
+    // Attempt soft redirect back to the landing page for deep links
+    (function(){
+      var home = '/index.html';
+      // If site is under a custom domain at root, this is fine. If under a path, adjust accordingly.
+      setTimeout(function(){ location.replace(home); }, 800);
+    })();
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <h1>404 — Page Not Found</h1>
+    <p>Let's go back to the start.</p>
+    <p><a href="/">Return home</a></p>
+  </div>
+</body>
+</html>
