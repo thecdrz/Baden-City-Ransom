@@ -61,15 +61,19 @@
   /* Hidden on title screen; revealed on game start */
   display: none;
     }
+  .playerName { color: #ffff00; }
+  /* HUD helpers */
+  .hudRow { display: flex; justify-content: space-between; width: 100%; }
+  .ml20 { margin-left: 20px; }
   </style>
 </head>
 <body>
   <!-- Top HUD Bar - Player Stats -->
   <div id="hud">
-    <div style="display: flex; justify-content: space-between; width: 100%;">
+    <div class="hudRow">
       <div>
-        <span style="color: #ffff00;">ALEX</span>
-        <span style="margin-left: 20px;">Health: <span id="health">100</span></span>
+  <span class="playerName">TheGuyWho</span>
+        <span class="ml20">Health: <span id="health">100</span></span>
       </div>
       <div>
         <span>Money: $<span id="money">26.50</span></span>
@@ -191,6 +195,7 @@
         const img = chosen ? this.add.image(w/2, h/2, chosen) : this.add.rectangle(w/2, h/2, w*0.9, h*0.6, 0x101020).setStrokeStyle(4, 0xffffff);
         img.setOrigin(0.5,0.5);
         let txt; // declared before fit() to avoid reference errors
+        let legal; // overlay credit tweak (NOT licensed by)
         const fit = () => {
           const TITLE_Y_BIAS = 0.09; // push image below center by ~9% of viewport height
           const cw = this.scale.width || this.scale.gameSize?.width || w;
@@ -202,6 +207,7 @@
           img.setScale(s);
           img.setPosition(cw/2, ch * (0.5 + TITLE_Y_BIAS));
           if (txt) txt.setPosition(cw/2, ch*0.975);
+          if (legal) legal.setPosition(cw/2, ch*0.905);
         };
         fit();
   this.scale.on('resize', () => fit());
@@ -213,6 +219,11 @@
         }).setOrigin(0.5,1).setDepth(10);
   // Slow blinking effect
   this.tweens.add({ targets: txt, alpha: 0.25, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+  // Overlay legal tweak: NOT licensed by (centered above the prompt)
+  legal = this.add.text(w/2, h*0.905, 'NOT LICENSED BY NINTENDO OF AMERICA INC.', {
+          fontFamily:'monospace', fontSize:'24px', color:'#ffffff', stroke:'#000', strokeThickness:4
+        }).setOrigin(0.5,1).setDepth(10);
 
         const start = () => {
           // Tiny confirm beep
@@ -559,6 +570,7 @@
   // Skip boss for now (focus on 1v1)
   step('skip boss');
   this.boss = null;
+  this.bossName = 'Miller';
         
         // Create Alex animations using heuristic row/column ranges with URL override support
   step('anims');
@@ -1005,7 +1017,7 @@
               if (target.health === 0 && !target._defeated) {
                 target._defeated = true; target.play(`${target.type||'boss'}-idle`);
                 this.tweens.add({ targets: target, alpha: 0, duration: 400, onComplete: () => target.destroy() });
-                if (target === this.boss) this.showMessage('Boss defeated!');
+                  if (target === this.boss) this.showMessage((this.bossName||'Boss') + ' defeated!');
               }
             }
           };
