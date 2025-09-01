@@ -212,6 +212,37 @@
           this.load.image('downtown', src);
         }
         
+        // Optional: GandalfHardcore layered character parts (compose into one sprite)
+        {
+          const base = '../assets/GandalfHardcore FREE Character Asset Pack/GandalfHardcore Character Asset Pack';
+          const parts = [
+            ['gh_skin', `${base}/Character skin colors/Male Skin3.png`],
+            ['gh_pants', `${base}/Male Clothing/Blue Pants.png`],
+            ['gh_shirt', `${base}/Male Clothing/Shirt v2.png`],
+            ['gh_shoes', `${base}/Male Clothing/Shoes.png`],
+            ['gh_hair', `${base}/Male Hair/Male Hair3.png`]
+          ];
+          parts.forEach(([key, rel]) => { const src = url(rel); logAdd('image', key, src); this.load.image(key, src); });
+        }
+
+        // Knight sprite set (multi-frame strips). Default to with_outline variant.
+        {
+          const base = '../assets/Knight 2D Pixel Art/Knight 2D Pixel Art/Sprites/with_outline';
+          const strips = [
+            ['kn_idle_src', `${base}/IDLE.png`],
+            ['kn_walk_src', `${base}/WALK.png`],
+            ['kn_run_src', `${base}/RUN.png`],
+            ['kn_jump_src', `${base}/JUMP.png`],
+            ['kn_attack1_src', `${base}/ATTACK 1.png`],
+            ['kn_attack2_src', `${base}/ATTACK 2.png`],
+            ['kn_attack3_src', `${base}/ATTACK 3.png`],
+            ['kn_hurt_src', `${base}/HURT.png`],
+            ['kn_death_src', `${base}/DEATH.png`],
+            ['kn_defend_src', `${base}/DEFEND.png`]
+          ];
+          strips.forEach(([key, rel]) => { const src = url(rel); logAdd('image', key, src); this.load.image(key, src); });
+        }
+
         // Load authentic River City Ransom music
   this.load.audio('bgm', url('../assets/audio/river_city_ransom_ost_mp3/River City Anthem.mp3'));
   this.load.audio('street_music', url('../assets/audio/river_city_ransom_ost_mp3/Street of No Escape.mp3'));
@@ -313,11 +344,54 @@
   const PLAYER_SCALE_MULT = 1.0; // match background pixel size exactly
   const playerScale = pixelScale * PLAYER_SCALE_MULT;
 
-  // Create Alex player positioned near road (feet-origin at y=ch-18 approx)
-  step('spawn alex');
-  if (!this.textures.exists('alex')) throw new Error('Missing texture: alex');
-  this.alex = this.add.sprite(200, ch - 18, 'alex', 0).setOrigin(0.5, 1);
+  // Create player (Knight). We'll slice the Knight strips into sprite sheets at runtime.
+  step('spawn player');
+  const sliceStrip = (dstKey, srcKey) => {
+    if (!this.textures.exists(srcKey)) return null;
+    const img = this.textures.get(srcKey).getSourceImage();
+    const w = this.textures.get(srcKey).source?.[0]?.width || img?.width || 0;
+    const h = this.textures.get(srcKey).source?.[0]?.height || img?.height || 0;
+    if (!img || !w || !h) return null;
+    const fw = h; // strips are horizontal; frames are square (w = n * h)
+    const frames = Math.max(1, Math.floor(w / fw));
+    if (this.textures.exists(dstKey)) this.textures.remove(dstKey);
+    this.textures.addSpriteSheet(dstKey, img, { frameWidth: fw, frameHeight: h, margin: 0, spacing: 0, endFrame: frames - 1 });
+    return { key: dstKey, frames };
+  };
+
+  const haveKnight = this.textures.exists('kn_idle_src');
+  const sheets = {};
+  if (haveKnight) {
+    sheets.idle = sliceStrip('kn_idle', 'kn_idle_src');
+    sheets.walk = sliceStrip('kn_walk', 'kn_walk_src');
+    sheets.run = sliceStrip('kn_run', 'kn_run_src');
+    sheets.jump = sliceStrip('kn_jump', 'kn_jump_src');
+    sheets.attack1 = sliceStrip('kn_attack1', 'kn_attack1_src');
+    sheets.attack2 = sliceStrip('kn_attack2', 'kn_attack2_src');
+    sheets.attack3 = sliceStrip('kn_attack3', 'kn_attack3_src');
+    sheets.hurt = sliceStrip('kn_hurt', 'kn_hurt_src');
+    sheets.death = sliceStrip('kn_death', 'kn_death_src');
+    sheets.defend = sliceStrip('kn_defend', 'kn_defend_src');
+  }
+
+  // Fallback texture selection
+  let PLAYER_TEX = haveKnight ? 'kn_idle' : (this.textures.exists('alex') ? 'alex' : null);
+  if (!PLAYER_TEX) throw new Error('Missing player texture (Knight or Alex)');
+  this.alex = this.add.sprite(200, ch - 18, PLAYER_TEX, 0).setOrigin(0.5, 1);
     this.alex.setScale(playerScale);
+        // If using Knight, normalize to ~32px pixel height so it matches NES scale
+        try {
+          if (haveKnight && this.textures.exists('kn_idle')) {
+            const fh = this.textures.get('kn_idle')?.frames?.[0]?.height || this.textures.get('kn_idle')?.frameTotal && this.textures.get('kn_idle').get(0)?.height || null;
+            const srcH = fh || this.textures.get('kn_idle').getSourceImage()?.height || 32;
+            const desiredPxH = 32;
+            this._playerScaleAdjust = desiredPxH / (srcH || 32);
+            const pxScale2 = this.bg.scaleX;
+            this.alex.setScale(pxScale2 * (this._playerScaleAdjust || 1.0));
+          } else {
+            this._playerScaleAdjust = 1.0;
+          }
+        } catch(e) { this._playerScaleAdjust = 1.0; }
         this.alex.health = 100;
         this.alex.money = 26.50; // Match reference format
         
@@ -344,48 +418,25 @@
         
         // Create Alex animations - basic walk/idle using first few frames
   step('anims');
-  this.anims.create({
-          key: 'alex-idle',
-          frames: [{ key: 'alex', frame: 0 }],
-          frameRate: 1,
-          repeat: 0
-        });
-        
-        this.anims.create({
-          key: 'alex-walk',
-          frames: [{ key: 'alex', frame: 0 }, { key: 'alex', frame: 1 }],
-          frameRate: 6, // a tad slower
-          repeat: -1
-        });
-        
-        this.anims.create({
-          key: 'alex-punch',
-          frames: [
-            { key: 'alex', frame: 0, duration: 60 },
-            { key: 'alex', frame: 1, duration: 140 },
-            { key: 'alex', frame: 0, duration: 80 }
-          ],
-          repeat: 0
-        });
-        
-        this.anims.create({
-          key: 'alex-kick',
-          frames: [
-            { key: 'alex', frame: 1, duration: 60 },
-            { key: 'alex', frame: 0, duration: 150 },
-            { key: 'alex', frame: 1, duration: 80 }
-          ],
-          repeat: 0
-        });
-        
-        // Airborne animation while jumping
-        this.anims.create({
-          key: 'alex-jump',
-          frames: this.anims.generateFrameNumbers('alex', { frames: [1,2] }),
-          frameRate: 6,
-          yoyo: true,
-          repeat: -1
-        });
+  if (haveKnight) {
+    const gf = (key, end) => this.anims.generateFrameNumbers(key, { start: 0, end: Math.max(0, (end ?? (this.textures.get(key).frameTotal - 1))) });
+    // Smooth idle / walk / run
+    if (sheets.idle) this.anims.create({ key: 'alex-idle', frames: gf('kn_idle', sheets.idle.frames - 1), frameRate: 6, repeat: -1 });
+    if (sheets.walk) this.anims.create({ key: 'alex-walk', frames: gf('kn_walk', sheets.walk.frames - 1), frameRate: 10, repeat: -1 });
+    if (sheets.run)  this.anims.create({ key: 'alex-run',  frames: gf('kn_run', sheets.run.frames - 1),  frameRate: 12, repeat: -1 });
+    // Jump
+    if (sheets.jump) this.anims.create({ key: 'alex-jump', frames: gf('kn_jump', sheets.jump.frames - 1), frameRate: 8, yoyo: true, repeat: -1 });
+    // Attacks map to punch/kick
+    if (sheets.attack1) this.anims.create({ key: 'alex-punch', frames: gf('kn_attack1', sheets.attack1.frames - 1), frameRate: 12, repeat: 0 });
+    if (sheets.attack2) this.anims.create({ key: 'alex-kick',  frames: gf('kn_attack2', sheets.attack2.frames - 1), frameRate: 12, repeat: 0 });
+  } else {
+    // Fallback to static frame if Knight missing
+    this.anims.create({ key: 'alex-idle', frames: [{ key: PLAYER_TEX, frame: 0 }], frameRate: 1, repeat: -1 });
+    this.anims.create({ key: 'alex-walk', frames: [{ key: PLAYER_TEX, frame: 0 }], frameRate: 1, repeat: -1 });
+    this.anims.create({ key: 'alex-jump', frames: [{ key: PLAYER_TEX, frame: 0 }], frameRate: 1, repeat: -1 });
+    this.anims.create({ key: 'alex-punch', frames: [{ key: PLAYER_TEX, frame: 0 }], frameRate: 1, repeat: 0 });
+    this.anims.create({ key: 'alex-kick',  frames: [{ key: PLAYER_TEX, frame: 0 }], frameRate: 1, repeat: 0 });
+  }
         
         // Create enemy animations for each type - simplified
     const enemyAnimTypes = ['enemy1', 'enemy2', 'enemy3'];
@@ -462,19 +513,20 @@
           this.bg.x = centerX + this._parallaxX;
           this.bg.y = 0;
 
-          // Recompute player scale to match pixel size and keep feet on ground
+          // Recompute scales to match pixel size and keep feet on ground
           const pixelScale = this.bg.scaleX;
-          const playerScale = pixelScale * 1.0;
+          const alexScale = pixelScale * (this._playerScaleAdjust || 1.0);
+          const enemyScale = pixelScale * 1.0;
           const groundY = h - 18;
-          this.alex.setScale(playerScale);
+          this.alex.setScale(alexScale);
           // update lane bounds and keep lane Y in range; recompute render Y
           this.baseYMax = groundY;
           this.baseYMin = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 2;
           this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
           if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
           this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
-          this.enemies.forEach(e=>{ e.setScale(playerScale); if (e.y > groundY) e.y = groundY; });
-          if (this.boss) { this.boss.setScale(playerScale); if (this.boss.y > groundY) this.boss.y = groundY; }
+          this.enemies.forEach(e=>{ e.setScale(enemyScale); if (e.y > groundY) e.y = groundY; });
+          if (this.boss) { this.boss.setScale(enemyScale); if (this.boss.y > groundY) this.boss.y = groundY; }
           updateDebug();
         });
   // Play authentic street music for this outdoor level
