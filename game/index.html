@@ -76,7 +76,7 @@
         <span class="ml20">Health: <span id="health">100</span></span>
       </div>
       <div>
-        <span>Money: $<span id="money">26.50</span></span>
+        <span>Money: $<span id="money">4.20</span></span>
       </div>
     </div>
   </div>
@@ -570,7 +570,7 @@
   step('boss spawn (test)');
   this.bossName = 'Miller';
   if (this.textures.exists('boss')) {
-    const bx = Math.max(360, Math.min(displayW - 140, 520));
+    const bx = Math.max(240, Math.min(displayW - 140, (this.alex?.x || 200) + 80));
     const boss = this.add.sprite(bx, ch - 18, 'boss', 0).setOrigin(0.5, 1);
     boss.setScale(playerScale);
     boss.health = 140;
@@ -1136,7 +1136,7 @@
         
         // Update HUD elements
         document.getElementById('health').innerHTML = this.alex.health;
-        document.getElementById('money').innerHTML = this.alex.money;
+  document.getElementById('money').innerHTML = Number(this.alex.money||0).toFixed(2);
       }
     }
     
