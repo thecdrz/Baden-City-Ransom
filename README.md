@@ -104,7 +104,16 @@ Baden-City-Ransom/
 ### Assets
 - `assets/sprites/` - All character sprites (Alex, Ryan, enemies)
 - `assets/backgrounds/` - Downtown and other area backgrounds
-- `assets/misc/` - Fonts, weapons, shop items
+- `assets/misc/` - Fonts, weapons, shop items, misc art (e.g., BoxArt.png)
+
+#### assets/misc details
+- `NES - River City Ransom _ Street Gangs - Miscellaneous - Font.png`
+- `NES - River City Ransom _ Street Gangs - Miscellaneous - Weapons.png`
+- `NES - River City Ransom _ Street Gangs - Miscellaneous - Shop Items.png`
+- `NES - River City Ransom _ Street Gangs - Miscellaneous - Mall NPCs.png`
+- `BoxArt.png` (cover art placed under misc for convenience)
+
+Note: BoxArt is included for personal, private use. Avoid redistributing.
 
 ### Development
 - `tests/` - Various test files for debugging sprites and dimensions
