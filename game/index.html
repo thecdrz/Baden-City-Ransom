@@ -138,7 +138,7 @@
   // Crop to keep the actual play area: trim off the sky and bottom credits.
   // This slice contains the buildings/grass/fence/road.
   const CROP_TOP_PCT = 0.72;     // where the playfield starts
-  const CROP_BOTTOM_PCT = 0.985; // just before the purple credit strip
+  const CROP_BOTTOM_PCT = 0.982; // just before the purple credit strip
   const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
   const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
   this.bg.setCrop(0, cropY, bgWidth, cropH);
