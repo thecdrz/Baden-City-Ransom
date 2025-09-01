@@ -128,13 +128,13 @@
   console.log('Creating authentic Baden City Ransom...');
         
   // Add background - remove green area, stretch road down to bottom of canvas
-  const bg = this.add.image(400, 0, 'downtown').setOrigin(0.5, 0);
+  const bg = this.add.image(0, 0, 'downtown').setOrigin(0, 0);
         const texture = this.textures.get('downtown');
         const bgWidth = texture.source[0].width;
         const bgHeight = texture.source[0].height;
         
   // Crop to remove the green band entirely and keep road + curb only
-  const ROAD_TOP = 0.56;   // portion from top where road region begins (tuned)
+  const ROAD_TOP = 0.60;   // portion from top where road region begins (tuned up to remove any sky/trees)
   const ROAD_HEIGHT = 0.40; // height portion to include (down to bottom)
   bg.setCrop(0, Math.floor(bgHeight * ROAD_TOP), bgWidth, Math.floor(bgHeight * ROAD_HEIGHT));
   // Fill the game canvas height exactly so the road reaches the bottom
