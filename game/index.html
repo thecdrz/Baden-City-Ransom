@@ -826,20 +826,45 @@
         
         // Input setup
   step('input');
-  this.cursors = this.input.keyboard.createCursorKeys();
-        this.keys = this.input.keyboard.addKeys('A,S,D,SPACE');
-  // Dev: quick spawn with B key
-  try { this.keys.B = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B); } catch(_) {}
-        // Pause / Mute keys with safety checks
+  try {
+    // Initialize input controls with safety checks
+    if (this.input && this.input.keyboard) {
+      this.cursors = this.input.keyboard.createCursorKeys() || {};
+      this.keys = this.input.keyboard.addKeys('A,S,D,SPACE') || {};
+      
+      // Dev: quick spawn with B key
+      if (this.keys && Phaser.Input.Keyboard.KeyCodes) {
+        this.keys.B = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B);
+      }
+    } else {
+      // Fallbacks if keyboard input is unavailable
+      this.cursors = {};
+      this.keys = {};
+    }
+  } catch(e) {
+    console.warn('Failed to initialize keyboard controls:', e);
+    this.cursors = {};
+    this.keys = {};
+  }
+        // Pause / Mute keys with enhanced safety checks
         try {
-          const KC = Phaser.Input.Keyboard.KeyCodes;
-          this.pauseKeys = {
-            esc: this.input?.keyboard?.addKey?.(KC?.ESC) || null,
-            p: this.input?.keyboard?.addKey?.(KC?.P) || null,
-            m: this.input?.keyboard?.addKey?.(KC?.M) || null
-          };
+          // Initialize pauseKeys as an empty object by default to prevent undefined errors
+          this.pauseKeys = {};
+          
+          if (this.input && this.input.keyboard) {
+            const KC = Phaser.Input.Keyboard.KeyCodes;
+            if (KC) {
+              // Only assign keys if the KeyCodes are available
+              this.pauseKeys = {
+                esc: this.input.keyboard.addKey(KC.ESC) || null,
+                p: this.input.keyboard.addKey(KC.P) || null,
+                m: this.input.keyboard.addKey(KC.M) || null
+              };
+            }
+          }
         } catch(e) {
           console.warn('Failed to initialize pause keys:', e);
+          // Ensure pauseKeys is an object even if initialization fails
           this.pauseKeys = {};
         }
         // Dev flags and helpers
@@ -1132,23 +1157,37 @@
       }
       
       update(time) {
-        // Pause toggle with safety checks
+        // Pause toggle with enhanced safety checks
         try {
-          if ((this.pauseKeys?.esc && Phaser.Input.Keyboard.JustDown(this.pauseKeys.esc)) || 
-              (this.pauseKeys?.p && Phaser.Input.Keyboard.JustDown(this.pauseKeys.p))) {
-            this.enterPause();
-            return; // stop processing this frame
-          }
-          // Music mute toggle
-          if (this.pauseKeys?.m && Phaser.Input.Keyboard.JustDown(this.pauseKeys.m)) {
-            this.toggleMusicMute();
+          // Safely check for undefined values with defensive coding
+          const JustDown = Phaser.Input.Keyboard?.JustDown;
+          if (typeof JustDown === 'function') {
+            const escPressed = this.pauseKeys && this.pauseKeys.esc && JustDown(this.pauseKeys.esc);
+            const pPressed = this.pauseKeys && this.pauseKeys.p && JustDown(this.pauseKeys.p);
+            
+            if (escPressed || pPressed) {
+              this.enterPause && this.enterPause();
+              return; // stop processing this frame
+            }
+            
+            // Music mute toggle with similar safety
+            if (this.pauseKeys && this.pauseKeys.m && JustDown(this.pauseKeys.m)) {
+              this.toggleMusicMute && this.toggleMusicMute();
+            }
           }
         } catch(e) {
           console.warn('Error checking pause keys:', e);
         }
         // Dev: quick boss spawn
-        if (this.keys?.B && Phaser.Input.Keyboard.JustDown(this.keys.B)) {
-          this.spawnBossNearPlayer && this.spawnBossNearPlayer();
+        try {
+          const JustDown = Phaser.Input.Keyboard?.JustDown;
+          if (typeof JustDown === 'function' && this.keys && this.keys.B) {
+            if (JustDown(this.keys.B)) {
+              typeof this.spawnBossNearPlayer === 'function' && this.spawnBossNearPlayer();
+            }
+          }
+        } catch(e) {
+          console.warn('Error checking boss key:', e);
         }
         // Alex movement with double-tap run
         let moving = false;
@@ -1466,32 +1505,50 @@
         };
         makeUi();
         this.scale.on('resize', makeUi, this);
-        try {
-          const KC = Phaser.Input.Keyboard.KeyCodes;
-          this.keys = {
-            esc: this.input?.keyboard?.addKey?.(KC?.ESC) || null,
-            p: this.input?.keyboard?.addKey?.(KC?.P) || null,
-            m: this.input?.keyboard?.addKey?.(KC?.M) || null
-          };
-        } catch(e) {
-          console.warn('Failed to initialize pause overlay keys:', e);
-          this.keys = {};
+        // Initialize keys as an empty object by default
+        this.keys = {};
+        
+        // Define resume function before other logic
+        const resume = () => { 
+          try { 
+            if (this.scene) {
+              this.scene.stop(); 
+              this.scene.resume('BadenCityRansomGame'); 
+            }
+          } catch(err) { 
+            console.warn('Error in resume function:', err); 
+          } 
+        };
+        
+        // Add direct mouse click listener - most reliable approach
+        if (this.input) {
+          this.input.once('pointerdown', resume);
         }
         
-        const resume = () => { try { this.scene.stop(); this.scene.resume('BadenCityRansomGame'); } catch(_) {} };
-        
+        // Try to add keyboard support if available
         try {
-          this.input?.keyboard?.on('keydown', (ev) => {
-            if (ev?.code === 'Escape' || ev?.code === 'KeyP') { resume(); }
-            else if (ev?.code === 'KeyM') {
-              try { 
-                const gs = this.scene.get('BadenCityRansomGame'); 
-                gs?.toggleMusicMute && gs.toggleMusicMute(); 
-              } catch(_) {}
-            }
-          });
-        } catch(e) {
-          console.warn('Error setting up keyboard handlers:', e);
+          if (this.input && this.input.keyboard) {
+            // Direct event listening is more reliable than key objects
+            this.input.keyboard.on('keydown', (ev) => {
+              if (ev && (ev.code === 'Escape' || ev.code === 'KeyP')) { 
+                resume(); 
+              }
+              else if (ev && ev.code === 'KeyM') {
+                try { 
+                  if (this.scene) {
+                    const gs = this.scene.get('BadenCityRansomGame');
+                    if (gs && typeof gs.toggleMusicMute === 'function') {
+                      gs.toggleMusicMute();
+                    } 
+                  }
+                } catch(err) { 
+                  console.warn('Error toggling music:', err); 
+                }
+              }
+            });
+          }
+        } catch(err) {
+          console.warn('Error setting up keyboard handlers:', err);
         }
         // Also allow pointer click to resume for convenience
         this.input.once('pointerdown', resume);
