@@ -90,31 +90,31 @@
       preload() {
         console.log('Loading authentic RCR sprites...');
         
-        // Load sprites with smaller, more accurate dimensions
+        // Load sprites with authentic NES frame size (16x24)
         this.load.spritesheet('alex', '../assets/sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png', {
-          frameWidth: 24,
-          frameHeight: 32
+          frameWidth: 16,
+          frameHeight: 24
         });
         
         this.load.spritesheet('ryan', '../assets/sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Ryan.png', {
-          frameWidth: 24,
-          frameHeight: 32
+          frameWidth: 16,
+          frameHeight: 24
         });
         
         // Load enemies with matching dimensions
         this.load.spritesheet('enemy1', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 1.png', {
-          frameWidth: 24,
-          frameHeight: 32
+          frameWidth: 16,
+          frameHeight: 24
         });
         
         this.load.spritesheet('enemy2', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 2.png', {
-          frameWidth: 24,
-          frameHeight: 32
+          frameWidth: 16,
+          frameHeight: 24
         });
         
         this.load.spritesheet('enemy3', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 3.png', {
-          frameWidth: 24,
-          frameHeight: 32
+          frameWidth: 16,
+          frameHeight: 24
         });
         
         // Load background
@@ -170,17 +170,17 @@
         
   // Player scale relative to background so pixels match; multiplied to taste
   const pixelScale = this.bg.scaleX;
-  const PLAYER_SCALE_MULT = 2.2; // tune if needed
+  const PLAYER_SCALE_MULT = 1.0; // match background pixel size exactly
   const playerScale = pixelScale * PLAYER_SCALE_MULT;
 
-  // Create Alex player positioned near ground
-  this.alex = this.add.sprite(200, ch - 40, 'alex', 0).setOrigin(0.5, 1);
+  // Create Alex player positioned near road (feet-origin at y=ch-18 approx)
+  this.alex = this.add.sprite(200, ch - 18, 'alex', 0).setOrigin(0.5, 1);
     this.alex.setScale(playerScale);
         this.alex.health = 100;
         this.alex.money = 26.50; // Match reference format
         
         // Create Ryan (Player 2)
-  this.ryan = this.add.sprite(260, ch - 40, 'ryan', 0).setOrigin(0.5, 1);
+  this.ryan = this.add.sprite(260, ch - 18, 'ryan', 0).setOrigin(0.5, 1);
     this.ryan.setScale(playerScale);
         
         // Create enemy gang members
@@ -189,7 +189,7 @@
         for (let i = 0; i < 3; i++) {
           const enemyType = enemyTypes[i];
           if (this.textures.exists(enemyType)) {
-            const enemy = this.add.sprite(500 + i * 80, ch - 40, enemyType, 0).setOrigin(0.5, 1);
+            const enemy = this.add.sprite(500 + i * 80, ch - 18, enemyType, 0).setOrigin(0.5, 1);
             enemy.setScale(playerScale); // Match player scale
             enemy.health = 30;
             enemy.type = enemyType;
@@ -208,7 +208,7 @@
         
         this.anims.create({
           key: 'alex-walk',
-          frames: this.anims.generateFrameNumbers('alex', { start: 0, end: 3 }),
+          frames: [{ key: 'alex', frame: 0 }, { key: 'alex', frame: 1 }],
           frameRate: 8,
           repeat: -1
         });
@@ -240,8 +240,8 @@
             
             this.anims.create({
               key: `${enemyType}-walk`,
-      frames: this.anims.generateFrameNumbers(enemyType, { start: 0, end: 3 }),
-      frameRate: 6,
+              frames: [{ key: enemyType, frame: 0 }, { key: enemyType, frame: 1 }],
+              frameRate: 6,
               repeat: -1
             });
           }
@@ -276,10 +276,10 @@
 
           // Recompute player scale to match pixel size and keep feet on ground
           const pixelScale = this.bg.scaleX;
-          const playerScale = pixelScale * 2.2;
-          this.alex.setScale(playerScale); this.alex.y = h - 40;
-          this.ryan.setScale(playerScale); this.ryan.y = h - 40;
-          this.enemies.forEach(e=>{ e.setScale(playerScale); e.y = h - 40; });
+          const playerScale = pixelScale * 1.0;
+          this.alex.setScale(playerScale); this.alex.y = h - 18;
+          this.ryan.setScale(playerScale); this.ryan.y = h - 18;
+          this.enemies.forEach(e=>{ e.setScale(playerScale); e.y = h - 18; });
         });
 
         // Play authentic RCR background music
@@ -304,12 +304,12 @@
           this.alex.x -= speed;
           this.alex.setFlipX(true);
           moving = true;
-          this._parallaxX += 0.8; // subtle parallax
+          this._parallaxX += 0.4; // subtle parallax
         } else if (this.cursors.right.isDown) {
           this.alex.x += speed;
           this.alex.setFlipX(false);
           moving = true;
-          this._parallaxX -= 0.8;
+          this._parallaxX -= 0.4;
         }
         
         if (this.cursors.up.isDown) {
@@ -350,7 +350,7 @@
         
         // Keep Alex on screen (canvas-only area; road fills entire height)
   const ymin = 80;
-  const ymax = this.scale.height - 40;
+  const ymax = this.scale.height - 18;
   this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, this.scale.width - 50);
   this.alex.y = Phaser.Math.Clamp(this.alex.y, ymin, ymax);
 
