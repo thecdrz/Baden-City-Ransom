@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Baden City Ransom</title>
+  <style>
+    :root {
+      --bg:#f5f6fa; --bg-grad:#f0f4fb; --panel:#ffffff; --border:#e5e7eb;
+      --fg:#1f2937; --muted:#6b7280; --accent:#2563eb; --accent2:#10b981;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      background: radial-gradient(1000px 500px at 50% -120px, var(--bg-grad) 0%, var(--bg) 60%);
+      color: var(--fg);
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { padding: 44px 20px 14px; text-align: center; }
+    h1 { margin: 0; font-size: 34px; letter-spacing: 0.4px; color: #111827; }
+    p { margin: 6px 0; color: var(--muted); }
+    main { max-width: 1100px; margin: 0 auto; padding: 10px 20px 56px; }
+    .hero { display:grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items:center; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: visible; box-shadow: 0 8px 24px rgba(17,24,39,0.08); }
+    .hero .art { display:flex; align-items:center; justify-content:center; background: #faf7ef; padding: 10px; }
+    .hero .art img { width: 100%; height: auto; max-height: 60vh; image-rendering: pixelated; }
+    .section { margin-top: 18px; }
+    .pad { padding: 16px 18px; }
+    .ctaRow { display:flex; gap:12px; flex-wrap:wrap; margin-top: 14px; }
+    .btn { display:inline-block; padding:12px 18px; background:#f8fafc; color:var(--fg); border-radius:10px; border:1px solid var(--border); font-weight:600; }
+    .btn:hover { background:#eef2f7; }
+    .btn.accent { background: var(--accent); color: #fff; border-color:#1d4ed8; box-shadow: 0 2px 0 rgba(0,0,0,0.06); }
+    .btn.accent:hover { background:#1e4fd8; }
+    .kbd { display:inline-block; padding:0 6px; border:1px solid #cbd5e1; border-bottom-width:2px; border-radius:4px; background:#f1f5f9; color:#111827; font-size:12px; }
+    footer { text-align:center; color:var(--muted); padding: 26px 0 36px; }
+  .subtitle { margin:0 0 6px 0; font-size:22px; }
+    @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Baden City Ransom</h1>
+    <p>Retro beat 'em up in Phaser. Best in Chrome/Edge desktop.</p>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="panel art pad">
+        <img alt="Baden City Ransom Box Art" src="./assets/BCR-BoxArt2.png" />
+      </div>
+      <div class="panel pad">
+        <h2 class="subtitle">Retro Beat ’Em Up, Right in Your Browser</h2>
+        <p>Walk the streets, punch and kick punks, and enjoy authentic NES vibes with crisp pixels and chiptune flair.</p>
+        <div class="section">
+          <strong>Controls</strong>
+          <p class="note">Arrows move • <span class="kbd">A</span> punch • <span class="kbd">S</span> kick • <span class="kbd">D</span> jump • <span class="kbd">ESC</span>/<span class="kbd">P</span> pause • <span class="kbd">M</span> mute</p>
+        </div>
+        <div class="ctaRow">
+          <a class="btn accent" href="./game/">▶ Play Now</a>
+          <a class="btn" href="https://github.com/thecdrz/Baden-City-Ransom" target="_blank" rel="noopener">Source</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <div>Hosted on <strong>cdrz.app</strong> via GitHub Pages</div>
+  </footer>
+</body>
+</html>

@@ -1,70 +1,1321 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Baden City Ransom</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baden City Ransom - AUTHENTIC</title>
   <style>
-    :root {
-      --bg:#f5f6fa; --bg-grad:#f0f4fb; --panel:#ffffff; --border:#e5e7eb;
-      --fg:#1f2937; --muted:#6b7280; --accent:#2563eb; --accent2:#10b981;
+  html, body { height: 100%; }
+  body { 
+      margin: 0; 
+      padding: 0; 
+      background: #000; 
+      color: #fff; 
+      font-family: monospace; 
+      overflow: hidden;
     }
-    html, body { height: 100%; }
-    body {
-      margin: 0;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-      background: radial-gradient(1000px 500px at 50% -120px, var(--bg-grad) 0%, var(--bg) 60%);
-      color: var(--fg);
+    /* Three-band layout: top HUD 10vh, game canvas 80vh, bottom dialogue 10vh */
+    #canvasWrap {
+      width: 100%;
+      height: 80vh;
+      position: relative;
+      background: #000; /* canvas sits here */
     }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    header { padding: 44px 20px 14px; text-align: center; }
-    h1 { margin: 0; font-size: 34px; letter-spacing: 0.4px; color: #111827; }
-    p { margin: 6px 0; color: var(--muted); }
-    main { max-width: 1100px; margin: 0 auto; padding: 10px 20px 56px; }
-    .hero { display:grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items:center; }
-    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: visible; box-shadow: 0 8px 24px rgba(17,24,39,0.08); }
-    .hero .art { display:flex; align-items:center; justify-content:center; background: #faf7ef; padding: 10px; }
-    .hero .art img { width: 100%; height: auto; max-height: 60vh; image-rendering: pixelated; }
-    .section { margin-top: 18px; }
-    .pad { padding: 16px 18px; }
-    .ctaRow { display:flex; gap:12px; flex-wrap:wrap; margin-top: 14px; }
-    .btn { display:inline-block; padding:12px 18px; background:#f8fafc; color:var(--fg); border-radius:10px; border:1px solid var(--border); font-weight:600; }
-    .btn:hover { background:#eef2f7; }
-    .btn.accent { background: var(--accent); color: #fff; border-color:#1d4ed8; box-shadow: 0 2px 0 rgba(0,0,0,0.06); }
-    .btn.accent:hover { background:#1e4fd8; }
-    .kbd { display:inline-block; padding:0 6px; border:1px solid #cbd5e1; border-bottom-width:2px; border-radius:4px; background:#f1f5f9; color:#111827; font-size:12px; }
-    footer { text-align:center; color:var(--muted); padding: 26px 0 36px; }
-  .subtitle { margin:0 0 6px 0; font-size:22px; }
-    @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } }
+    #canvasWrap canvas { display:block; }
+    #hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+  height: 10vh; /* top black bar */
+      background: #000;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+  font-size: 28px; /* Increased for better readability */
+      font-weight: bold;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      padding: 0 30px;
+      box-sizing: border-box;
+      border-bottom: 3px solid #444;
+  /* Hidden on title screen; revealed on game start */
+  display: none;
+    }
+    
+    #dialogue {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+  height: 10vh; /* bottom black bar */
+      background: #000;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+  font-size: 26px; /* Increased for better readability */
+      font-weight: bold;
+      z-index: 1000;
+      padding: 15px 30px;
+      box-sizing: border-box;
+      border-top: 3px solid #444;
+  /* Hidden on title screen; revealed on game start */
+  display: none;
+    }
+  .playerName { color: #ffff00; }
+  /* HUD helpers */
+  .hudRow { display: flex; justify-content: space-between; width: 100%; }
+  .ml20 { margin-left: 20px; }
+  /* Dev UI */
+  #devBtn { position: fixed; right: 12px; bottom: 12px; z-index: 2000; background:#111; color:#fff; border:1px solid #444; border-radius:8px; padding:8px 10px; opacity:0.7; cursor:pointer; }
+  #devBtn:hover { opacity: 1; }
+  #devPanel { position: fixed; right: 12px; bottom: 56px; z-index: 2000; background:#111; color:#fff; border:1px solid #444; border-radius:10px; padding:12px; width:240px; display:none; box-shadow: 0 6px 16px rgba(0,0,0,0.35); }
+  #devPanel .row { margin-bottom:8px; }
+  #devPanel label { display:flex; align-items:center; gap:8px; }
+  #devClose { background:#222; color:#fff; border:1px solid #444; border-radius:6px; padding:4px 8px; cursor:pointer; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Baden City Ransom</h1>
-    <p>Retro beat 'em up in Phaser. Best in Chrome/Edge desktop.</p>
-  </header>
-  <main>
-    <section class="hero">
-      <div class="panel art pad">
-        <img alt="Baden City Ransom Box Art" src="./assets/BCR-BoxArt2.png" />
+  <!-- Top HUD Bar - Player Stats -->
+  <div id="hud">
+    <div class="hudRow">
+      <div>
+  <span class="playerName">TheGuyWho</span>
+        <span class="ml20">Health: <span id="health">100</span></span>
       </div>
-      <div class="panel pad">
-        <h2 class="subtitle">Retro Beat ’Em Up, Right in Your Browser</h2>
-        <p>Walk the streets, punch and kick punks, and enjoy authentic NES vibes with crisp pixels and chiptune flair.</p>
-        <div class="section">
-          <strong>Controls</strong>
-          <p class="note">Arrows move • <span class="kbd">A</span> punch • <span class="kbd">S</span> kick • <span class="kbd">D</span> jump • <span class="kbd">ESC</span>/<span class="kbd">P</span> pause • <span class="kbd">M</span> mute</p>
-        </div>
-        <div class="ctaRow">
-          <a class="btn accent" href="./game/">▶ Play Now</a>
-          <a class="btn" href="https://github.com/thecdrz/Baden-City-Ransom" target="_blank" rel="noopener">Source</a>
-        </div>
+      <div>
+        <span>Money: $<span id="money">4.20</span></span>
       </div>
-    </section>
-  </main>
-  <footer>
-    <div>Hosted on <strong>cdrz.app</strong> via GitHub Pages</div>
-  </footer>
+    </div>
+  </div>
+  
+  <!-- Game Canvas Area (80% height) -->
+  <div id="canvasWrap"></div>
+  
+  <!-- Bottom Dialogue Bar - Messages/Chat -->
+  <div id="dialogue">
+    <div id="dialogue-text">🎮 BADEN CITY RANSOM - Use Arrow Keys to Move, A to Punch, S to Kick</div>
+  </div>
+
+  <!-- Dev UI: Toggle panel for quick testing options -->
+  <button id="devBtn" aria-controls="devPanel" aria-expanded="false" title="Dev Tools">Dev</button>
+  <div id="devPanel" role="dialog" aria-label="Dev Panel">
+    <div class="row"><label><input type="checkbox" id="devGod"> Unlimited life</label></div>
+    <div class="row"><label><input type="checkbox" id="devBoss"> Spawn boss near player</label></div>
+    <div class="row"><button id="devClose">Close</button></div>
+  </div>
+
+  <script>
+  (async function bootstrap() {
+    function loadScript(url) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = url;
+  s.crossOrigin = 'anonymous';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    // Assets are relative to the root index.html
+    const ASSETS_BASE = 'assets';
+    const asset = (p) => `${ASSETS_BASE}/${p.split('/').map(s => encodeURIComponent(s)).join('/')}`;
+
+    if (!window.Phaser) {
+      const statusEl = document.getElementById('dialogue-text');
+      const candidates = [
+        // Prefer local copies if available
+        './phaser.min.js',
+        '../vendor/phaser/3.55.2/phaser.min.js',
+        '../vendor/phaser/phaser.min.js',
+        '/vendor/phaser/3.55.2/phaser.min.js',
+        '/vendor/phaser.min.js',
+        // CDNs as fallback
+        'https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js',
+        'https://unpkg.com/phaser@3.55.2/dist/phaser.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js'
+      ];
+      for (const url of candidates) {
+        try {
+          if (statusEl) statusEl.textContent = `Loading engine: ${url}`;
+          await loadScript(url);
+          if (window.Phaser) { if (statusEl) statusEl.textContent = `Engine loaded from: ${url}`; break; }
+        } catch(e) { /* try next */ }
+      }
+    }
+
+    if (!window.Phaser) {
+      const d = document.getElementById('dialogue-text');
+      if (d) d.textContent = 'Failed to load engine. Check connection; CDN may be blocked.';
+      return;
+    }
+
+    // Optional Title/Splash Scene
+    class TitleScene extends Phaser.Scene {
+      constructor(){ super({ key: 'TitleScene' }); }
+      preload(){
+  const url = (p) => encodeURI(p);
+  const asset = (p) => encodeURI(`${ASSETS_BASE}/${p}`);
+        // Try URL param override first, else attempt a series of likely filenames
+        const params = new URLSearchParams(location.search);
+        const custom = params.get('titleImg');
+        const candidates = [
+          custom,
+          // Prefer misc folder, then asset root fallbacks
+          asset('misc/BCR-StartScreen2.png'),
+          asset('BCR-StartScreen2.png'),
+          asset('misc/BCR-StartScreen.png'),
+          asset('BCR-StartScreen.png'),
+          asset('misc/Baden City Ransom Start.png'),
+          asset('misc/Baden City Ransom - Start.png'),
+          asset('misc/Start Screen.png'),
+          asset('misc/StartScreen.png'),
+          asset('misc/Title.png'),
+          asset('misc/Title Screen.png'),
+          asset('misc/splash.png'),
+          asset('Start Screen.png'),
+          asset('StartScreen.png'),
+          asset('title.png'),
+          asset('splash.png'),
+          asset('misc/BoxArt.png')
+        ].filter(Boolean);
+        // Load all candidates with unique keys; we’ll pick the first that exists
+        candidates.forEach((src, i) => this.load.image(`title_${i}`, url(src)));
+        // Keep quiet on missing ones
+        this.load.on('loaderror', () => {});
+      }
+      create(){
+  const { width:w, height:h } = this.scale.gameSize;
+        // Ensure HUD and dialogue are hidden on the title screen
+        try {
+          const hud = document.getElementById('hud');
+          const dlg = document.getElementById('dialogue');
+          if (hud) hud.style.display = 'none';
+          if (dlg) dlg.style.display = 'none';
+          // Keep canvas at stable 80vh to avoid initial zoom drift
+          const wrap = document.getElementById('canvasWrap');
+          if (wrap) { wrap.style.height = '80vh'; }
+          try { this.scale.refresh && this.scale.refresh(); } catch(_) {}
+        } catch(_) {}
+        // pick first loaded texture
+        const pickKey = () => {
+          const list = this.textures.list;
+          for (let i=0;i<40;i++) {
+            const k = `title_${i}`;
+            if (this.textures.exists(k)) return k;
+          }
+          return null;
+        };
+        const chosen = pickKey();
+        if (chosen) {
+          console.log('Title image chosen:', this.textures.get(chosen)?.source?.[0]?.src || chosen);
+        } else {
+          console.warn('No title image matched; using placeholder rectangle');
+        }
+        const img = chosen ? this.add.image(w/2, h/2, chosen) : this.add.rectangle(w/2, h/2, w*0.9, h*0.6, 0x101020).setStrokeStyle(4, 0xffffff);
+        img.setOrigin(0.5,0.5);
+  let txt; // declared before fit() to avoid reference errors
+        const fit = () => {
+          const TITLE_Y_BIAS = 0.09; // push image below center by ~9% of viewport height
+          const cw = this.scale.width || this.scale.gameSize?.width || w;
+          const ch = this.scale.height || this.scale.gameSize?.height || h;
+          const iw = img.width || 1, ih = img.height || 1;
+          const sx = cw/iw, sy = ch/ih;
+          // Make the start image noticeably larger while keeping safe headroom
+          const s = Math.min(sx, sy) * 0.99; // previously 0.93
+          img.setScale(s);
+          img.setPosition(cw/2, ch * (0.5 + TITLE_Y_BIAS));
+          if (txt) txt.setPosition(cw/2, ch*0.975);
+        };
+        fit();
+  this.scale.on('resize', () => fit());
+  // Refit shortly after DOM height change
+  try { this.time.delayedCall(60, () => fit()); } catch(_) {}
+
+  txt = this.add.text(w/2, h*0.975, 'Press Enter or Click to Start', {
+          fontFamily:'monospace', fontSize:'24px', color:'#ffff00', stroke:'#000', strokeThickness:4
+        }).setOrigin(0.5,1).setDepth(10);
+  // Slow blinking effect
+  this.tweens.add({ targets: txt, alpha: 0.25, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+  
+
+        const start = () => {
+          // Tiny confirm beep
+          try {
+            const ctx = this.sound.context; const t = ctx.currentTime;
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.type = 'square'; o.frequency.setValueAtTime(880, t);
+            g.gain.setValueAtTime(0.001, t); g.gain.linearRampToValueAtTime(0.2, t+0.01); g.gain.exponentialRampToValueAtTime(0.001, t+0.12);
+            o.connect(g).connect(ctx.destination); o.start(t); o.stop(t+0.14);
+          } catch(_) {}
+          // Restore canvas to gameplay layout (80vh) and start game
+          try {
+            const wrap = document.getElementById('canvasWrap');
+            if (wrap) {
+              wrap.style.height = '80vh';
+              const cw = wrap.clientWidth || this.scale.gameSize?.width || this.scale.width || 800;
+              const ch = wrap.clientHeight || this.scale.gameSize?.height || this.scale.height || 480;
+              if (this.scale.resize) this.scale.resize(cw, ch); else if (this.scale.refresh) this.scale.refresh();
+            } else if (this.scale.refresh) {
+              this.scale.refresh();
+            }
+          } catch(_) {}
+          // Start the game on the next tick after resize is applied
+          try { this.time.delayedCall(16, () => this.scene.start('BadenCityRansomGame')); }
+          catch(_) { this.scene.start('BadenCityRansomGame'); }
+        };
+        this.input.once('pointerdown', start);
+        this.input.keyboard.once('keydown-ENTER', start);
+        this.input.keyboard.once('keydown-SPACE', start);
+      }
+    }
+
+    class BadenCityRansomGame extends Phaser.Scene {
+      constructor() {
+  super({ key: 'BadenCityRansomGame' });
+      }
+      
+      preload() {
+        console.log('Loading authentic RCR sprites...');
+        // Surface loader diagnostics in the dialogue bar on failures
+        this.load.on('loaderror', (file) => {
+          const d = document.getElementById('dialogue-text');
+          if (d) d.textContent = `Asset failed: ${file?.key || 'unknown'} -> ${file?.src || ''}`;
+          console.warn('Load error', file?.key, file?.src);
+        });
+        this.load.on('progress', (p) => {
+          const d = document.getElementById('dialogue-text');
+          if (d) d.textContent = `Loading assets: ${(p*100|0)}%`;
+        });
+        this.load.once('complete', () => {
+          const d = document.getElementById('dialogue-text');
+          if (d) d.textContent = 'Assets loaded. Initializing scene...';
+        });
+
+        const url = (p) => encodeURI(p);
+        const logAdd = (kind, key, src) => console.log(`load ${kind}: ${key} <- ${src}`);
+        
+        // Load sprites with authentic NES frame size (16x24)
+        {
+          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png');
+          logAdd('sheet','alex', src);
+          this.load.spritesheet('alex', src, {
+          frameWidth: 16,
+          frameHeight: 32,
+          margin: 1,
+          spacing: 1
+          });
+        }
+        
+  // (Player 2 removed for now)
+        
+        // Load enemies with matching dimensions
+        {
+          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 1.png');
+          logAdd('sheet','enemy1', src);
+          this.load.spritesheet('enemy1', src, {
+          frameWidth: 16,
+          frameHeight: 32,
+          margin: 1,
+          spacing: 1
+          });
+        }
+        
+        {
+          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 2.png');
+          logAdd('sheet','enemy2', src);
+          this.load.spritesheet('enemy2', src, {
+          frameWidth: 16,
+          frameHeight: 32,
+          margin: 1,
+          spacing: 1
+          });
+        }
+        
+        {
+          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 3.png');
+          logAdd('sheet','enemy3', src);
+          this.load.spritesheet('enemy3', src, {
+          frameWidth: 16,
+          frameHeight: 32,
+          margin: 1,
+          spacing: 1
+          });
+        }
+        // Boss spritesheet (Moose)
+        {
+          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Moose.png');
+          logAdd('sheet','boss', src);
+          this.load.spritesheet('boss', src, {
+            frameWidth: 16,
+            frameHeight: 32,
+            margin: 1,
+            spacing: 1
+          });
+        }
+        
+        // Load background
+        {
+          const src = asset('backgrounds/NES - River City Ransom _ Street Gangs - Backgrounds - Downtown.png');
+          logAdd('image','downtown', src);
+          this.load.image('downtown', src);
+        }
+        
+        // Optional: GandalfHardcore layered character parts (compose into one sprite)
+        {
+          const base = `${ASSETS_BASE}/GandalfHardcore FREE Character Asset Pack/GandalfHardcore Character Asset Pack`;
+          const parts = [
+            ['gh_skin', `${base}/Character skin colors/Male Skin3.png`],
+            ['gh_pants', `${base}/Male Clothing/Blue Pants.png`],
+            ['gh_shirt', `${base}/Male Clothing/Shirt v2.png`],
+            ['gh_shoes', `${base}/Male Clothing/Shoes.png`],
+            ['gh_hair', `${base}/Male Hair/Male Hair3.png`]
+          ];
+          parts.forEach(([key, rel]) => { const src = url(rel); logAdd('image', key, src); this.load.image(key, src); });
+        }
+
+  // (Knight assets removed)
+
+        // Load authentic River City Ransom music
+  this.load.audio('bgm', asset('audio/river_city_ransom_ost_mp3/River City Anthem.mp3'));
+  this.load.audio('street_music', asset('audio/river_city_ransom_ost_mp3/Street of No Escape.mp3'));
+  // Short SFX
+  this.load.audio('sfx_punch1', asset('audio/river_city_ransom_ost_mp3/classic-punch.mp3'));
+  this.load.audio('sfx_punch2', asset('audio/river_city_ransom_ost_mp3/fist-fight.mp3'));
+  this.load.audio('sfx_jump1',  asset('audio/river_city_ransom_ost_mp3/jump-01.mp3'));
+  this.load.audio('sfx_jump2',  asset('audio/river_city_ransom_ost_mp3/jump-02.mp3'));
+      }
+      
+      create() {
+  console.log('Creating authentic Baden City Ransom...');
+  // Ensure camera zoom is neutral (avoid accidental device zoom factors)
+  try { this.cameras.main.setZoom(1); } catch(_) {}
+        // Reveal HUD and dialogue now that gameplay begins
+        try {
+          const hud = document.getElementById('hud');
+          const dlg = document.getElementById('dialogue');
+          if (hud) hud.style.display = 'flex';
+          if (dlg) dlg.style.display = 'block';
+        } catch(_) {}
+        const diag = (msg) => { const d = document.getElementById('dialogue-text'); if (d) d.textContent = String(msg); };
+        const step = (name) => diag(`Init: ${name}`);
+        try {
+          step('scene start');
+        const canvasWrap = document.getElementById('canvasWrap');
+        const getSize = () => {
+          const cw = this.scale.width || this.scale.gameSize?.width || canvasWrap?.clientWidth || this.sys.game.config.width || 800;
+          const ch = this.scale.height || this.scale.gameSize?.height || canvasWrap?.clientHeight || this.sys.game.config.height || 480;
+          return { cw, ch };
+        };
+        // Centralized resize application to keep math consistent
+        const applyResize = (w, h) => {
+          if (!w || !h) { const s = getSize(); w = s.cw; h = s.ch; }
+          const scale = h / (this._bgCropH || h);
+          if (this.bg) {
+            this.bg.setScale(scale);
+            const displayW = (this._bgNaturalW || w) * scale;
+            this.bg.x = 0;
+            this.bg.y = 0;
+            this.cameras.main.setBounds(0, 0, displayW, h);
+          }
+          // Recompute scales to match pixel size and keep feet on ground
+          const pixelScale = this.bg?.scaleX || 1;
+          const alexScale = pixelScale * (this._playerScaleAdjust || 1.0);
+          const enemyScale = pixelScale * 1.0;
+          const groundY = h - 18;
+          if (this.alex) {
+            this.alex.setScale(alexScale);
+          }
+          this.baseYMax = groundY;
+          this.baseYMin = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 2;
+          this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
+          if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
+          if (this.alex) this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
+          (this.enemies||[]).forEach(e=>{ e.setScale(enemyScale); if (e.y > groundY) e.y = groundY; });
+          if (this.boss) { this.boss.setScale(enemyScale); if (this.boss.y > groundY) this.boss.y = groundY; }
+        };
+        
+  // Add background – create CROPPED canvas texture with a safe fallback
+  let useKey = 'downtown';
+  try {
+    const srcTex = this.textures.get('downtown');
+    const srcImg = srcTex?.getSourceImage();
+    const bgWidth = srcTex?.source?.[0]?.width;
+    const bgHeight = srcTex?.source?.[0]?.height;
+    if (srcImg && bgWidth && bgHeight) {
+      // Crop to keep the actual play area: trim off the sky and bottom credits.
+      const CROP_TOP_PCT = 0.72;     // where the playfield starts
+      const CROP_BOTTOM_PCT = 0.982; // just before the purple credit strip
+      const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
+      const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
+      this._bgNaturalW = bgWidth;
+      this._bgCropH = cropH > 0 ? cropH : bgHeight; // guard
+
+      const playKey = 'downtown_play';
+      if (this.textures.exists(playKey)) this.textures.remove(playKey);
+      const playTex = this.textures.createCanvas(playKey, bgWidth, this._bgCropH);
+      const ctx = playTex.getContext();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(srcImg, 0, cropY, bgWidth, this._bgCropH, 0, 0, bgWidth, this._bgCropH);
+      playTex.refresh();
+      // Detect road (blue) top boundary as a fraction of the cropped texture height
+      const analyzeRoadTop = (ctx, w, h) => {
+        try {
+          const sampleCols = 24;
+          const xs = Array.from({length: sampleCols}, (_, i) => Math.floor((i+0.5) * w / sampleCols));
+          const isBlueish = (r,g,b) => b > g + 20 && b > r + 20 && b > 80; // strong blue dominance
+          for (let y = 0; y < h; y += 2) {
+            let blueHits = 0;
+            for (const x of xs) {
+              const d = ctx.getImageData(x, y, 1, 1).data; // small samples; acceptable at init
+              if (isBlueish(d[0], d[1], d[2])) blueHits++;
+            }
+            if (blueHits >= Math.ceil(sampleCols * 0.6)) {
+              return y / h; // fraction from top
+            }
+          }
+        } catch (e) { console.warn('Road detection failed', e); }
+        return null;
+      };
+      const frac = analyzeRoadTop(ctx, bgWidth, this._bgCropH);
+      this._roadTopFrac = (frac != null ? frac : 0.65);
+      useKey = playKey;
+    } else {
+      // Fallback to raw image if something’s off
+      const raw = this.textures.get('downtown');
+      this._bgNaturalW = raw?.source?.[0]?.width || 800;
+      this._bgCropH = raw?.source?.[0]?.height || 480;
+      this._roadTopFrac = 0.65;
+    }
+  } catch (e) {
+    // Fallback to raw image on any unexpected error
+    const raw = this.textures.get('downtown');
+    this._bgNaturalW = raw?.source?.[0]?.width || 800;
+    this._bgCropH = raw?.source?.[0]?.height || 480;
+    useKey = 'downtown';
+    this._roadTopFrac = 0.65;
+  }
+
+  // Optionally tile the cropped background horizontally to create a long map sized to target minutes
+  try {
+    if (this.textures.exists('downtown_play')) {
+      const src = this.textures.get('downtown_play').getSourceImage();
+      const tileW = this._bgNaturalW; // width of the original background
+      const tileH = this._bgCropH;    // cropped height
+      // Estimate desired world width based on player ground speed (~2 px per frame at 60fps = 120 px/s)
+      const { ch } = getSize();
+      const scaleForBand = ch / tileH;
+      const pxPerSec = 120; // 2 px/frame * 60fps
+      const targetSecs = 180; // ~3 minutes walking time (combat will extend total time)
+      const targetWorldWidth = pxPerSec * targetSecs; // in scaled world px
+      const tilesNeeded = Math.ceil(targetWorldWidth / (tileW * scaleForBand));
+      const TILES = Math.max(3, Math.min(40, tilesNeeded));
+      const longKey = 'downtown_long';
+      if (this.textures.exists(longKey)) this.textures.remove(longKey);
+      const longTex = this.textures.createCanvas(longKey, tileW * TILES, tileH);
+      const lctx = longTex.getContext(); lctx.imageSmoothingEnabled = false;
+      for (let i=0;i<TILES;i++) lctx.drawImage(src, 0, 0, tileW, tileH, i*tileW, 0, tileW, tileH);
+      longTex.refresh();
+      // swap to long map
+      useKey = longKey;
+      this._bgNaturalW = tileW * TILES;
+    }
+  } catch(e) { console.warn('Failed to build long background, using single tile', e); }
+
+  // Use whichever background key we ended up with
+  step(`bg add key=${useKey}`);
+  if (!this.textures.exists(useKey)) { throw new Error(`Background texture missing: ${useKey}`); }
+  this.bg = this.add.image(0, 0, useKey).setOrigin(0, 0);
+
+  // Scale to fill the canvas height (80vh) and center horizontally (robust fallbacks)
+  const { cw, ch } = getSize();
+  const scale = (this._bgCropH && this._bgCropH > 0) ? (ch / this._bgCropH) : 1;
+  this.bg.setScale(scale);
+  const displayW = this._bgNaturalW * scale;
+  this.bg.x = 0;
+  this.bg.y = 0;
+
+  // Set up a side-scrolling camera that follows the player
+  const cam = this.cameras.main;
+  cam.setRoundPixels(true);
+  cam.setBounds(0, 0, displayW, ch);
+        
+  // console log for debugging is noisy on some hosts; keep quiet in prod
+        
+  // Player scale relative to background so pixels match
+  const pixelScale = this.bg.scaleX;
+  const PLAYER_SCALE_MULT = 1.0; // match background pixel size exactly
+  const playerScale = pixelScale * PLAYER_SCALE_MULT;
+
+  // Create Alex player positioned near road (feet-origin at y=ch-18 approx)
+  step('spawn alex');
+  // Force the classic RCR Alex sheet (no GH composite)
+  const PLAYER_TEX = 'alex';
+  if (!this.textures.exists(PLAYER_TEX)) throw new Error('Missing player texture: alex');
+  this.alex = this.add.sprite(200, ch - 18, PLAYER_TEX, 0).setOrigin(0.5, 1);
+    this.alex.setScale(playerScale);
+  // Camera follows the player for smooth scrolling
+  this.cameras.main.startFollow(this.alex, true, 0.12, 0.12);
+        // Normalize scale baseline
+        this._playerScaleAdjust = 1.0;
+        this.alex.health = 100;
+  this.alex.money = 4.20; // New default
+        
+        // Create enemy gang members
+  step('spawn enemies');
+  this.enemies = [];
+        // Focus on a single enemy for tight combat iteration
+        const enemyType = 'enemy1';
+        if (this.textures.exists(enemyType)) {
+          const ex = Math.max(420, Math.min(displayW - 160, 700));
+          const enemy = this.add.sprite(ex, ch - 18, enemyType, 0).setOrigin(0.5, 1);
+          enemy.setScale(playerScale);
+          enemy.health = 60;
+          enemy.type = enemyType;
+          enemy.aiTimer = 0;
+          enemy.speed = 0.9;
+          enemy.attackCooldown = 0; // ms
+          enemy.attackCadence = 900; // ms between attacks
+          enemy.attackReach = 24; // horizontal reach
+          enemy.attackWidth = 20;
+          enemy.attackHeight = 18;
+          this.enemies.push(enemy);
+        }
+  // Boss is spawned manually via Dev tools or future triggers
+  step('boss (manual spawn)');
+  this.bossName = 'Miller';
+  this.boss = null;
+  try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = false; } catch(_) {}
+        
+        // Create Alex animations using heuristic row/column ranges with URL override support
+  step('anims');
+  const SHEET = { fw:16, fh:32, margin:1, spacing:1 };
+  const alexImg = this.textures.get('alex').source?.[0];
+  const sheetW = alexImg?.width || 0;
+  const sheetH = alexImg?.height || 0;
+  // Derive frames-per-row/col exactly like Phaser's spritesheet parser: (size - 2*margin + spacing) / (frame + spacing)
+  const cols = sheetW ? Math.max(1, Math.floor((sheetW - (SHEET.margin*2) + SHEET.spacing) / (SHEET.fw + SHEET.spacing))) : 8;
+  const rows = sheetH ? Math.max(1, Math.floor((sheetH - (SHEET.margin*2) + SHEET.spacing) / (SHEET.fh + SHEET.spacing))) : 6;
+  const idx = (r,c) => (Math.max(0, Math.min(rows-1, r)) * cols) + Math.max(0, Math.min(cols-1, c));
+  const parseMap = () => {
+    const params = new URLSearchParams(location.search);
+    const raw = params.get('alexMap'); // e.g., walk=0:0-1;punch=1:0-2;kick=2:0-2;jump=3:0-1
+    if (!raw) return null;
+    const out = {};
+    raw.split(';').forEach(part => {
+      const [k, spec] = part.split('=');
+      if (!k || !spec) return;
+      const [rowStr, colsStr] = spec.split(':');
+      const r = parseInt(rowStr, 10);
+      const [a,b] = (colsStr||'0-0').split('-').map(x=>parseInt(x,10));
+      out[k.trim()] = { row: isNaN(r)?0:r, from: isNaN(a)?0:a, to: isNaN(b)?a:b };
+    });
+    return out;
+  };
+  const map = parseMap() || {
+    // Defaults matching prior working setup
+    walk:  { row: 0, from: 0, to: Math.min(1, cols-1) },
+    punch: { row: 1, from: 0, to: Math.min(2, cols-1) },
+    // Kick provisional (will auto-tune below)
+    kick:  { row: 2, from: 0, to: Math.min(2, cols-1) },
+    // Jump left as-is since you’re happy with it
+    jump:  { row: 0, from: 0, to: 0 }
+  };
+
+  // Auto-select a non-ducking kick row by scanning pixels (if no explicit URL override)
+  (function autoPickKickRow(){
+    const hasOverride = new URLSearchParams(location.search).get('alexMap');
+    if (hasOverride) return; // user-specified mapping wins
+    try {
+      const tex = this.textures.get('alex');
+      const src = tex.getSourceImage();
+      if (!src) return;
+      const tmp = document.createElement('canvas');
+      const ctx = tmp.getContext('2d', { willReadFrequently: true });
+      const heightScores = [];
+      const scoreRow = (r) => {
+        // sample first 3 columns on this row
+        let heights = [];
+        for (let c = 0; c < Math.min(3, cols); c++) {
+          const fIdx = idx(r, c);
+          const f = this.textures.getFrame('alex', fIdx);
+          if (!f) continue;
+          tmp.width = f.cutWidth; tmp.height = f.cutHeight;
+          ctx.clearRect(0,0,tmp.width,tmp.height);
+          ctx.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
+          const data = ctx.getImageData(0,0,tmp.width,tmp.height).data;
+          // compute alpha bbox
+          let top = tmp.height, bottom = -1;
+          for (let y=0; y<tmp.height; y++) {
+            for (let x=0; x<tmp.width; x++) {
+              const a = data[(y*tmp.width + x)*4 + 3];
+              if (a > 8) { if (y < top) top = y; if (y > bottom) bottom = y; }
+            }
+          }
+          if (bottom >= top) heights.push(bottom - top + 1);
+        }
+        if (!heights.length) return 0;
+        heights.sort((a,b)=>a-b); const mid = heights[Math.floor(heights.length/2)];
+        return mid || 0;
+      };
+      for (let r=0;r<rows;r++) {
+        // skip rows already used by walk or punch
+        if (r === map.walk.row || r === map.punch.row) continue;
+        heightScores.push({ r, h: scoreRow(r) });
+      }
+      // prefer taller rows (avoid crouch/duck which are short)
+      heightScores.sort((a,b)=>b.h - a.h);
+      const best = heightScores.find(s => s.h >= 24) || heightScores[0];
+      if (best && Number.isFinite(best.r)) {
+        map.kick.row = best.r;
+        console.log('Auto-picked kick row', best);
+      }
+    } catch(e) { console.warn('autoPickKickRow failed', e); }
+  }).call(this);
+  // Build trimmed textures for used frames to remove deadspace
+  const usedIdx = new Set();
+  const addRange = (m) => { if (!m) return; for (let c=m.from; c<=m.to; c++) usedIdx.add(idx(m.row, c)); };
+  addRange(map.walk); addRange(map.punch); addRange(map.kick); usedIdx.add(idx(map.jump.row, map.jump.from));
+  const trimKeyOf = (fIndex) => `alex_t_${fIndex}`;
+  try {
+    const tmp = document.createElement('canvas');
+    const ctx = tmp.getContext('2d', { willReadFrequently: true });
+    usedIdx.forEach(fIndex => {
+      const f = this.textures.getFrame('alex', fIndex);
+      if (!f) return;
+      tmp.width = f.cutWidth; tmp.height = f.cutHeight;
+      ctx.clearRect(0,0,tmp.width,tmp.height);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
+      const img = ctx.getImageData(0,0,tmp.width,tmp.height);
+      const data = img.data;
+      let minX=tmp.width, minY=tmp.height, maxX=-1, maxY=-1;
+      for (let y=0;y<tmp.height;y++) {
+        for (let x=0;x<tmp.width;x++) {
+          const a = data[(y*tmp.width + x)*4 + 3];
+          if (a>8) { if (x<minX) minX=x; if (y<minY) minY=y; if (x>maxX) maxX=x; if (y>maxY) maxY=y; }
+        }
+      }
+      if (maxX<minX || maxY<minY) { // fully empty? create tiny transparent
+        minX=0; minY=0; maxX=1; maxY=1;
+      }
+      const w = Math.max(1, maxX-minX+1);
+      const h = Math.max(1, maxY-minY+1);
+      // Create a canvas texture per frame
+      const key = trimKeyOf(fIndex);
+      if (this.textures.exists(key)) this.textures.remove(key);
+      const ct = this.textures.createCanvas(key, w, h);
+      const c2 = ct.getContext();
+      c2.imageSmoothingEnabled = false;
+      c2.drawImage(tmp, minX, minY, w, h, 0, 0, w, h);
+      ct.refresh();
+    });
+  } catch(e) { console.warn('Trimming frames failed', e); }
+
+  const range = (k) => {
+    const m = map[k]; if (!m) return [{ key: 'alex', frame: 0 }];
+    const frames = [];
+    for (let c=m.from; c<=m.to; c++) {
+      const fIndex = idx(m.row, c);
+      const tKey = trimKeyOf(fIndex);
+      if (this.textures.exists(tKey)) frames.push({ key: tKey, frame: 0 });
+      else frames.push({ key: 'alex', frame: fIndex });
+    }
+    return frames.length?frames:[{ key: 'alex', frame: 0 }];
+  };
+  this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 1, repeat: -1 });
+  this.anims.create({ key: 'alex-walk', frames: range('walk'), frameRate: 8, repeat: -1 });
+  // Run uses the same frames as walk but faster
+  this.anims.create({ key: 'alex-run', frames: range('walk'), frameRate: 14, repeat: -1 });
+  this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 10, repeat: 0 });
+  this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 10, repeat: 0 });
+  // Jump: a single stable airborne frame; no yoyo to avoid odd flicker
+  {
+    const jIndex = idx(map.jump.row, map.jump.from);
+    const tKey = trimKeyOf(jIndex);
+    const jf = this.textures.exists(tKey) ? [{ key: tKey, frame: 0 }] : [{ key: 'alex', frame: jIndex }];
+    this.anims.create({ key: 'alex-jump', frames: jf, frameRate: 1, repeat: -1 });
+  }
+        
+        // Create enemy animations for each type - simplified
+    const enemyAnimTypes = ['enemy1', 'enemy2', 'enemy3'];
+  enemyAnimTypes.forEach(enemyType => {
+          if (this.textures.exists(enemyType)) {
+            this.anims.create({
+              key: `${enemyType}-idle`,
+              frames: [{ key: enemyType, frame: 0 }],
+              frameRate: 1,
+              repeat: 0
+            });
+            
+            this.anims.create({
+              key: `${enemyType}-walk`,
+              frames: [{ key: enemyType, frame: 0 }, { key: enemyType, frame: 1 }],
+              frameRate: 6,
+              repeat: -1
+            });
+          }
+        });
+  // Boss animations
+  this.anims.create({ key: 'boss-idle', frames: [{ key: 'boss', frame: 0 }], frameRate: 1, repeat: 0 });
+  this.anims.create({ key: 'boss-walk', frames: [{ key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 6, repeat: -1 });
+        
+        // Start animations
+  this.alex.play('alex-idle');
+        this.enemies.forEach(enemy => {
+          enemy.play(`${enemy.type}-idle`);
+        });
+  if (this.boss) this.boss.play('boss-idle');
+        
+        // Input setup
+  step('input');
+  this.cursors = this.input.keyboard.createCursorKeys();
+        this.keys = this.input.keyboard.addKeys('A,S,D,SPACE');
+  // Dev: quick spawn with B key
+  try { this.keys.B = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B); } catch(_) {}
+        // Pause / Mute keys
+        const KC = Phaser.Input.Keyboard.KeyCodes;
+        this.pauseKeys = {
+          esc: this.input.keyboard.addKey(KC.ESC),
+          p: this.input.keyboard.addKey(KC.P),
+          m: this.input.keyboard.addKey(KC.M)
+        };
+        // Dev flags and helpers
+        this.godMode = false;
+        this.setGodMode = (on) => { this.godMode = !!on; this.showMessage(this.godMode ? 'God Mode: ON' : 'God Mode: OFF'); };
+    this.spawnBossNearPlayer = () => {
+          try {
+            // If already present, keep it and inform
+            if (this.boss && this.boss.active && !this.boss._defeated) { this.showMessage('Boss already present.'); return this.boss; }
+            // Pick a sprite key that exists (fallback to enemy1 if boss sheet missing)
+            const spriteKey = this.textures.exists('boss') ? 'boss' : (this.textures.exists('enemy1') ? 'enemy1' : null);
+            const bx = Math.max((this.alex?.x || 200) + 70, 60);
+            // Fallback ground if baseY not initialized yet
+            const groundY = Number.isFinite(this.baseYMax) ? this.baseYMax : ((this.scale.height || this.scale.gameSize?.height || 480) - 18);
+            const by = groundY;
+            if (!spriteKey) {
+              this.showMessage('Boss sprite not loaded (check 404s). No spawn.');
+              try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = false; } catch(_) {}
+              return null;
+            }
+            const boss = this.add.sprite(bx, by, spriteKey, 0).setOrigin(0.5, 1).setDepth(10);
+            const enemyScale = this.bg?.scaleX || 1;
+            boss.setScale(enemyScale);
+            boss.health = 140; boss.type = spriteKey; boss.speed = 0.8; boss.attackCooldown = 0; boss.attackCadence = 850; boss.attackReach = 30; boss.attackWidth = 24; boss.attackHeight = 20;
+            const animKey = spriteKey === 'boss' ? 'boss-idle' : `${spriteKey}-idle`;
+            try { boss.play(animKey); } catch(_) {}
+            this.bossName = this.bossName || 'Miller';
+            this.boss = boss;
+      try { boss.setTintFill(0xff55ff); this.time.delayedCall(180, () => boss.clearTint()); } catch(_) {}
+            this.showMessage(`${this.bossName} spawned nearby.`);
+            // Reflect in Dev UI if present
+            try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = true; } catch(_) {}
+            return boss;
+          } catch(_) { return null; }
+        };
+        this.despawnBoss = () => { try { if (this.boss) { this.boss.destroy(); this.boss = null; this.showMessage('Boss despawned.'); } } catch(_) {} };
+        
+  // Game state
+  this.isMoving = false;
+  this.isAttacking = false;
+  // Double-tap to run state
+  this.runState = { isRunning:false, dir:0, lastTap:{ left:0, right:0 }, threshold: 280 };
+  // Lane movement + jump physics (jump height separate from lane Y)
+  // Constrain to detected road band; fallback to constant if detection unavailable
+  this.ROAD_TOP_PCT = 0.65;
+  this.baseYMin = Math.round(ch * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 2; // small cushion
+  this.baseYMax = ch - 18;
+  this.alexBaseY = this.baseYMax;
+  this.alexJumpZ = 0; // negative while rising
+  this.alexVy = 0;
+  this.GRAVITY = 0.28; // slightly slower fall for longer airtime
+  this.JUMP_VELOCITY = -12.0; // slightly softer takeoff
+  this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
+  // Player hurt / invulnerability window
+  this.playerInvulUntil = 0; // timestamp in ms
+        
+  console.log('Baden City Ransom scene ready. Background cropped to road.');
+  // Lightweight on-screen debug overlay (updates on resize)
+  const dbg = this.add.text(6, 6, '', { fontFamily: 'monospace', fontSize: '12px', color: '#0f0' }).setDepth(10000).setScrollFactor(0);
+  const updateDebug = () => {
+    const s = [
+      `cw:${this.scale.width} ch:${this.scale.height}`,
+      `bgKey:${useKey} bgScale:${this.bg.scaleX.toFixed(2)}`,
+      `parallax:${Math.round(this._parallaxX)}`,
+      `alex:${Math.round(this.alex.x)},${Math.round(this.alex.y)} run:${this.runState?.isRunning?'Y':'N'}`,
+      `sheet ${cols}x${rows}  map w:${map.walk.row}:${map.walk.from}-${map.walk.to} p:${map.punch.row}:${map.punch.from}-${map.punch.to} k:${map.kick.row}:${map.kick.from}-${map.kick.to} j:${map.jump.row}:${map.jump.from}-${map.jump.to}`
+    ].join('  ');
+    dbg.setText(s);
+  };
+  updateDebug();
+        
+        // Ensure background continues to fit if the canvas size changes
+        this.scale.on('resize', (gameSize) => {
+          const w = gameSize?.width || this.scale.width || this.scale.gameSize?.width || canvasWrap?.clientWidth || 800;
+          const h = gameSize?.height || this.scale.height || this.scale.gameSize?.height || canvasWrap?.clientHeight || 480;
+          applyResize(w, h);
+          updateDebug();
+        });
+        // Apply a couple of staged resizes to settle layout after the Title height swap
+        const s0 = getSize();
+        applyResize(s0.cw, s0.ch);
+        try {
+          this.time.delayedCall(16, () => { const s = getSize(); applyResize(s.cw, s.ch); updateDebug(); });
+          this.time.delayedCall(80, () => { const s = getSize(); applyResize(s.cw, s.ch); updateDebug(); });
+        } catch(_) {}
+  // Play authentic street music for this outdoor level
+  step('music');
+        this.sound.stopAll();
+        this.music = this.sound.add('street_music', { loop: true, volume: 0.35 });
+        const startMusic = () => { if (!this.music.isPlaying) this.music.play(); };
+        if (this.sound.locked) {
+          this.sound.once('unlocked', startMusic);
+          this.input.once('pointerdown', startMusic);
+        } else {
+          startMusic();
+        }
+  // Auto-pause and resume music based on scene pause/resume
+  this.events.on('pause', () => { try { this.music?.pause(); } catch(_) {} });
+  this.events.on('resume', () => { try { this.music?.resume(); } catch(_) {} });
+        // Small helper to play short SFX with minimal overlap
+        this._sfxGateTs = 0;
+        this.playSfx = (keys, volume=0.5, rate=1.0, duckMs=120, duckVol=0.25) => {
+          try {
+            if (this.sound.locked) return; // should be unlocked after title
+            const now = this.time.now || 0;
+            if (now - (this._sfxGateTs||0) < 40) return; // gentle spam gate
+            this._sfxGateTs = now;
+            const list = Array.isArray(keys) ? keys : [keys];
+            const key = list[(Math.random()*list.length)|0];
+            if (!this.sound?.get(key)) { /* okay */ }
+            const s = this.sound.add(key, { volume, rate });
+            s.once('complete', () => s.destroy());
+            // Brief music ducking while SFX plays
+            const prevVol = this.music?.volume ?? 0.35;
+            if (this.music && duckMs>0) {
+              this.music.setVolume(Math.max(0, Math.min(prevVol, duckVol)));
+              this.time.delayedCall(duckMs, () => { if (this.music) this.music.setVolume(prevVol); });
+            }
+            s.play();
+          } catch (_) { /* ignore */ }
+        };
+        // Lightweight synthesized SFX (no asset needed)
+        this.synth = {
+          click: (freq=1100, dur=0.035, vol=0.12) => {
+            try {
+              const ctx = this.sound.context; const t = ctx.currentTime;
+              const o = ctx.createOscillator(); const g = ctx.createGain();
+              o.type = 'square'; o.frequency.setValueAtTime(freq, t);
+              g.gain.setValueAtTime(0.0001, t);
+              g.gain.linearRampToValueAtTime(vol, t + 0.006);
+              g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+              o.connect(g).connect(ctx.destination);
+              o.start(t); o.stop(t + dur + 0.01);
+            } catch(_) {}
+          },
+          thump: (freq=90, dur=0.12, vol=0.22) => {
+            try {
+              const ctx = this.sound.context; const t = ctx.currentTime;
+              const o = ctx.createOscillator(); const g = ctx.createGain(); const f = ctx.createBiquadFilter();
+              o.type = 'sine'; o.frequency.setValueAtTime(freq, t);
+              f.type = 'lowpass'; f.frequency.setValueAtTime(240, t);
+              g.gain.setValueAtTime(0.0001, t);
+              g.gain.linearRampToValueAtTime(vol, t + 0.01);
+              g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+              o.connect(f).connect(g).connect(ctx.destination);
+              o.start(t); o.stop(t + dur + 0.02);
+            } catch(_) {}
+          }
+        };
+        
+        // Function to show messages in dialogue bar
+        this.showMessage = (text) => {
+          document.getElementById('dialogue-text').innerHTML = text;
+        };
+        // Expose simple toggles for PauseOverlay to call
+        this.toggleMusicMute = () => {
+          try { if (this.music) { this.music.setMute(!this.music.mute); this.showMessage(this.music.mute ? 'Music muted' : 'Music unmuted'); } } catch(_) {}
+        };
+        this.enterPause = () => {
+          try {
+            if (!this.scene.isActive('PauseOverlay')) {
+              this.scene.launch('PauseOverlay');
+              this.scene.pause();
+            }
+          } catch(_) {}
+        };
+        
+  this.showMessage('Welcome to Baden City! Fight your way through the gangs!');
+  step('ready');
+        } catch (err) {
+          console.error(err);
+          diag(`Init error: ${err?.message || err}`);
+          // Do not rethrow to avoid opaque 'Script error.' from cross-origin contexts
+          return;
+        }
+      }
+      
+      update(time) {
+        // Pause toggle
+        if (Phaser.Input.Keyboard.JustDown(this.pauseKeys.esc) || Phaser.Input.Keyboard.JustDown(this.pauseKeys.p)) {
+          this.enterPause();
+          return; // stop processing this frame
+        }
+        // Music mute toggle
+        if (Phaser.Input.Keyboard.JustDown(this.pauseKeys.m)) {
+          this.toggleMusicMute();
+        }
+        // Dev: quick boss spawn
+        if (this.keys?.B && Phaser.Input.Keyboard.JustDown(this.keys.B)) {
+          this.spawnBossNearPlayer && this.spawnBossNearPlayer();
+        }
+        // Alex movement with double-tap run
+        let moving = false;
+        const now = time;
+        // detect taps
+        const tap = (side) => {
+          const last = this.runState.lastTap[side] || 0;
+          const dt = now - last;
+          this.runState.lastTap[side] = now;
+          if (dt > 0 && dt < this.runState.threshold) {
+            this.runState.isRunning = true;
+            this.runState.dir = (side==='left'?-1:1);
+          }
+        };
+        if (Phaser.Input.Keyboard.JustDown(this.cursors.left)) tap('left');
+        if (Phaser.Input.Keyboard.JustDown(this.cursors.right)) tap('right');
+
+  const baseSpeed = 2;
+        const speed = (this.runState.isRunning ? 3.8 : baseSpeed);
+
+        if (!this.isAttacking && this.cursors.left.isDown) {
+          this.alex.x -= speed;
+          this.alex.setFlipX(true);
+          moving = true;
+          if (this.runState.isRunning && this.runState.dir !== -1) this.runState.isRunning = false;
+        } else if (!this.isAttacking && this.cursors.right.isDown) {
+          this.alex.x += speed;
+          this.alex.setFlipX(false);
+          moving = true;
+          if (this.runState.isRunning && this.runState.dir !== 1) this.runState.isRunning = false;
+        } else {
+          // No horizontal input: stop running
+          this.runState.isRunning = false;
+        }
+        
+        // Lane up/down movement along the road
+  if (!this.isAttacking && this.cursors.up.isDown) { this.alexBaseY -= speed; moving = true; }
+  else if (!this.isAttacking && this.cursors.down.isDown) { this.alexBaseY += speed; moving = true; }
+        this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
+
+        // Jump with D if not already airborne
+        const onGround = this.alexJumpZ === 0;
+  if (!this.isAttacking && Phaser.Input.Keyboard.JustDown(this.keys.D) && onGround) {
+          this.alexVy = this.JUMP_VELOCITY;
+          // Play one of the short jump SFX
+          this.playSfx(['sfx_jump1','sfx_jump2'], 0.45, 1.0);
+        }
+        // Apply jump gravity to jump height only
+        const wasAir = !onGround || this.alexVy !== 0;
+        if (!onGround || this.alexVy !== 0) {
+          this.alexJumpZ += this.alexVy;
+          this.alexVy += this.GRAVITY;
+          if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
+        }
+        // Compose final render Y
+        this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
+        // Landing detect: transitioning from air to ground this frame
+        const nowOnGround = (this.alexJumpZ === 0 && this.alexVy === 0);
+        if (wasAir && nowOnGround) {
+          this.synth.thump(95, 0.1, 0.18);
+        }
+        
+  // Animation handling
+        if (!onGround && !this.isAttacking) {
+          if (this.alex.anims.currentAnim?.key !== 'alex-jump') {
+            this.alex.play('alex-jump');
+          }
+        } else if (moving && !this.isAttacking) {
+          const want = this.runState.isRunning ? 'alex-run' : 'alex-walk';
+          if (this.alex.anims.currentAnim?.key !== want) this.alex.play(want);
+        } else if (!this.isAttacking) {
+          if (this.alex.anims.currentAnim?.key !== 'alex-idle') {
+            this.alex.play('alex-idle');
+          }
+        }
+        
+        // Combat
+  const tryAttack = (kind) => {
+          if (this.isAttacking) return;
+          this.isAttacking = true;
+          this.alex.play(kind === 'kick' ? 'alex-kick' : 'alex-punch');
+          // tiny procedural motion to sell the strike
+          const tilt = kind === 'kick' ? 8 : 5;
+          this.tweens.add({ targets: this.alex, angle: (this.alex.flipX?-tilt:tilt), duration: 80, yoyo: true, onComplete:()=>{ this.alex.setAngle(0); } });
+          // small recoil on the player when attacking
+          try {
+            const recoil = (kind === 'kick') ? 3.5 : 2.5;
+            const worldW = (this._bgNaturalW||800) * (this.bg?.scaleX||1);
+            this.alex.x += this.alex.flipX ? recoil : -recoil;
+            this.alex.x = Phaser.Math.Clamp(this.alex.x, 16, worldW - 16);
+          } catch(_) {}
+          // Play a short punch/kick SFX
+          this.playSfx(['sfx_punch1','sfx_punch2'], 0.5, kind==='kick' ? 0.95 : 1.02);
+          // Build a simple hitbox in front of Alex once per press
+          const reach = (kind === 'kick') ? 26 : 22;
+          const w = (kind === 'kick') ? 22 : 18;
+          const h = 20;
+          const ox = this.alex.flipX ? -reach : reach;
+          // Place the hitbox around chest height (a bit above the feet)
+          const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h - 6, w, h);
+
+      const applyHit = (target, dmg, knock=6) => {
+            if (!target || !target.active) return;
+            const tb = target.getBounds();
+            if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, tb)) {
+              target.health = Math.max(0, (target.health||1) - dmg);
+              target.setTintFill(0xff0000);
+              this.time.delayedCall(80, () => target.clearTint());
+              // simple knockback
+              target.x += this.alex.flipX ? -knock : knock;
+              this.synth.click(1300, 0.03, 0.10);
+              if (target.health === 0 && !target._defeated) {
+                target._defeated = true; target.play(`${target.type||'boss'}-idle`);
+                this.tweens.add({ targets: target, alpha: 0, duration: 400, onComplete: () => target.destroy() });
+                  if (target === this.boss) this.showMessage((this.bossName||'Boss') + ' defeated!');
+              }
+            }
+          };
+
+          // Damage numbers
+          const dmg = kind === 'kick' ? 16 : 12;
+          this.enemies.forEach(e => applyHit(e, dmg, 5));
+          if (this.boss) applyHit(this.boss, dmg, 8);
+
+          // Only clear attacking when the specific attack animation completes
+          const ev = `animationcomplete-${kind === 'kick' ? 'alex-kick' : 'alex-punch'}`;
+          this.alex.once(ev, () => { this.isAttacking = false; this.alex.setAngle(0); });
+        };
+
+  if (Phaser.Input.Keyboard.JustDown(this.keys.A)) { this.runState.isRunning=false; tryAttack('punch'); }
+  if (Phaser.Input.Keyboard.JustDown(this.keys.S)) { this.runState.isRunning=false; tryAttack('kick'); }
+        
+    // Keep Alex inside world bounds
+  const displayWNow = this._bgNaturalW * this.bg.scaleX;
+  this.alex.x = Phaser.Math.Clamp(this.alex.x, 16, displayWNow - 16);
+        
+  // ... (resize listener moved to create())
+        
+        // Single-enemy chase + attack AI
+        const hurtPlayer = (dmg, knock=8, dir=1) => {
+          if (this.godMode) return; // ignore damage in God Mode
+          const nowMs = time;
+          if (nowMs < this.playerInvulUntil) return; // i-frames
+          this.alex.health = Math.max(0, (this.alex.health||0) - dmg);
+          this.playerInvulUntil = nowMs + 600; // 600ms i-frames
+          this.alex.setTintFill(0xffff77);
+          this.time.delayedCall(100, () => this.alex.clearTint());
+          // knockback along X and tiny vertical wobble
+          this.alex.x += (dir<0?-1:1) * knock;
+          this.cameras.main.shake(90, 0.004);
+          this.synth.click(900, 0.04, 0.12);
+          if (this.alex.health === 0) {
+            // Auto-respawn with blinking invulnerability (classic style)
+            this.showMessage('You were knocked out! Respawning...');
+            try {
+              const respawn = () => {
+                // Restore position and health
+                const { height:ch } = this.scale;
+                const worldW = (this._bgNaturalW||800) * (this.bg?.scaleX||1);
+                this.alex.health = 100;
+                this.alexBaseY = this.baseYMax;
+                this.alexJumpZ = 0; this.alexVy = 0;
+                this.alex.x = Phaser.Math.Clamp((this.cameras.main.scrollX||0) + 120, 16, worldW - 16);
+                this.alex.y = Math.round(this.alexBaseY);
+                // Set longer i-frames and blink
+                const now2 = this.time.now || (nowMs+1);
+                const INV_MS = 2000;
+                this.playerInvulUntil = now2 + INV_MS;
+                try { this.tweens.add({ targets: this.alex, alpha: 0.25, yoyo: true, repeat: Math.floor(INV_MS/120), duration: 60 }); } catch(_) {}
+                this.showMessage('Back up! (invulnerable)');
+              };
+              this.time.delayedCall(450, respawn);
+            } catch(_) {}
+          }
+        };
+        this.enemies.forEach(enemy => {
+          if (!enemy || enemy._defeated) return;
+          // face the player and chase
+          const dx = this.alex.x - enemy.x;
+          const dy = (this.alexBaseY - enemy.y);
+          enemy.setFlipX(dx < 0);
+          const alignedY = Math.abs(dy) <= 12; // lane alignment
+          const distX = Math.abs(dx);
+          const reach = enemy.attackReach;
+          // move towards player until in range
+          if (distX > reach + 2 || !alignedY) {
+            enemy.x += Math.sign(dx) * enemy.speed;
+            // drift vertically to align lanes
+            if (!alignedY) enemy.y += Math.sign(this.alexBaseY - enemy.y) * 0.6;
+            if (enemy.anims.currentAnim?.key !== `${enemy.type}-walk`) enemy.play(`${enemy.type}-walk`);
+          } else {
+            if (enemy.anims.currentAnim?.key !== `${enemy.type}-idle`) enemy.play(`${enemy.type}-idle`);
+            // attempt attack if cooldown over
+            if (time >= (enemy.attackCooldown||0)) {
+              // attack hitbox in front of enemy
+              const w = enemy.attackWidth, h = enemy.attackHeight;
+              const ox = enemy.flipX ? -reach : reach;
+              const hitRect = new Phaser.Geom.Rectangle(enemy.x + ox - w/2, enemy.y - h - 6, w, h);
+              const pb = this.alex.getBounds();
+              if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
+                hurtPlayer(10, 10, enemy.flipX?-1:1);
+              }
+              enemy.attackCooldown = time + enemy.attackCadence;
+            }
+          }
+        });
+        // Boss AI (Miller) – same simple chase/attack loop
+        if (this.boss && !this.boss._defeated) {
+          const b = this.boss;
+          const dx = this.alex.x - b.x;
+          const dy = (this.alexBaseY - b.y);
+          try { b.setFlipX && b.setFlipX(dx < 0); } catch(_) {}
+          const alignedY = Math.abs(dy) <= 12;
+          const distX = Math.abs(dx);
+          const reach = b.attackReach || 28;
+          if (distX > reach + 2 || !alignedY) {
+            b.x += Math.sign(dx) * (b.speed || 0.8);
+            if (!alignedY) b.y += Math.sign(this.alexBaseY - b.y) * 0.6;
+            try { if (b.anims?.currentAnim?.key !== `${b.type}-walk`) b.play && b.play(`${b.type}-walk`); } catch(_) {}
+          } else {
+            try { if (b.anims?.currentAnim?.key !== `${b.type}-idle`) b.play && b.play(`${b.type}-idle`); } catch(_) {}
+            if (time >= (b.attackCooldown||0)) {
+              const w = b.attackWidth || 22, h = b.attackHeight || 20;
+              const ox = b.flipX ? -reach : reach;
+              const hitRect = new Phaser.Geom.Rectangle(b.x + ox - w/2, b.y - h - 6, w, h);
+              const pb = this.alex.getBounds();
+              if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
+                hurtPlayer(14, 12, b.flipX?-1:1);
+              }
+              b.attackCooldown = time + (b.attackCadence || 900);
+            }
+          }
+        }
+        
+        // Update HUD elements
+        document.getElementById('health').innerHTML = this.alex.health;
+  document.getElementById('money').innerHTML = Number(this.alex.money||0).toFixed(2);
+      }
+    }
+    
+    // Simple overlay scene that pauses the game and listens for resume/mute
+    class PauseOverlay extends Phaser.Scene {
+      constructor(){ super({ key: 'PauseOverlay' }); }
+      create(){
+        const makeUi = () => {
+          const w = this.scale.width, h = this.scale.height;
+          if (this.maskRect) this.maskRect.destroy();
+          if (this.label) this.label.destroy();
+          this.maskRect = this.add.rectangle(0, 0, w, h, 0x000000, 0.55).setOrigin(0,0).setDepth(10000);
+          this.label = this.add.text(w/2, h/2, 'Paused\nESC or P: Resume\nM: Mute/Unmute Music', {
+            fontFamily: 'monospace', fontSize: '28px', color: '#ffff00', align: 'center', stroke:'#000', strokeThickness: 6
+          }).setOrigin(0.5).setDepth(10001);
+        };
+        makeUi();
+        this.scale.on('resize', makeUi, this);
+        const KC = Phaser.Input.Keyboard.KeyCodes;
+        this.keys = {
+          esc: this.input.keyboard.addKey(KC.ESC),
+          p: this.input.keyboard.addKey(KC.P),
+          m: this.input.keyboard.addKey(KC.M)
+        };
+        const resume = () => { try { this.scene.stop(); this.scene.resume('BadenCityRansomGame'); } catch(_) {} };
+        this.input.keyboard.on('keydown', (ev) => {
+          if (ev.code === 'Escape' || ev.code === 'KeyP') { resume(); }
+          else if (ev.code === 'KeyM') {
+            try { const gs = this.scene.get('BadenCityRansomGame'); gs.toggleMusicMute && gs.toggleMusicMute(); } catch(_) {}
+          }
+        });
+        // Also allow pointer click to resume for convenience
+        this.input.once('pointerdown', resume);
+      }
+      shutdown(){ this.scale.off('resize', undefined, this); }
+      destroy(){ this.scale && this.scale.off('resize', undefined, this); }
+    }
+    
+    // Game configuration with adjusted canvas for bigger UI bars
+    const config = {
+      type: Phaser.AUTO,
+      width: 800,
+      height: 480, // 80% of a 600 reference height
+      parent: 'canvasWrap',
+      backgroundColor: '#000000',
+  resolution: 1,
+  scene: [TitleScene, BadenCityRansomGame, PauseOverlay],
+      render: {
+        pixelArt: true,
+        antialias: false,
+        roundPixels: true
+      },
+      scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.NO_CENTER,
+        parent: 'canvasWrap'
+      }
+    };
+    
+  console.log('Starting authentic Baden City Ransom...');
+    const game = new Phaser.Game(config);
+  // Expose helpers for Dev UI
+  window._BCR = { game, gs: () => { try { return game.scene.getScene('BadenCityRansomGame'); } catch(_) { return null; } } };
+    
+    game.events.on('ready', () => {
+      console.log('🎮 BADEN CITY RANSOM IS READY TO PLAY!');
+    });
+    // Wire Dev UI controls
+    (function(){
+      const btn = document.getElementById('devBtn');
+      const panel = document.getElementById('devPanel');
+      const close = document.getElementById('devClose');
+      const god = document.getElementById('devGod');
+      const boss = document.getElementById('devBoss');
+      if (!btn || !panel) return;
+      const gs = () => (window._BCR && window._BCR.gs) ? window._BCR.gs() : null;
+      btn.addEventListener('click', () => {
+        const show = panel.style.display !== 'block';
+        panel.style.display = show ? 'block' : 'none';
+        btn.setAttribute('aria-expanded', String(show));
+      });
+      close && close.addEventListener('click', () => {
+        panel.style.display = 'none';
+        btn.setAttribute('aria-expanded', 'false');
+      });
+      god && god.addEventListener('change', () => { const s = gs(); if (s && s.setGodMode) s.setGodMode(god.checked); });
+  boss && boss.addEventListener('change', () => { const s = gs(); if (!s) return; if (boss.checked) { s.spawnBossNearPlayer && s.spawnBossNearPlayer(); s.showMessage && s.showMessage('Spawn request sent.'); } else { s.despawnBoss && s.despawnBoss(); s.showMessage && s.showMessage('Despawn request sent.'); } });
+      // Initialize boss checkbox if spawned by default
+      setTimeout(() => { const s = gs(); if (s && s.boss) { if (boss) boss.checked = true; } }, 200);
+    })();
+  })();
+  </script>
+  <script>
+    // Catch unexpected runtime errors early and surface them in the dialogue bar
+    (function(){
+      const report = (msg) => { const d = document.getElementById('dialogue-text'); if (d) d.textContent = String(msg); };
+      window.addEventListener('error', (e) => {
+        const parts = [
+          'Error:', e?.message,
+          e?.filename ? `@ ${e.filename}` : '',
+          (e?.lineno||e?.colno) ? `:${e.lineno||0}:${e.colno||0}` : ''
+        ].filter(Boolean);
+        report(parts.join(' '));
+        if (e?.error?.stack) console.error(e.error.stack);
+      });
+      window.addEventListener('unhandledrejection', (e) => {
+        const reason = e?.reason;
+        report(`Unhandled: ${reason?.message || reason || 'unknown'}`);
+        if (reason?.stack) console.error(reason.stack);
+      });
+    })();
+  </script>
 </body>
 </html>
