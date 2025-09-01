@@ -596,29 +596,89 @@
         this.alex.health = 100;
   this.alex.money = 4.20; // New default
         
-        // Create enemy gang members
+        // Create diverse enemy gang members from available sprites
   step('spawn enemies');
   this.enemies = [];
-        // Focus on a single enemy for tight combat iteration
-        const enemyType = 'enemy1';
-        if (this.textures.exists(enemyType)) {
-          const ex = Math.max(420, Math.min(displayW - 160, 700));
-          const enemy = this.add.sprite(ex, ch - 18, enemyType, 0).setOrigin(0.5, 1);
-          enemy.setScale(playerScale);
-          enemy.health = 60;
-          enemy.type = enemyType;
-          enemy.aiTimer = 0;
-          enemy.speed = 0.9;
-          enemy.attackCooldown = 0; // ms
-          enemy.attackCadence = 900; // ms between attacks
-          enemy.attackReach = 24; // horizontal reach
-          enemy.attackWidth = 20;
-          enemy.attackHeight = 18;
-          this.enemies.push(enemy);
-        }
-  // Boss is spawned manually via Dev tools or future triggers
+        
+        // Enhanced enemy spawning with variety and different stats
+        const enemyConfigs = [
+          { type: 'enemy1', health: 50, speed: 1.1, cadence: 800, name: 'Street Punk' },
+          { type: 'enemy2', health: 70, speed: 0.8, cadence: 1200, name: 'Heavy Bruiser' },
+          { type: 'enemy3', health: 60, speed: 1.0, cadence: 900, name: 'Gang Member' }
+        ];
+        
+        // Spawn 2-3 enemies with different types for variety
+        const numEnemies = Math.min(2 + Math.floor(Math.random() * 2), enemyConfigs.length);
+        const usedConfigs = enemyConfigs.slice(0, numEnemies);
+        
+        usedConfigs.forEach((config, i) => {
+          if (this.textures.exists(config.type)) {
+            const spacing = 80;
+            const startX = Math.max(420, displayW - 300);
+            const ex = startX + (i * spacing);
+            
+            const enemy = this.add.sprite(ex, ch - 18, config.type, 0).setOrigin(0.5, 1);
+            enemy.setScale(playerScale);
+            enemy.health = config.health;
+            enemy.maxHealth = config.health;
+            enemy.type = config.type;
+            enemy.name = config.name;
+            enemy.aiTimer = 0;
+            enemy.speed = config.speed;
+            enemy.attackCooldown = 0;
+            enemy.attackCadence = config.cadence;
+            enemy.attackReach = 24;
+            enemy.attackWidth = 20;
+            enemy.attackHeight = 18;
+            enemy.lastDirection = 1; // For AI movement tracking
+            enemy.aggroRange = 120; // How close player needs to be to activate AI
+            
+            // Create enemy health bar
+            enemy.healthBarBg = this.add.rectangle(0, 0, 32, 4, 0x333333).setOrigin(0.5, 1).setDepth(9999);
+            enemy.healthBar = this.add.rectangle(0, 0, 30, 2, 0xff0000).setOrigin(0.5, 1).setDepth(10000);
+            
+            // Update health bar position function
+            enemy.updateHealthBar = () => {
+              if (enemy.healthBarBg && enemy.healthBar) {
+                enemy.healthBarBg.setPosition(enemy.x, enemy.y - enemy.height * enemy.scaleY - 5);
+                enemy.healthBar.setPosition(enemy.x, enemy.y - enemy.height * enemy.scaleY - 5);
+                
+                const healthPercent = enemy.health / enemy.maxHealth;
+                enemy.healthBar.width = 30 * healthPercent;
+                
+                // Color based on health
+                if (healthPercent > 0.7) {
+                  enemy.healthBar.fillColor = 0x00ff00;
+                } else if (healthPercent > 0.3) {
+                  enemy.healthBar.fillColor = 0xffaa00;
+                } else {
+                  enemy.healthBar.fillColor = 0xff0000;
+                }
+                
+                // Hide when at full health or defeated
+                const shouldShow = enemy.health < enemy.maxHealth && enemy.health > 0 && !enemy._defeated;
+                enemy.healthBarBg.setVisible(shouldShow);
+                enemy.healthBar.setVisible(shouldShow);
+              }
+            };
+            
+            this.enemies.push(enemy);
+          }
+        });
+  // Enhanced boss spawning system with variety
   step('boss (manual spawn)');
-  this.bossName = 'Miller';
+  
+  // Array of available boss configurations
+  this.bossConfigs = [
+    { key: 'boss', name: 'Miller', health: 140, speed: 0.8, cadence: 850, description: 'Street Boss' },
+    { sprite: 'NES - River City Ransom _ Street Gangs - Enemies & Bosses - Moose.png', key: 'moose', name: 'Moose', health: 160, speed: 0.7, cadence: 1200, description: 'Heavy Bruiser' },
+    { sprite: 'NES - River City Ransom _ Street Gangs - Enemies & Bosses - Ivan.png', key: 'ivan', name: 'Ivan', health: 120, speed: 1.0, cadence: 700, description: 'Quick Fighter' },
+    { sprite: 'NES - River City Ransom _ Street Gangs - Enemies & Bosses - Blade.png', key: 'blade', name: 'Blade', health: 100, speed: 1.2, cadence: 600, description: 'Swift Assassin' }
+  ];
+  
+  // Select random boss configuration
+  this.currentBossConfig = this.bossConfigs[Math.floor(Math.random() * this.bossConfigs.length)];
+  this.bossName = this.currentBossConfig.name;
   this.boss = null;
   try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = false; } catch(_) {}
         
@@ -648,9 +708,9 @@
     return out;
   };
   const map = parseMap() || {
-    // Defaults matching prior working setup
-    walk:  { row: 0, from: 0, to: Math.min(1, cols-1) },
-    punch: { row: 1, from: 0, to: Math.min(2, cols-1) },
+    // Enhanced movement with more frames for smoother animation
+    walk:  { row: 0, from: 0, to: Math.min(3, cols-1) }, // More walking frames
+    punch: { row: 1, from: 0, to: Math.min(3, cols-1) }, // Extended punch combo
     // Kick provisional (will auto-tune below)
     kick:  { row: 2, from: 0, to: Math.min(2, cols-1) },
     // Jump left as-is since you’re happy with it
@@ -758,18 +818,25 @@
     }
     return frames.length?frames:[{ key: 'alex', frame: 0 }];
   };
-  this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 1, repeat: -1 });
-  this.anims.create({ key: 'alex-walk', frames: range('walk'), frameRate: 8, repeat: -1 });
-  // Run uses the same frames as walk but faster
-  this.anims.create({ key: 'alex-run', frames: range('walk'), frameRate: 14, repeat: -1 });
-  this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 10, repeat: 0 });
-  this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 10, repeat: 0 });
-  // Jump: a single stable airborne frame; no yoyo to avoid odd flicker
+  // Enhanced animation creation with smoother frame rates
+  this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 2, repeat: -1 });
+  this.anims.create({ key: 'alex-walk', frames: range('walk'), frameRate: 12, repeat: -1 }); // Smoother walking
+  // Run uses the same frames as walk but much faster
+  this.anims.create({ key: 'alex-run', frames: range('walk'), frameRate: 18, repeat: -1 }); // Faster running
+  this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 15, repeat: 0 }); // Faster punching
+  this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 12, repeat: 0 });
+  
+  // Enhanced jump animation with better transitions
   {
     const jIndex = idx(map.jump.row, map.jump.from);
     const tKey = trimKeyOf(jIndex);
     const jf = this.textures.exists(tKey) ? [{ key: tKey, frame: 0 }] : [{ key: 'alex', frame: jIndex }];
-    this.anims.create({ key: 'alex-jump', frames: jf, frameRate: 1, repeat: -1 });
+    this.anims.create({ key: 'alex-jump', frames: jf, frameRate: 8, repeat: -1 });
+  }
+  
+  // Add hurt animation if frames exist
+  if (map.hurt) {
+    this.anims.create({ key: 'alex-hurt', frames: range('hurt'), frameRate: 8, repeat: 0 });
   }
         
         // Create enemy animations for each type - simplified
@@ -1036,8 +1103,21 @@
   this.playerInvulUntil = 0; // timestamp in ms
         
   console.log('Baden City Ransom scene ready. Background cropped to road.');
-  // Lightweight on-screen debug overlay (updates on resize)
+  // Enhanced HUD with combo display
   const dbg = this.add.text(6, 6, '', { fontFamily: 'monospace', fontSize: '12px', color: '#0f0' }).setDepth(10000).setScrollFactor(0);
+  
+  // Add combo display
+  this.comboDisplay = this.add.text(6, 30, '', { 
+    fontFamily: 'monospace', fontSize: '14px', color: '#ffff00', stroke: '#000', strokeThickness: 2 
+  }).setDepth(10000).setScrollFactor(0);
+  
+  // Add health bar for Alex
+  this.healthBarBg = this.add.rectangle(10, 50, 120, 12, 0x333333).setOrigin(0, 0).setDepth(9999).setScrollFactor(0);
+  this.healthBar = this.add.rectangle(12, 52, 116, 8, 0x00ff00).setOrigin(0, 0).setDepth(10000).setScrollFactor(0);
+  this.healthText = this.add.text(140, 50, 'Health: 100', { 
+    fontFamily: 'monospace', fontSize: '12px', color: '#ffffff' 
+  }).setDepth(10000).setScrollFactor(0);
+  
   const updateDebug = () => {
     const s = [
       `cw:${this.scale.width} ch:${this.scale.height}`,
@@ -1047,6 +1127,35 @@
       `sheet ${cols}x${rows}  map w:${map.walk.row}:${map.walk.from}-${map.walk.to} p:${map.punch.row}:${map.punch.from}-${map.punch.to} k:${map.kick.row}:${map.kick.from}-${map.kick.to} j:${map.jump.row}:${map.jump.from}-${map.jump.to}`
     ].join('  ');
     dbg.setText(s);
+    
+    // Update combo display
+    if (this.comboCount > 1) {
+      this.comboDisplay.setText(`COMBO: ${this.comboCount}x`);
+      this.comboDisplay.setVisible(true);
+      // Pulse effect for high combos
+      if (this.comboCount > 3) {
+        this.comboDisplay.setScale(1 + Math.sin(this.time.now * 0.01) * 0.1);
+      } else {
+        this.comboDisplay.setScale(1);
+      }
+    } else {
+      this.comboDisplay.setVisible(false);
+    }
+    
+    // Update health bar
+    const healthPercent = (this.alex.health || 0) / 100;
+    this.healthBar.width = 116 * healthPercent;
+    
+    // Change color based on health
+    if (healthPercent > 0.6) {
+      this.healthBar.fillColor = 0x00ff00; // Green
+    } else if (healthPercent > 0.3) {
+      this.healthBar.fillColor = 0xffff00; // Yellow
+    } else {
+      this.healthBar.fillColor = 0xff0000; // Red
+    }
+    
+    this.healthText.setText(`Health: ${Math.ceil(this.alex.health || 0)}`);
   };
   updateDebug();
         
@@ -1264,51 +1373,126 @@
           }
         }
         
-        // Combat
+        // Enhanced Combat System with combos and variety
+        this.comboCount = 0;
+        this.comboTimer = 0;
+        this.maxCombo = 4;
+        
   const tryAttack = (kind) => {
           if (this.isAttacking) return;
+          
+          // Check for combo continuation
+          const now = this.time.now || 0;
+          if (now - this.comboTimer > 1000) {
+            this.comboCount = 0; // Reset combo if too much time passed
+          }
+          
           this.isAttacking = true;
-          this.alex.play(kind === 'kick' ? 'alex-kick' : 'alex-punch');
-          // tiny procedural motion to sell the strike
-          const tilt = kind === 'kick' ? 8 : 5;
-          this.tweens.add({ targets: this.alex, angle: (this.alex.flipX?-tilt:tilt), duration: 80, yoyo: true, onComplete:()=>{ this.alex.setAngle(0); } });
-          // small recoil on the player when attacking
+          this.comboCount = Math.min(this.comboCount + 1, this.maxCombo);
+          this.comboTimer = now;
+          
+          // Enhanced animation with combo effects
+          const animKey = kind === 'kick' ? 'alex-kick' : 'alex-punch';
+          this.alex.play(animKey);
+          
+          // Combo-based visual effects
+          const tilt = (kind === 'kick' ? 8 : 5) * Math.min(1.3, 1 + this.comboCount * 0.1);
+          this.tweens.add({ 
+            targets: this.alex, 
+            angle: (this.alex.flipX ? -tilt : tilt), 
+            duration: Math.max(60, 90 - this.comboCount * 5), 
+            yoyo: true, 
+            onComplete: () => { this.alex.setAngle(0); } 
+          });
+          
+          // Enhanced recoil based on combo
           try {
-            const recoil = (kind === 'kick') ? 3.5 : 2.5;
+            const baseRecoil = (kind === 'kick') ? 3.5 : 2.5;
+            const recoil = baseRecoil * (1 + this.comboCount * 0.15);
             const worldW = (this._bgNaturalW||800) * (this.bg?.scaleX||1);
             this.alex.x += this.alex.flipX ? recoil : -recoil;
             this.alex.x = Phaser.Math.Clamp(this.alex.x, 16, worldW - 16);
           } catch(_) {}
-          // Play a short punch/kick SFX
-          this.playSfx(['sfx_punch1','sfx_punch2'], 0.5, kind==='kick' ? 0.95 : 1.02);
-          // Build a simple hitbox in front of Alex once per press
-          const reach = (kind === 'kick') ? 26 : 22;
-          const w = (kind === 'kick') ? 22 : 18;
-          const h = 20;
+          
+          // Enhanced SFX with combo pitch variation
+          const pitchVar = 1.0 + (this.comboCount * 0.05);
+          this.playSfx(['sfx_punch1','sfx_punch2'], 0.5 + this.comboCount * 0.1, kind==='kick' ? 0.95 * pitchVar : 1.02 * pitchVar);
+          
+          // Enhanced hitbox with combo scaling
+          const baseReach = (kind === 'kick') ? 26 : 22;
+          const reach = baseReach * (1 + this.comboCount * 0.08);
+          const baseW = (kind === 'kick') ? 22 : 18;
+          const w = baseW * (1 + this.comboCount * 0.1);
+          const h = 20 + this.comboCount * 2;
           const ox = this.alex.flipX ? -reach : reach;
-          // Place the hitbox around chest height (a bit above the feet)
           const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h - 6, w, h);
 
       const applyHit = (target, dmg, knock=6) => {
-            if (!target || !target.active) return;
+            if (!target || !target.active || target._defeated) return;
             const tb = target.getBounds();
             if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, tb)) {
-              target.health = Math.max(0, (target.health||1) - dmg);
-              target.setTintFill(0xff0000);
-              this.time.delayedCall(80, () => target.clearTint());
-              // simple knockback
-              target.x += this.alex.flipX ? -knock : knock;
-              this.synth.click(1300, 0.03, 0.10);
+              const comboDamage = dmg * (1 + this.comboCount * 0.2);
+              const comboKnockback = knock * (1 + this.comboCount * 0.15);
+              
+              target.health = Math.max(0, (target.health||1) - comboDamage);
+              
+              // Enhanced hit effects
+              const hitColor = this.comboCount > 2 ? 0xffaa00 : 0xff0000; // Orange for high combo
+              target.setTintFill(hitColor);
+              this.time.delayedCall(100, () => target.clearTint());
+              
+              // Combo knockback
+              target.x += this.alex.flipX ? -comboKnockback : comboKnockback;
+              
+              // Enhanced hit sound
+              const hitPitch = 1300 + (this.comboCount * 200);
+              this.synth.click(hitPitch, 0.03 + this.comboCount * 0.01, 0.10);
+              
+              // Show combo count
+              if (this.comboCount > 1) {
+                const comboText = this.add.text(target.x, target.y - 40, `${this.comboCount}x COMBO!`, {
+                  fontSize: '12px', fontFamily: 'monospace', color: '#ffff00', stroke: '#000', strokeThickness: 2
+                }).setOrigin(0.5);
+                
+                this.tweens.add({
+                  targets: comboText,
+                  y: comboText.y - 30,
+                  alpha: 0,
+                  duration: 800,
+                  onComplete: () => comboText.destroy()
+                });
+              }
+              
+              // Defeat logic
               if (target.health === 0 && !target._defeated) {
-                target._defeated = true; target.play(`${target.type||'boss'}-idle`);
-                this.tweens.add({ targets: target, alpha: 0, duration: 400, onComplete: () => target.destroy() });
-                  if (target === this.boss) this.showMessage((this.bossName||'Boss') + ' defeated!');
+                target._defeated = true; 
+                target.play(`${target.type||'boss'}-idle`);
+                
+                // Enhanced defeat effect
+                this.tweens.add({ 
+                  targets: target, 
+                  alpha: 0, 
+                  scaleX: target.scaleX * 1.1,
+                  scaleY: target.scaleY * 1.1,
+                  duration: 600, 
+                  onComplete: () => {
+                    if (target === this.boss) {
+                      this.showMessage((this.bossName||'Boss') + ' defeated!');
+                    } else {
+                      // Add money reward
+                      this.alex.money = (this.alex.money || 0) + (5 + this.comboCount * 2);
+                      this.showMessage(`${target.name || 'Enemy'} defeated! +$${5 + this.comboCount * 2}`);
+                    }
+                    target.destroy();
+                  }
+                });
               }
             }
           };
 
-          // Damage numbers
-          const dmg = kind === 'kick' ? 16 : 12;
+          // Combo-based damage scaling
+          const baseDmg = kind === 'kick' ? 16 : 12;
+          const dmg = baseDmg * (1 + this.comboCount * 0.25);
           this.enemies.forEach(e => applyHit(e, dmg, 5));
           if (this.boss) applyHit(this.boss, dmg, 8);
 
@@ -1326,19 +1510,30 @@
         
   // ... (resize listener moved to create())
         
-        // Single-enemy chase + attack AI
+        // Enhanced multi-enemy AI system with varied behaviors
         const hurtPlayer = (dmg, knock=8, dir=1) => {
           if (this.godMode) return; // ignore damage in God Mode
           const nowMs = time;
           if (nowMs < this.playerInvulUntil) return; // i-frames
+          
+          // Reset combo on taking damage
+          this.comboCount = 0;
+          
           this.alex.health = Math.max(0, (this.alex.health||0) - dmg);
           this.playerInvulUntil = nowMs + 600; // 600ms i-frames
           this.alex.setTintFill(0xffff77);
           this.time.delayedCall(100, () => this.alex.clearTint());
+          
+          // Play hurt animation if available
+          if (this.alex.anims.exists('alex-hurt')) {
+            this.alex.play('alex-hurt');
+          }
+          
           // knockback along X and tiny vertical wobble
           this.alex.x += (dir<0?-1:1) * knock;
           this.cameras.main.shake(90, 0.004);
           this.synth.click(900, 0.04, 0.12);
+          
           if (this.alex.health === 0) {
             // Auto-respawn with blinking invulnerability (classic style)
             this.showMessage('You were knocked out! Respawning...');
@@ -1363,20 +1558,67 @@
             } catch(_) {}
           }
         };
-        this.enemies.forEach(enemy => {
+        
+        this.enemies.forEach((enemy, index) => {
           if (!enemy || enemy._defeated) return;
-          // face the player and chase
+          
           const dx = this.alex.x - enemy.x;
           const dy = (this.alexBaseY - enemy.y);
-          enemy.setFlipX(dx < 0);
-          const alignedY = Math.abs(dy) <= 12; // lane alignment
           const distX = Math.abs(dx);
+          const distY = Math.abs(dy);
+          const totalDist = Math.sqrt(dx*dx + dy*dy);
+          
+          // Enhanced AI behavior based on enemy type and position
+          enemy.setFlipX(dx < 0);
+          
+          // Check if player is within aggro range
+          if (totalDist > enemy.aggroRange) {
+            // Idle behavior - light wandering
+            if (Math.random() < 0.02) {
+              enemy.lastDirection *= -1;
+            }
+            enemy.x += enemy.lastDirection * 0.3;
+            return;
+          }
+          
+          const alignedY = distY <= 12;
           const reach = enemy.attackReach;
-          // move towards player until in range
-          if (distX > reach + 2 || !alignedY) {
-            enemy.x += Math.sign(dx) * enemy.speed;
-            // drift vertically to align lanes
-            if (!alignedY) enemy.y += Math.sign(this.alexBaseY - enemy.y) * 0.6;
+          
+          // Different AI patterns based on enemy index
+          const aiPattern = index % 3;
+          
+          switch(aiPattern) {
+            case 0: // Aggressive direct approach
+              if (distX > reach + 2 || !alignedY) {
+                enemy.x += Math.sign(dx) * enemy.speed * 1.1;
+                if (!alignedY) enemy.y += Math.sign(this.alexBaseY - enemy.y) * 0.8;
+              }
+              break;
+              
+            case 1: // Cautious circling
+              if (distX > reach + 20) {
+                enemy.x += Math.sign(dx) * enemy.speed;
+                if (!alignedY) enemy.y += Math.sign(this.alexBaseY - enemy.y) * 0.6;
+              } else if (distX > reach + 5) {
+                // Circle around player
+                const circleOffset = Math.sin(time * 0.003) * 15;
+                enemy.y += circleOffset * 0.1;
+                enemy.x += Math.sign(dx) * enemy.speed * 0.7;
+              }
+              break;
+              
+            case 2: // Hit and run
+              if (enemy.retreating) {
+                enemy.x += Math.sign(dx) * -enemy.speed * 1.2; // Run away
+                if (distX > reach + 40) enemy.retreating = false;
+              } else {
+                if (distX > reach + 2 || !alignedY) {
+                  enemy.x += Math.sign(dx) * enemy.speed * 1.3; // Rush in
+                  if (!alignedY) enemy.y += Math.sign(this.alexBaseY - enemy.y) * 0.7;
+                }
+              }
+              break;
+          }
             if (enemy.anims.currentAnim?.key !== `${enemy.type}-walk`) enemy.play(`${enemy.type}-walk`);
           } else {
             if (enemy.anims.currentAnim?.key !== `${enemy.type}-idle`) enemy.play(`${enemy.type}-idle`);
@@ -1484,7 +1726,20 @@
           }
         }
         
-        // Update HUD elements
+        // Update enemy health bars
+        this.enemies.forEach(enemy => {
+          if (enemy && enemy.updateHealthBar) {
+            enemy.updateHealthBar();
+          }
+        });
+        
+        // Update boss health bar if it exists
+        if (this.boss && this.boss.updateHealthBar) {
+          this.boss.updateHealthBar();
+        }
+        
+        // Update HUD elements and debug display
+        updateDebug();
         document.getElementById('health').innerHTML = this.alex.health;
   document.getElementById('money').innerHTML = Number(this.alex.money||0).toFixed(2);
       }
