@@ -330,25 +330,9 @@
 
   // Create Alex player positioned near road (feet-origin at y=ch-18 approx)
   step('spawn alex');
-  // Compose GandalfHardcore parts into a single texture if present
-  let PLAYER_TEX = 'alex';
-  const haveGH = this.textures.exists('gh_skin') && this.textures.exists('gh_pants') && this.textures.exists('gh_shirt');
-  if (haveGH) {
-    try {
-      const w = this.textures.get('gh_skin').source[0].width;
-      const h = this.textures.get('gh_skin').source[0].height;
-      const key = 'hero_custom';
-      if (this.textures.exists(key)) this.textures.remove(key);
-      const tex = this.textures.createCanvas(key, w, h);
-      const ctx = tex.getContext();
-      ctx.imageSmoothingEnabled = false;
-      const draw = (k) => { if (this.textures.exists(k)) { const img = this.textures.get(k).getSourceImage(); ctx.drawImage(img, 0, 0); } };
-      draw('gh_skin'); draw('gh_pants'); draw('gh_shirt'); draw('gh_shoes'); draw('gh_hair');
-      tex.refresh();
-      PLAYER_TEX = key;
-    } catch (e) { console.warn('Failed composing GH parts; falling back to alex', e); }
-  }
-  if (!this.textures.exists(PLAYER_TEX)) throw new Error('Missing player texture: ' + PLAYER_TEX);
+  // Force the classic RCR Alex sheet (no GH composite)
+  const PLAYER_TEX = 'alex';
+  if (!this.textures.exists(PLAYER_TEX)) throw new Error('Missing player texture: alex');
   this.alex = this.add.sprite(200, ch - 18, PLAYER_TEX, 0).setOrigin(0.5, 1);
     this.alex.setScale(playerScale);
         // If using Knight, normalize to ~32px pixel height so it matches NES scale
@@ -391,7 +375,7 @@
         // Create Alex animations - basic walk/idle using first few frames
   step('anims');
   this.anims.create({ key: 'alex-idle', frames: [{ key: PLAYER_TEX, frame: 0 }], frameRate: 1, repeat: 0 });
-  this.anims.create({ key: 'alex-walk', frames: [{ key: PLAYER_TEX, frame: 0 }, { key: PLAYER_TEX, frame: 0 }], frameRate: 6, repeat: -1 });
+  this.anims.create({ key: 'alex-walk', frames: [{ key: PLAYER_TEX, frame: 0 }, { key: PLAYER_TEX, frame: 1 }], frameRate: 8, repeat: -1 });
   this.anims.create({ key: 'alex-punch', frames: [{ key: PLAYER_TEX, frame: 0, duration: 60 }, { key: PLAYER_TEX, frame: 0, duration: 140 }, { key: PLAYER_TEX, frame: 0, duration: 80 }], repeat: 0 });
   this.anims.create({ key: 'alex-kick', frames: [{ key: PLAYER_TEX, frame: 0, duration: 60 }, { key: PLAYER_TEX, frame: 0, duration: 150 }, { key: PLAYER_TEX, frame: 0, duration: 80 }], repeat: 0 });
   this.anims.create({ key: 'alex-jump', frames: [{ key: PLAYER_TEX, frame: 0 }], frameRate: 6, yoyo: true, repeat: -1 });
