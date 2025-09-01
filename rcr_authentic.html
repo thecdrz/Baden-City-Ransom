@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Baden City Ransom - Authentic NES Style</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      background: #1a1a2e; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      min-height: 100vh;
+      font-family: 'Courier New', monospace;
+    }
+    #gameContainer { 
+      border: 3px solid #16213e;
+      background: #0f0f1e;
+      box-shadow: 0 0 20px rgba(0,100,255,0.3);
+    }
+    #hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #ffff00;
+      font-size: 12px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.8);
+      padding: 8px;
+      border: 1px solid #444;
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="hud">
+  Baden City Ransom - Press Arrow Keys to Move<br>
+      A: Punch | S: Kick | Space + Arrow: Run
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  <script src="assets.js"></script>
+  
+  <script>
+    // River City Ransom Game Scene
+    class RiverCityRansom extends Phaser.Scene {
+      constructor() {
+        super({ key: 'RiverCityRansom' });
+      }
+      
+      preload() {
+        console.log('Loading River City Ransom assets...');
+        
+        // Load background - use Downtown for authentic feel
+        this.load.image('bg_downtown', RCR_ASSETS['Backgrounds___Downtown']);
+        
+        // Load Alex with NES-accurate 16x24 dimensions
+        this.load.spritesheet('alex', RCR_ASSETS['Playable_Characters___Alex'], {
+          frameWidth: 16,
+          frameHeight: 24
+        });
+        
+        // Load Ryan
+        this.load.spritesheet('ryan', RCR_ASSETS['Playable_Characters___Ryan'], {
+          frameWidth: 16,
+          frameHeight: 24
+        });
+        
+        // Load gang members with same dimensions
+        for (let i = 1; i <= 9; i++) {
+          const key = `Enemies_andamp;_Bosses___Gang_Member___Type_${i}`;
+          if (RCR_ASSETS[key]) {
+            this.load.spritesheet(`gang${i}`, RCR_ASSETS[key], {
+              frameWidth: 16,
+              frameHeight: 24
+            });
+          }
+        }
+        
+        // Load bosses
+        const bosses = ['Benny', 'Blade', 'Clyde', 'Ivan', 'Mojo', 'Moose', 'Otis', 'Rocko', 'Simon', 'Tex', 'Thor', 'Turk'];
+        bosses.forEach(boss => {
+          const key = `Enemies_andamp;_Bosses___${boss}`;
+          if (RCR_ASSETS[key]) {
+            this.load.spritesheet(`boss_${boss.toLowerCase()}`, RCR_ASSETS[key], {
+              frameWidth: 16,
+              frameHeight: 24
+            });
+          }
+        });
+      }
+      
+      create() {
+        console.log('Creating River City Ransom scene...');
+        
+        // Add authentic RCR background
+        const bg = this.add.image(400, 240, 'bg_downtown');
+        bg.setScale(1); // Keep original scale for pixel-perfect look
+        
+        // Create Alex (main player)
+        this.alex = this.add.sprite(200, 300, 'alex', 0);
+        this.alex.setScale(3); // Scale up for visibility while keeping pixel art crisp
+        
+        // Create Ryan (player 2)
+        this.ryan = this.add.sprite(250, 300, 'ryan', 0);
+        this.ryan.setScale(3);
+        
+        // Create some gang members
+        this.enemies = [];
+        for (let i = 0; i < 3; i++) {
+          const gangType = Phaser.Math.Between(1, 9);
+          if (this.textures.exists(`gang${gangType}`)) {
+            const enemy = this.add.sprite(400 + i * 80, 300, `gang${gangType}`, 0);
+            enemy.setScale(3);
+            enemy.gangType = gangType;
+            this.enemies.push(enemy);
+          }
+        }
+        
+        // Create animations for Alex
+        this.createPlayerAnimations('alex');
+        this.createPlayerAnimations('ryan');
+        
+        // Create gang animations
+        for (let i = 1; i <= 9; i++) {
+          if (this.textures.exists(`gang${i}`)) {
+            this.createGangAnimations(`gang${i}`);
+          }
+        }
+        
+        // Start idle animations
+        this.alex.play('alex_idle');
+        this.ryan.play('ryan_idle');
+        
+        // Start enemy idle animations
+        this.enemies.forEach(enemy => {
+          enemy.play(`gang${enemy.gangType}_idle`);
+        });
+        
+        // Input handling
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keys = this.input.keyboard.addKeys('A,S,SPACE');
+        
+        // Player movement variables
+        this.playerSpeed = 120;
+        this.isMoving = false;
+        
+        // Add authentic RCR style text
+        this.add.text(400, 50, 'RIVER CITY RANSOM', {
+          fontSize: '24px',
+          fill: '#ffff00',
+          fontFamily: 'Courier New',
+          stroke: '#000000',
+          strokeThickness: 2
+        }).setOrigin(0.5);
+        
+        this.add.text(400, 80, 'Save River City High!', {
+          fontSize: '14px',
+          fill: '#ffffff',
+          fontFamily: 'Courier New'
+        }).setOrigin(0.5);
+        
+        console.log('River City Ransom scene created successfully!');
+      }
+      
+      createPlayerAnimations(character) {
+        // Idle animation
+        this.anims.create({
+          key: `${character}_idle`,
+          frames: [{ key: character, frame: 0 }],
+          frameRate: 1,
+          repeat: -1
+        });
+        
+        // Walk animation - use frames 1 and 2
+        this.anims.create({
+          key: `${character}_walk`,
+          frames: this.anims.generateFrameNumbers(character, { start: 1, end: 2 }),
+          frameRate: 8,
+          repeat: -1
+        });
+        
+        // Punch animation
+        this.anims.create({
+          key: `${character}_punch`,
+          frames: [{ key: character, frame: 3 }],
+          frameRate: 12,
+          repeat: 0
+        });
+        
+        // Kick animation
+        this.anims.create({
+          key: `${character}_kick`,
+          frames: [{ key: character, frame: 4 }],
+          frameRate: 12,
+          repeat: 0
+        });
+      }
+      
+      createGangAnimations(gangKey) {
+        // Idle
+        this.anims.create({
+          key: `${gangKey}_idle`,
+          frames: [{ key: gangKey, frame: 0 }],
+          frameRate: 1,
+          repeat: -1
+        });
+        
+        // Walk
+        this.anims.create({
+          key: `${gangKey}_walk`,
+          frames: this.anims.generateFrameNumbers(gangKey, { start: 1, end: 2 }),
+          frameRate: 6,
+          repeat: -1
+        });
+      }
+      
+      update() {
+        // Alex movement
+        let alexMoving = false;
+        
+        if (this.cursors.left.isDown) {
+          this.alex.x -= this.playerSpeed * 0.016;
+          this.alex.setFlipX(true);
+          alexMoving = true;
+        } else if (this.cursors.right.isDown) {
+          this.alex.x += this.playerSpeed * 0.016;
+          this.alex.setFlipX(false);
+          alexMoving = true;
+        }
+        
+        if (this.cursors.up.isDown) {
+          this.alex.y -= this.playerSpeed * 0.016;
+          alexMoving = true;
+        } else if (this.cursors.down.isDown) {
+          this.alex.y += this.playerSpeed * 0.016;
+          alexMoving = true;
+        }
+        
+        // Animation handling
+        if (alexMoving) {
+          if (this.alex.anims.currentAnim?.key !== 'alex_walk') {
+            this.alex.play('alex_walk');
+          }
+        } else {
+          if (this.alex.anims.currentAnim?.key !== 'alex_idle') {
+            this.alex.play('alex_idle');
+          }
+        }
+        
+        // Attack handling
+        if (Phaser.Input.Keyboard.JustDown(this.keys.A)) {
+          this.alex.play('alex_punch');
+          setTimeout(() => {
+            if (!alexMoving) this.alex.play('alex_idle');
+          }, 200);
+        }
+        
+        if (Phaser.Input.Keyboard.JustDown(this.keys.S)) {
+          this.alex.play('alex_kick');
+          setTimeout(() => {
+            if (!alexMoving) this.alex.play('alex_idle');
+          }, 200);
+        }
+        
+        // Keep players on screen
+        this.alex.x = Phaser.Math.Clamp(this.alex.x, 20, 780);
+        this.alex.y = Phaser.Math.Clamp(this.alex.y, 120, 460);
+      }
+    }
+    
+    // Game configuration optimized for NES-style graphics
+    const config = {
+      type: Phaser.CANVAS, // Canvas for pixel-perfect rendering
+      width: 800,
+      height: 480,
+      parent: 'gameContainer',
+      backgroundColor: '#1a1a2e',
+      scene: RiverCityRansom,
+      render: {
+        pixelArt: true,
+        antialias: false,
+        roundPixels: true
+      },
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+      }
+    };
+    
+    // Initialize the authentic River City Ransom experience
+    const game = new Phaser.Game(config);
+    
+    console.log('River City Ransom initialized!');
+  </script>
+</body>
+</html>

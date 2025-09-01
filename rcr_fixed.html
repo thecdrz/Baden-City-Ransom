@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baden City Ransom - Fixed Assets</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 20px; 
+      background: #000; 
+      color: #fff; 
+      font-family: monospace; 
+      text-align: center;
+    }
+    #gameContainer { 
+      border: 3px solid #ffff00;
+      margin: 20px auto;
+      display: inline-block;
+    }
+    .status {
+      background: #004400;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎮 BADEN CITY RANSOM - ASSET FIX</h1>
+  
+  <div class="status" id="status">
+    Loading minimal assets...
+  </div>
+
+  <div id="gameContainer"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  <script src="assets.js"></script>
+  
+  <script>
+    class RCRFixed extends Phaser.Scene {
+      constructor() {
+        super({ key: 'RCRFixed' });
+      }
+      
+      preload() {
+        console.log('Loading only essential assets...');
+        document.getElementById('status').innerHTML = '📦 Loading Alex sprite...';
+        
+        // Load just ONE asset at a time to test
+        try {
+          if (RCR_ASSETS['Playable_Characters___Alex']) {
+            // Try as regular image first
+            this.load.image('alex_img', RCR_ASSETS['Playable_Characters___Alex']);
+            console.log('Alex image queued');
+          }
+        } catch (e) {
+          console.error('Failed to queue Alex:', e);
+        }
+        
+        // Simple fallback background
+        this.load.image('fallback_bg', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+      }
+      
+      create() {
+        console.log('Creating RCR scene...');
+        document.getElementById('status').innerHTML = '🎨 Creating game world...';
+        
+        // Create background
+        this.add.rectangle(400, 300, 800, 600, 0x4A90E2); // Sky
+        this.add.rectangle(400, 450, 800, 300, 0x666666); // Street
+        
+        // Add buildings
+        for (let i = 0; i < 4; i++) {
+          const x = 150 + i * 150;
+          this.add.rectangle(x, 350, 100, 200, 0x8B4513); // Building
+          this.add.rectangle(x, 250, 100, 20, 0x654321); // Roof
+        }
+        
+        // Try to display Alex sprite if it loaded
+        if (this.textures.exists('alex_img')) {
+          const alexSprite = this.add.image(200, 200, 'alex_img');
+          alexSprite.setScale(4); // Make it big so we can see it
+          this.add.text(200, 150, 'Alex Sprite Sheet', { fontSize: '14px', fill: '#ffff00' }).setOrigin(0.5);
+          console.log('Alex sprite displayed successfully!');
+        } else {
+          console.log('Alex sprite failed to load, using rectangle');
+        }
+        
+        // Create controllable Alex (rectangle version)
+        this.alex = this.add.rectangle(400, 400, 32, 48, 0xFF6B6B);
+        this.alex.setStrokeStyle(3, 0x000000);
+        
+        // Create Ryan
+        this.ryan = this.add.rectangle(450, 400, 32, 48, 0x4ECDC4);  
+        this.ryan.setStrokeStyle(3, 0x000000);
+        
+        // Create enemies
+        this.enemies = [];
+        for (let i = 0; i < 3; i++) {
+          const enemy = this.add.rectangle(600 + i * 50, 400, 32, 48, 0xFFE66D);
+          enemy.setStrokeStyle(3, 0x000000);
+          this.enemies.push(enemy);
+        }
+        
+        // Add title
+        this.add.text(400, 50, 'RIVER CITY RANSOM', {
+          fontSize: '28px',
+          fill: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 2
+        }).setOrigin(0.5);
+        
+        // Add labels
+        this.add.text(400, 360, 'ALEX (RED)', { fontSize: '12px', fill: '#fff' }).setOrigin(0.5);
+        this.add.text(450, 360, 'RYAN', { fontSize: '12px', fill: '#fff' }).setOrigin(0.5);
+        this.add.text(625, 360, 'GANG', { fontSize: '12px', fill: '#fff' }).setOrigin(0.5);
+        
+        // Setup controls
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keys = this.input.keyboard.addKeys('A,S');
+        
+        document.getElementById('status').innerHTML = '✅ Game ready! Arrow keys = Move Alex | A = Punch | S = Kick';
+        console.log('RCR scene created successfully!');
+      }
+      
+      update() {
+        // Alex movement
+        if (this.cursors.left.isDown) {
+          this.alex.x -= 3;
+          this.alex.setFillStyle(0xFF9999);
+        } else if (this.cursors.right.isDown) {
+          this.alex.x += 3;
+          this.alex.setFillStyle(0xFF9999);
+        } else if (this.cursors.up.isDown) {
+          this.alex.y -= 3;
+          this.alex.setFillStyle(0xFF9999);
+        } else if (this.cursors.down.isDown) {
+          this.alex.y += 3;
+          this.alex.setFillStyle(0xFF9999);
+        } else {
+          this.alex.setFillStyle(0xFF6B6B);
+        }
+        
+        // Combat
+        if (Phaser.Input.Keyboard.JustDown(this.keys.A)) {
+          this.alex.setFillStyle(0xFF0000); // Punch
+          setTimeout(() => this.alex.setFillStyle(0xFF6B6B), 200);
+        }
+        
+        if (Phaser.Input.Keyboard.JustDown(this.keys.S)) {
+          this.alex.setFillStyle(0xFF3333); // Kick
+          setTimeout(() => this.alex.setFillStyle(0xFF6B6B), 200);
+        }
+        
+        // Keep Alex on screen
+        this.alex.x = Phaser.Math.Clamp(this.alex.x, 30, 770);
+        this.alex.y = Phaser.Math.Clamp(this.alex.y, 120, 480);
+      }
+    }
+    
+    const config = {
+      type: Phaser.CANVAS,
+      width: 800,
+      height: 600,
+      parent: 'gameContainer',
+      backgroundColor: '#1a1a2e',
+      scene: RCRFixed,
+      render: {
+        pixelArt: true,
+        antialias: false
+      }
+    };
+    
+    console.log('Starting RCR with asset fix...');
+    const game = new Phaser.Game(config);
+    
+    game.events.on('ready', () => {
+      console.log('RCR game ready!');
+    });
+  </script>
+</body>
+</html>

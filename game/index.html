@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>River City Ransom - AUTHENTIC</title>
+  <title>Baden City Ransom - AUTHENTIC</title>
   <style>
     body { 
       margin: 0; 
@@ -74,15 +74,15 @@
   
   <!-- Bottom Dialogue Bar - Messages/Chat -->
   <div id="dialogue">
-    <div id="dialogue-text">🎮 RIVER CITY RANSOM - Use Arrow Keys to Move, A to Punch, S to Kick</div>
+    <div id="dialogue-text">🎮 BADEN CITY RANSOM - Use Arrow Keys to Move, A to Punch, S to Kick</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
   
   <script>
-    class RiverCityRansomGame extends Phaser.Scene {
+  class BadenCityRansomGame extends Phaser.Scene {
       constructor() {
-        super({ key: 'RiverCityRansomGame' });
+  super({ key: 'BadenCityRansomGame' });
       }
       
       preload() {
@@ -125,7 +125,7 @@
       }
       
       create() {
-        console.log('Creating authentic River City Ransom...');
+  console.log('Creating authentic Baden City Ransom...');
         
         // Add background - remove green area, stretch road down to arrow bottom
         const bg = this.add.image(400, 290, 'downtown'); // Position for proper stretching
@@ -240,7 +240,7 @@
           document.getElementById('dialogue-text').innerHTML = text;
         };
         
-        this.showMessage('Welcome to River City! Fight your way through the gangs!');
+  this.showMessage('Welcome to Baden City! Fight your way through the gangs!');
       }
       
       update(time) {
@@ -337,7 +337,7 @@
       height: 380, // Reduced to account for bigger bars (600 - 100 - 120)
       parent: 'gameContainer',
       backgroundColor: '#2c3e50',
-      scene: RiverCityRansomGame,
+  scene: BadenCityRansomGame,
       render: {
         pixelArt: true,
         antialias: false,
@@ -349,11 +349,11 @@
       }
     };
     
-    console.log('Starting authentic River City Ransom...');
+  console.log('Starting authentic Baden City Ransom...');
     const game = new Phaser.Game(config);
     
     game.events.on('ready', () => {
-      console.log('🎮 RIVER CITY RANSOM IS READY TO PLAY!');
+      console.log('🎮 BADEN CITY RANSOM IS READY TO PLAY!');
     });
   </script>
 </body>

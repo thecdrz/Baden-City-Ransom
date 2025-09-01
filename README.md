@@ -1,4 +1,4 @@
-# River City Ransom - Web Edition
+# Baden City Ransom - Web Edition
 
 A faithful recreation of the classic NES game River City Ransom using the original sprite assets and Phaser 3.
 
@@ -28,12 +28,12 @@ python -m http.server 8081
 # Then visit: http://localhost:8081/rcr.html
 ```
 
-# River City Ransom Clone - Project Structure
+# Baden City Ransom - Project Structure
 
 ## 📁 Project Organization
 
 ```
-DoubleDragonClone/
+Baden-City-Ransom/
 ├── 📁 assets/
 │   ├── 📁 audio/          # Sound effects and music
 │   ├── 📁 backgrounds/     # Background images
@@ -52,7 +52,7 @@ DoubleDragonClone/
 
 1. **Start a local server:**
    ```bash
-   cd DoubleDragonClone
+   cd Baden-City-Ransom
    python -m http.server 8080
    ```
 
@@ -99,7 +99,7 @@ DoubleDragonClone/
 ## 📝 File Descriptions
 
 ### Main Game
-- `game/index.html` - The playable River City Ransom game
+- `game/index.html` - The playable Baden City Ransom game
 
 ### Assets
 - `assets/sprites/` - All character sprites (Alex, Ryan, enemies)
