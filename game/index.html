@@ -830,13 +830,18 @@
         this.keys = this.input.keyboard.addKeys('A,S,D,SPACE');
   // Dev: quick spawn with B key
   try { this.keys.B = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B); } catch(_) {}
-        // Pause / Mute keys
-        const KC = Phaser.Input.Keyboard.KeyCodes;
-        this.pauseKeys = {
-          esc: this.input.keyboard.addKey(KC.ESC),
-          p: this.input.keyboard.addKey(KC.P),
-          m: this.input.keyboard.addKey(KC.M)
-        };
+        // Pause / Mute keys with safety checks
+        try {
+          const KC = Phaser.Input.Keyboard.KeyCodes;
+          this.pauseKeys = {
+            esc: this.input?.keyboard?.addKey?.(KC?.ESC) || null,
+            p: this.input?.keyboard?.addKey?.(KC?.P) || null,
+            m: this.input?.keyboard?.addKey?.(KC?.M) || null
+          };
+        } catch(e) {
+          console.warn('Failed to initialize pause keys:', e);
+          this.pauseKeys = {};
+        }
         // Dev flags and helpers
         this.godMode = false;
         this.setGodMode = (on) => { this.godMode = !!on; this.showMessage(this.godMode ? 'God Mode: ON' : 'God Mode: OFF'); };
@@ -1127,14 +1132,19 @@
       }
       
       update(time) {
-        // Pause toggle
-        if (Phaser.Input.Keyboard.JustDown(this.pauseKeys.esc) || Phaser.Input.Keyboard.JustDown(this.pauseKeys.p)) {
-          this.enterPause();
-          return; // stop processing this frame
-        }
-        // Music mute toggle
-        if (Phaser.Input.Keyboard.JustDown(this.pauseKeys.m)) {
-          this.toggleMusicMute();
+        // Pause toggle with safety checks
+        try {
+          if ((this.pauseKeys?.esc && Phaser.Input.Keyboard.JustDown(this.pauseKeys.esc)) || 
+              (this.pauseKeys?.p && Phaser.Input.Keyboard.JustDown(this.pauseKeys.p))) {
+            this.enterPause();
+            return; // stop processing this frame
+          }
+          // Music mute toggle
+          if (this.pauseKeys?.m && Phaser.Input.Keyboard.JustDown(this.pauseKeys.m)) {
+            this.toggleMusicMute();
+          }
+        } catch(e) {
+          console.warn('Error checking pause keys:', e);
         }
         // Dev: quick boss spawn
         if (this.keys?.B && Phaser.Input.Keyboard.JustDown(this.keys.B)) {
@@ -1456,19 +1466,33 @@
         };
         makeUi();
         this.scale.on('resize', makeUi, this);
-        const KC = Phaser.Input.Keyboard.KeyCodes;
-        this.keys = {
-          esc: this.input.keyboard.addKey(KC.ESC),
-          p: this.input.keyboard.addKey(KC.P),
-          m: this.input.keyboard.addKey(KC.M)
-        };
+        try {
+          const KC = Phaser.Input.Keyboard.KeyCodes;
+          this.keys = {
+            esc: this.input?.keyboard?.addKey?.(KC?.ESC) || null,
+            p: this.input?.keyboard?.addKey?.(KC?.P) || null,
+            m: this.input?.keyboard?.addKey?.(KC?.M) || null
+          };
+        } catch(e) {
+          console.warn('Failed to initialize pause overlay keys:', e);
+          this.keys = {};
+        }
+        
         const resume = () => { try { this.scene.stop(); this.scene.resume('BadenCityRansomGame'); } catch(_) {} };
-        this.input.keyboard.on('keydown', (ev) => {
-          if (ev.code === 'Escape' || ev.code === 'KeyP') { resume(); }
-          else if (ev.code === 'KeyM') {
-            try { const gs = this.scene.get('BadenCityRansomGame'); gs.toggleMusicMute && gs.toggleMusicMute(); } catch(_) {}
-          }
-        });
+        
+        try {
+          this.input?.keyboard?.on('keydown', (ev) => {
+            if (ev?.code === 'Escape' || ev?.code === 'KeyP') { resume(); }
+            else if (ev?.code === 'KeyM') {
+              try { 
+                const gs = this.scene.get('BadenCityRansomGame'); 
+                gs?.toggleMusicMute && gs.toggleMusicMute(); 
+              } catch(_) {}
+            }
+          });
+        } catch(e) {
+          console.warn('Error setting up keyboard handlers:', e);
+        }
         // Also allow pointer click to resume for convenience
         this.input.once('pointerdown', resume);
       }
