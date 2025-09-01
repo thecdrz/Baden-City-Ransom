@@ -183,14 +183,11 @@
         fit();
         this.scale.on('resize', () => fit());
 
-        // Game name overlay
-        this.add.text(w/2, h*0.12, 'Baden City Ransom', {
-          fontFamily:'monospace', fontSize:'32px', color:'#ffffff', stroke:'#000', strokeThickness:6
-        }).setOrigin(0.5,0).setDepth(10);
-
-        const txt = this.add.text(w/2, h*0.88, 'Press Enter or Click to Start', {
+  const txt = this.add.text(w/2, h*0.94, 'Press Enter or Click to Start', {
           fontFamily:'monospace', fontSize:'24px', color:'#ffff00', stroke:'#000', strokeThickness:4
         }).setOrigin(0.5,1).setDepth(10);
+  // Slow blinking effect
+  this.tweens.add({ targets: txt, alpha: 0.25, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
         const start = () => this.scene.start('BadenCityRansomGame');
         this.input.once('pointerdown', start);
