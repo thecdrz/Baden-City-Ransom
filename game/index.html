@@ -127,15 +127,18 @@
       create() {
   console.log('Creating authentic Baden City Ransom...');
         
-        // Add background - remove green area, stretch road down to arrow bottom
-        const bg = this.add.image(400, 290, 'downtown'); // Position for proper stretching
+  // Add background - remove green area, stretch road down to bottom of canvas
+  const bg = this.add.image(400, 0, 'downtown').setOrigin(0.5, 0);
         const texture = this.textures.get('downtown');
         const bgWidth = texture.source[0].width;
         const bgHeight = texture.source[0].height;
         
-        // Crop to remove green area completely, keep only road section
-        bg.setCrop(0, bgHeight * 0.42, bgWidth, bgHeight * 0.25); // Skip green, just road
-        bg.setDisplaySize(800, 580); // Stretch road down to meet arrow bottom
+  // Crop to remove the green band entirely and keep road + curb only
+  const ROAD_TOP = 0.56;   // portion from top where road region begins (tuned)
+  const ROAD_HEIGHT = 0.40; // height portion to include (down to bottom)
+  bg.setCrop(0, Math.floor(bgHeight * ROAD_TOP), bgWidth, Math.floor(bgHeight * ROAD_HEIGHT));
+  // Fill the game canvas height exactly so the road reaches the bottom
+  bg.setDisplaySize(800, 380);
         
         console.log(`Background: ${bgWidth}x${bgHeight}, showing middle third`);
         
@@ -228,7 +231,7 @@
         this.isMoving = false;
         this.isAttacking = false;
         
-        console.log('River City Ransom ready to play!');
+  console.log('Baden City Ransom scene ready. Background cropped to road.');
         
         // Play authentic RCR background music
         if (this.sound.get('street_music')) {
@@ -294,9 +297,9 @@
           });
         }
         
-        // Keep Alex on screen (adjusted for smaller canvas with road at top)
-        this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, 750);
-        this.alex.y = Phaser.Math.Clamp(this.alex.y, 120, 340); // Road starts near top
+  // Keep Alex on screen (canvas-only area; road fills entire height)
+  this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, 750);
+  this.alex.y = Phaser.Math.Clamp(this.alex.y, 100, 340);
         
         // Simple enemy AI
         this.enemies.forEach(enemy => {
