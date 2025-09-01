@@ -29,7 +29,7 @@
       background: #000;
       color: #fff;
       font-family: 'Courier New', monospace;
-      font-size: 24px; /* Increased from 20px */
+  font-size: 28px; /* Increased for better readability */
       font-weight: bold;
       z-index: 1000;
       display: flex;
@@ -48,7 +48,7 @@
       background: #000;
       color: #fff;
       font-family: 'Courier New', monospace;
-      font-size: 22px; /* Increased from 18px for better readability */
+  font-size: 26px; /* Increased for better readability */
       font-weight: bold;
       z-index: 1000;
       padding: 15px 30px;
@@ -79,67 +79,157 @@
     <div id="dialogue-text">🎮 BADEN CITY RANSOM - Use Arrow Keys to Move, A to Punch, S to Kick</div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
-  
   <script>
-  class BadenCityRansomGame extends Phaser.Scene {
+  (async function bootstrap() {
+    function loadScript(url) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = url;
+  s.crossOrigin = 'anonymous';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    if (!window.Phaser) {
+      const statusEl = document.getElementById('dialogue-text');
+      const candidates = [
+        // Prefer local copies if available
+        './phaser.min.js',
+        '../vendor/phaser/3.55.2/phaser.min.js',
+        '../vendor/phaser/phaser.min.js',
+        '/vendor/phaser/3.55.2/phaser.min.js',
+        '/vendor/phaser.min.js',
+        // CDNs as fallback
+        'https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js',
+        'https://unpkg.com/phaser@3.55.2/dist/phaser.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js'
+      ];
+      for (const url of candidates) {
+        try {
+          if (statusEl) statusEl.textContent = `Loading engine: ${url}`;
+          await loadScript(url);
+          if (window.Phaser) { if (statusEl) statusEl.textContent = `Engine loaded from: ${url}`; break; }
+        } catch(e) { /* try next */ }
+      }
+    }
+
+    if (!window.Phaser) {
+      const d = document.getElementById('dialogue-text');
+      if (d) d.textContent = 'Failed to load engine. Check connection; CDN may be blocked.';
+      return;
+    }
+
+    class BadenCityRansomGame extends Phaser.Scene {
       constructor() {
   super({ key: 'BadenCityRansomGame' });
       }
       
       preload() {
         console.log('Loading authentic RCR sprites...');
+        // Surface loader diagnostics in the dialogue bar on failures
+        this.load.on('loaderror', (file) => {
+          const d = document.getElementById('dialogue-text');
+          if (d) d.textContent = `Asset failed: ${file?.key || 'unknown'} -> ${file?.src || ''}`;
+          console.warn('Load error', file?.key, file?.src);
+        });
+        this.load.on('progress', (p) => {
+          const d = document.getElementById('dialogue-text');
+          if (d) d.textContent = `Loading assets: ${(p*100|0)}%`;
+        });
+        this.load.once('complete', () => {
+          const d = document.getElementById('dialogue-text');
+          if (d) d.textContent = 'Assets loaded. Initializing scene...';
+        });
+
+        const url = (p) => encodeURI(p);
+        const logAdd = (kind, key, src) => console.log(`load ${kind}: ${key} <- ${src}`);
         
         // Load sprites with authentic NES frame size (16x24)
-        this.load.spritesheet('alex', '../assets/sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png', {
+        {
+          const src = url('../assets/sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png');
+          logAdd('sheet','alex', src);
+          this.load.spritesheet('alex', src, {
           frameWidth: 16,
           frameHeight: 32,
           margin: 1,
           spacing: 1
-        });
+          });
+        }
         
   // (Player 2 removed for now)
         
         // Load enemies with matching dimensions
-        this.load.spritesheet('enemy1', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies %26 Bosses - Gang Member - Type 1.png', {
+        {
+          const src = url('../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 1.png');
+          logAdd('sheet','enemy1', src);
+          this.load.spritesheet('enemy1', src, {
           frameWidth: 16,
           frameHeight: 32,
           margin: 1,
           spacing: 1
-        });
+          });
+        }
         
-        this.load.spritesheet('enemy2', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies %26 Bosses - Gang Member - Type 2.png', {
+        {
+          const src = url('../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 2.png');
+          logAdd('sheet','enemy2', src);
+          this.load.spritesheet('enemy2', src, {
           frameWidth: 16,
           frameHeight: 32,
           margin: 1,
           spacing: 1
-        });
+          });
+        }
         
-        this.load.spritesheet('enemy3', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies %26 Bosses - Gang Member - Type 3.png', {
+        {
+          const src = url('../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 3.png');
+          logAdd('sheet','enemy3', src);
+          this.load.spritesheet('enemy3', src, {
           frameWidth: 16,
           frameHeight: 32,
           margin: 1,
           spacing: 1
-        });
+          });
+        }
         // Boss spritesheet (Moose)
-        this.load.spritesheet('boss', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies %26 Bosses - Moose.png', {
+        {
+          const src = url('../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Moose.png');
+          logAdd('sheet','boss', src);
+          this.load.spritesheet('boss', src, {
           frameWidth: 16,
           frameHeight: 32,
           margin: 1,
           spacing: 1
-        });
+          });
+        }
         
         // Load background
-        this.load.image('downtown', '../assets/backgrounds/NES - River City Ransom _ Street Gangs - Backgrounds - Downtown.png');
+        {
+          const src = url('../assets/backgrounds/NES - River City Ransom _ Street Gangs - Backgrounds - Downtown.png');
+          logAdd('image','downtown', src);
+          this.load.image('downtown', src);
+        }
         
         // Load authentic River City Ransom music
-        this.load.audio('bgm', '../assets/audio/river_city_ransom_ost_mp3/River City Anthem.mp3');
-        this.load.audio('street_music', '../assets/audio/river_city_ransom_ost_mp3/Street of No Escape.mp3');
-        this.load.audio('punch_sound', '../assets/audio/river_city_ransom_ost_mp3/Just For Kicks.mp3');
+  this.load.audio('bgm', url('../assets/audio/river_city_ransom_ost_mp3/River City Anthem.mp3'));
+  this.load.audio('street_music', url('../assets/audio/river_city_ransom_ost_mp3/Street of No Escape.mp3'));
+  this.load.audio('punch_sound', url('../assets/audio/river_city_ransom_ost_mp3/Just For Kicks.mp3'));
       }
       
       create() {
   console.log('Creating authentic Baden City Ransom...');
+        const diag = (msg) => { const d = document.getElementById('dialogue-text'); if (d) d.textContent = String(msg); };
+        const step = (name) => diag(`Init: ${name}`);
+        try {
+          step('scene start');
+        const canvasWrap = document.getElementById('canvasWrap');
+        const getSize = () => {
+          const cw = this.scale.width || this.scale.gameSize?.width || canvasWrap?.clientWidth || this.sys.game.config.width || 800;
+          const ch = this.scale.height || this.scale.gameSize?.height || canvasWrap?.clientHeight || this.sys.game.config.height || 480;
+          return { cw, ch };
+        };
         
   // Add background – create CROPPED canvas texture with a safe fallback
   let useKey = 'downtown';
@@ -164,12 +254,34 @@
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(srcImg, 0, cropY, bgWidth, this._bgCropH, 0, 0, bgWidth, this._bgCropH);
       playTex.refresh();
+      // Detect road (blue) top boundary as a fraction of the cropped texture height
+      const analyzeRoadTop = (ctx, w, h) => {
+        try {
+          const sampleCols = 24;
+          const xs = Array.from({length: sampleCols}, (_, i) => Math.floor((i+0.5) * w / sampleCols));
+          const isBlueish = (r,g,b) => b > g + 20 && b > r + 20 && b > 80; // strong blue dominance
+          for (let y = 0; y < h; y += 2) {
+            let blueHits = 0;
+            for (const x of xs) {
+              const d = ctx.getImageData(x, y, 1, 1).data; // small samples; acceptable at init
+              if (isBlueish(d[0], d[1], d[2])) blueHits++;
+            }
+            if (blueHits >= Math.ceil(sampleCols * 0.6)) {
+              return y / h; // fraction from top
+            }
+          }
+        } catch (e) { console.warn('Road detection failed', e); }
+        return null;
+      };
+      const frac = analyzeRoadTop(ctx, bgWidth, this._bgCropH);
+      this._roadTopFrac = (frac != null ? frac : 0.65);
       useKey = playKey;
     } else {
       // Fallback to raw image if something’s off
       const raw = this.textures.get('downtown');
       this._bgNaturalW = raw?.source?.[0]?.width || 800;
       this._bgCropH = raw?.source?.[0]?.height || 480;
+      this._roadTopFrac = 0.65;
     }
   } catch (e) {
     // Fallback to raw image on any unexpected error
@@ -177,15 +289,17 @@
     this._bgNaturalW = raw?.source?.[0]?.width || 800;
     this._bgCropH = raw?.source?.[0]?.height || 480;
     useKey = 'downtown';
+    this._roadTopFrac = 0.65;
   }
 
   // Use whichever background key we ended up with
+  step(`bg add key=${useKey}`);
+  if (!this.textures.exists(useKey)) { throw new Error(`Background texture missing: ${useKey}`); }
   this.bg = this.add.image(0, 0, useKey).setOrigin(0, 0);
 
-  // Scale to fill the canvas height (80vh) and center horizontally
-  const cw = this.scale.width || this.scale.gameSize?.width || this.sys.game.config.width || 800;
-  const ch = this.scale.height || this.scale.gameSize?.height || this.sys.game.config.height || 480;
-  const scale = ch / this._bgCropH;
+  // Scale to fill the canvas height (80vh) and center horizontally (robust fallbacks)
+  const { cw, ch } = getSize();
+  const scale = (this._bgCropH && this._bgCropH > 0) ? (ch / this._bgCropH) : 1;
   this.bg.setScale(scale);
   const displayW = this._bgNaturalW * scale;
   this.bg.x = Math.floor((cw - displayW) / 2);
@@ -200,13 +314,16 @@
   const playerScale = pixelScale * PLAYER_SCALE_MULT;
 
   // Create Alex player positioned near road (feet-origin at y=ch-18 approx)
+  step('spawn alex');
+  if (!this.textures.exists('alex')) throw new Error('Missing texture: alex');
   this.alex = this.add.sprite(200, ch - 18, 'alex', 0).setOrigin(0.5, 1);
     this.alex.setScale(playerScale);
         this.alex.health = 100;
         this.alex.money = 26.50; // Match reference format
         
         // Create enemy gang members
-        this.enemies = [];
+  step('spawn enemies');
+  this.enemies = [];
         const enemyTypes = ['enemy1', 'enemy2', 'enemy3'];
         for (let i = 0; i < 3; i++) {
           const enemyType = enemyTypes[i];
@@ -220,14 +337,14 @@
           }
         }
   // Create Boss (Moose)
-  this.boss = this.add.sprite(700, ch - 18, 'boss', 0).setOrigin(0.5, 1);
-  this.boss.setScale(playerScale);
-  this.boss.health = 120;
-  this.boss.type = 'boss';
-  this.boss.aiTimer = 0;
+  step('spawn boss');
+  if (!this.textures.exists('boss')) console.warn('Missing boss texture; skipping boss');
+  this.boss = this.textures.exists('boss') ? this.add.sprite(700, ch - 18, 'boss', 0).setOrigin(0.5, 1) : null;
+  if (this.boss) { this.boss.setScale(playerScale); this.boss.health = 120; this.boss.type = 'boss'; this.boss.aiTimer = 0; }
         
         // Create Alex animations - basic walk/idle using first few frames
-        this.anims.create({
+  step('anims');
+  this.anims.create({
           key: 'alex-idle',
           frames: [{ key: 'alex', frame: 0 }],
           frameRate: 1,
@@ -243,16 +360,31 @@
         
         this.anims.create({
           key: 'alex-punch',
-          frames: [{ key: 'alex', frame: 0 }],
-          frameRate: 8,
+          frames: [
+            { key: 'alex', frame: 0, duration: 60 },
+            { key: 'alex', frame: 1, duration: 140 },
+            { key: 'alex', frame: 0, duration: 80 }
+          ],
           repeat: 0
         });
         
         this.anims.create({
           key: 'alex-kick',
-          frames: [{ key: 'alex', frame: 0 }],
-          frameRate: 8,
+          frames: [
+            { key: 'alex', frame: 1, duration: 60 },
+            { key: 'alex', frame: 0, duration: 150 },
+            { key: 'alex', frame: 1, duration: 80 }
+          ],
           repeat: 0
+        });
+        
+        // Airborne animation while jumping
+        this.anims.create({
+          key: 'alex-jump',
+          frames: this.anims.generateFrameNumbers('alex', { frames: [1,2] }),
+          frameRate: 6,
+          yoyo: true,
+          repeat: -1
         });
         
         // Create enemy animations for each type - simplified
@@ -283,31 +415,46 @@
         this.enemies.forEach(enemy => {
           enemy.play(`${enemy.type}-idle`);
         });
-  this.boss.play('boss-idle');
+  if (this.boss) this.boss.play('boss-idle');
         
         // Input setup
-        this.cursors = this.input.keyboard.createCursorKeys();
+  step('input');
+  this.cursors = this.input.keyboard.createCursorKeys();
         this.keys = this.input.keyboard.addKeys('A,S,D,SPACE');
         
   // Game state
   this.isMoving = false;
   this.isAttacking = false;
   // Lane movement + jump physics (jump height separate from lane Y)
-  this.baseYMin = 80;
+  // Constrain to detected road band; fallback to constant if detection unavailable
+  this.ROAD_TOP_PCT = 0.65;
+  this.baseYMin = Math.round(ch * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 2; // small cushion
   this.baseYMax = ch - 18;
   this.alexBaseY = this.baseYMax;
   this.alexJumpZ = 0; // negative while rising
   this.alexVy = 0;
-  this.GRAVITY = 0.50; // slightly lower for longer airtime
-  this.JUMP_VELOCITY = -12.5; // higher jump
+  this.GRAVITY = 0.35; // slower fall for clearer airtime
+  this.JUMP_VELOCITY = -12.0; // slightly softer takeoff
   this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
         
   console.log('Baden City Ransom scene ready. Background cropped to road.');
+  // Lightweight on-screen debug overlay (updates on resize)
+  const dbg = this.add.text(6, 6, '', { fontFamily: 'monospace', fontSize: '12px', color: '#0f0' }).setDepth(10000);
+  const updateDebug = () => {
+    const s = [
+      `cw:${this.scale.width} ch:${this.scale.height}`,
+      `bgKey:${useKey} bgScale:${this.bg.scaleX.toFixed(2)}`,
+      `parallax:${Math.round(this._parallaxX)}`,
+      `alex:${Math.round(this.alex.x)},${Math.round(this.alex.y)}`
+    ].join('  ');
+    dbg.setText(s);
+  };
+  updateDebug();
         
         // Ensure background continues to fit if the canvas size changes
         this.scale.on('resize', (gameSize) => {
-          const w = gameSize?.width || this.scale.width || this.scale.gameSize?.width || 800;
-          const h = gameSize?.height || this.scale.height || this.scale.gameSize?.height || 480;
+          const w = gameSize?.width || this.scale.width || this.scale.gameSize?.width || canvasWrap?.clientWidth || 800;
+          const h = gameSize?.height || this.scale.height || this.scale.gameSize?.height || canvasWrap?.clientHeight || 480;
           const scale = h / this._bgCropH;
           this.bg.setScale(scale);
           const displayW = this._bgNaturalW * scale;
@@ -322,13 +469,16 @@
           this.alex.setScale(playerScale);
           // update lane bounds and keep lane Y in range; recompute render Y
           this.baseYMax = groundY;
+          this.baseYMin = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 2;
           this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
           if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
           this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
           this.enemies.forEach(e=>{ e.setScale(playerScale); if (e.y > groundY) e.y = groundY; });
           if (this.boss) { this.boss.setScale(playerScale); if (this.boss.y > groundY) this.boss.y = groundY; }
+          updateDebug();
         });
-        // Play authentic street music for this outdoor level
+  // Play authentic street music for this outdoor level
+  step('music');
         this.sound.stopAll();
         this.music = this.sound.add('street_music', { loop: true, volume: 0.35 });
         const startMusic = () => { if (!this.music.isPlaying) this.music.play(); };
@@ -345,6 +495,13 @@
         };
         
   this.showMessage('Welcome to Baden City! Fight your way through the gangs!');
+  step('ready');
+        } catch (err) {
+          console.error(err);
+          diag(`Init error: ${err?.message || err}`);
+          // Do not rethrow to avoid opaque 'Script error.' from cross-origin contexts
+          return;
+        }
       }
       
       update(time) {
@@ -352,12 +509,12 @@
         let moving = false;
         const speed = 2;
         
-        if (this.cursors.left.isDown) {
+  if (!this.isAttacking && this.cursors.left.isDown) {
           this.alex.x -= speed;
           this.alex.setFlipX(true);
           moving = true;
           this._parallaxX += 0.4; // subtle parallax
-        } else if (this.cursors.right.isDown) {
+  } else if (!this.isAttacking && this.cursors.right.isDown) {
           this.alex.x += speed;
           this.alex.setFlipX(false);
           moving = true;
@@ -365,13 +522,13 @@
         }
         
         // Lane up/down movement along the road
-        if (this.cursors.up.isDown) { this.alexBaseY -= speed; moving = true; }
-        else if (this.cursors.down.isDown) { this.alexBaseY += speed; moving = true; }
+  if (!this.isAttacking && this.cursors.up.isDown) { this.alexBaseY -= speed; moving = true; }
+  else if (!this.isAttacking && this.cursors.down.isDown) { this.alexBaseY += speed; moving = true; }
         this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
 
         // Jump with D if not already airborne
         const onGround = this.alexJumpZ === 0;
-        if (Phaser.Input.Keyboard.JustDown(this.keys.D) && onGround) {
+  if (!this.isAttacking && Phaser.Input.Keyboard.JustDown(this.keys.D) && onGround) {
           this.alexVy = this.JUMP_VELOCITY;
         }
         // Apply jump gravity to jump height only
@@ -384,7 +541,11 @@
         this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
         
         // Animation handling
-        if (moving && !this.isAttacking) {
+        if (!onGround && !this.isAttacking) {
+          if (this.alex.anims.currentAnim?.key !== 'alex-jump') {
+            this.alex.play('alex-jump');
+          }
+        } else if (moving && !this.isAttacking) {
           if (this.alex.anims.currentAnim?.key !== 'alex-walk') {
             this.alex.play('alex-walk');
           }
@@ -516,6 +677,27 @@
     game.events.on('ready', () => {
       console.log('🎮 BADEN CITY RANSOM IS READY TO PLAY!');
     });
+  })();
+  </script>
+  <script>
+    // Catch unexpected runtime errors early and surface them in the dialogue bar
+    (function(){
+      const report = (msg) => { const d = document.getElementById('dialogue-text'); if (d) d.textContent = String(msg); };
+      window.addEventListener('error', (e) => {
+        const parts = [
+          'Error:', e?.message,
+          e?.filename ? `@ ${e.filename}` : '',
+          (e?.lineno||e?.colno) ? `:${e.lineno||0}:${e.colno||0}` : ''
+        ].filter(Boolean);
+        report(parts.join(' '));
+        if (e?.error?.stack) console.error(e.error.stack);
+      });
+      window.addEventListener('unhandledrejection', (e) => {
+        const reason = e?.reason;
+        report(`Unhandled: ${reason?.message || reason || 'unknown'}`);
+        if (reason?.stack) console.error(reason.stack);
+      });
+    })();
   </script>
 </body>
 </html>
