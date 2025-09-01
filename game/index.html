@@ -268,18 +268,13 @@
               this.scale.refresh();
             }
           } catch(_) {}
-          // Enhanced scene start with asset verification
+          // Enhanced scene start with proper preload handling
           try { 
             this.time.delayedCall(100, () => {
-              // Verify critical assets are loaded before starting game
-              const gameScene = this.scene.get('BadenCityRansomGame');
-              if (gameScene && gameScene.load) {
-                console.log('Starting game scene with asset verification...');
-                this.scene.start('BadenCityRansomGame');
-              } else {
-                console.warn('Game scene not ready, trying again...');
-                this.time.delayedCall(200, () => this.scene.start('BadenCityRansomGame'));
-              }
+              console.log('Starting game scene...');
+              // Use restart instead of start to ensure preload runs
+              this.scene.stop('BadenCityRansomGame');
+              this.scene.start('BadenCityRansomGame');
             }); 
           }
           catch(_) { 
@@ -443,19 +438,13 @@
       create() {
   console.log('Creating authentic Baden City Ransom...');
   
-  // Ensure assets are fully loaded before proceeding
-  if (!this.assetsLoaded) {
-    console.warn('Assets not fully loaded, waiting...');
-    this.time.delayedCall(200, () => this.create());
-    return;
-  }
-  
-  // Verify critical textures exist
+  // Verify critical textures exist (but don't block creation)
   const requiredTextures = ['alex', 'downtown_bg'];
   const missing = requiredTextures.filter(tex => !this.textures.exists(tex));
   if (missing.length > 0) {
-    console.error('Missing critical textures:', missing);
+    console.warn('Some textures missing:', missing);
     console.log('Available textures:', this.textures.getTextureKeys());
+    // Continue anyway with fallbacks
   }
   
   // Ensure camera zoom is neutral (avoid accidental device zoom factors)
@@ -623,25 +612,28 @@
   // Enhanced player creation with texture verification
   const PLAYER_TEX = 'alex';
   
-  // Safety check: Ensure texture exists before creating sprite
-  if (!this.textures.exists(PLAYER_TEX)) {
-    console.error('Alex texture not found! Available textures:', this.textures.getTextureKeys());
-    
-    // Try to create a fallback texture
-    try {
-      // Create a simple colored rectangle as fallback
-      this.textures.generate('alex_fallback', { data: ['2'], pixelWidth: 16, pixelHeight: 32 });
-      console.log('Created fallback alex texture');
+  // Create player sprite with better error handling
+  try {
+    if (this.textures.exists(PLAYER_TEX)) {
+      this.alex = this.add.sprite(200, ch - 18, PLAYER_TEX, 0).setOrigin(0.5, 1);
+      console.log('Alex sprite created successfully');
+    } else {
+      console.warn('Alex texture missing, creating simple fallback');
+      // Create a simple canvas texture as fallback
+      const fallbackCanvas = this.textures.createCanvas('alex_fallback', 16, 32);
+      const ctx = fallbackCanvas.getContext();
+      ctx.fillStyle = '#4444ff';
+      ctx.fillRect(0, 0, 16, 32);
+      fallbackCanvas.refresh();
       
-      // Use fallback if original doesn't exist
-      const useTex = this.textures.exists(PLAYER_TEX) ? PLAYER_TEX : 'alex_fallback';
-      this.alex = this.add.sprite(200, ch - 18, useTex, 0).setOrigin(0.5, 1);
-    } catch(e) {
-      console.error('Failed to create fallback texture:', e);
-      throw new Error('Cannot create player sprite - no valid texture available');
+      this.alex = this.add.sprite(200, ch - 18, 'alex_fallback', 0).setOrigin(0.5, 1);
+      console.log('Alex fallback sprite created');
     }
-  } else {
-    this.alex = this.add.sprite(200, ch - 18, PLAYER_TEX, 0).setOrigin(0.5, 1);
+  } catch(e) {
+    console.error('Failed to create Alex sprite:', e);
+    // Last resort: create a simple rectangle shape
+    this.alex = this.add.rectangle(200, ch - 18, 16, 32, 0x4444ff).setOrigin(0.5, 1);
+    console.log('Created rectangle fallback for Alex');
   }
     this.alex.setScale(playerScale);
   // Camera follows the player for smooth scrolling
