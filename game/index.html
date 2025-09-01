@@ -116,6 +116,16 @@
         document.head.appendChild(s);
       });
     }
+    // Compute assets base so it works whether served from / (project root) or /game/ (subfolder)
+    const ASSETS_BASE = (() => {
+      try {
+        // location: .../game/index.html -> parent + '/assets'
+        const parent = new URL('..', location.href);
+        const basePath = parent.pathname.endsWith('/') ? parent.pathname.slice(0, -1) : parent.pathname;
+        return `${basePath}/assets`;
+      } catch (_) { return '/assets'; }
+    })();
+    const asset = (p) => encodeURI(`${ASSETS_BASE}/${p}`);
 
     if (!window.Phaser) {
       const statusEl = document.getElementById('dialogue-text');
@@ -150,33 +160,30 @@
     class TitleScene extends Phaser.Scene {
       constructor(){ super({ key: 'TitleScene' }); }
       preload(){
-        const url = (p) => encodeURI(p);
+  const url = (p) => encodeURI(p);
+  const asset = (p) => encodeURI(`${ASSETS_BASE}/${p}`);
         // Try URL param override first, else attempt a series of likely filenames
         const params = new URLSearchParams(location.search);
         const custom = params.get('titleImg');
         const candidates = [
           custom,
-          // User-provided start screen
-          '../assets/misc/BCR-StartScreen2.ppng',
-          '../assets/misc/BCR-StartScreen2.png',
-          '../assets/BCR-StartScreen2.ppng',
-          '../assets/BCR-StartScreen2.png',
-          '../assets/misc/BCR-StartScreen.ppng',
-          '../assets/misc/BCR-StartScreen.png',
-          '../assets/BCR-StartScreen.ppng',
-          '../assets/BCR-StartScreen.png',
-          '../assets/misc/Baden City Ransom Start.png',
-          '../assets/misc/Baden City Ransom - Start.png',
-          '../assets/misc/Start Screen.png',
-          '../assets/misc/StartScreen.png',
-          '../assets/misc/Title.png',
-          '../assets/misc/Title Screen.png',
-          '../assets/misc/splash.png',
-          '../assets/Start Screen.png',
-          '../assets/StartScreen.png',
-          '../assets/title.png',
-          '../assets/splash.png',
-          '../assets/misc/BoxArt.png'
+          // Prefer misc folder, then asset root fallbacks
+          asset('misc/BCR-StartScreen2.png'),
+          asset('BCR-StartScreen2.png'),
+          asset('misc/BCR-StartScreen.png'),
+          asset('BCR-StartScreen.png'),
+          asset('misc/Baden City Ransom Start.png'),
+          asset('misc/Baden City Ransom - Start.png'),
+          asset('misc/Start Screen.png'),
+          asset('misc/StartScreen.png'),
+          asset('misc/Title.png'),
+          asset('misc/Title Screen.png'),
+          asset('misc/splash.png'),
+          asset('Start Screen.png'),
+          asset('StartScreen.png'),
+          asset('title.png'),
+          asset('splash.png'),
+          asset('misc/BoxArt.png')
         ].filter(Boolean);
         // Load all candidates with unique keys; we’ll pick the first that exists
         candidates.forEach((src, i) => this.load.image(`title_${i}`, url(src)));
@@ -297,7 +304,7 @@
         
         // Load sprites with authentic NES frame size (16x24)
         {
-          const src = url('../assets/sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png');
+          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png');
           logAdd('sheet','alex', src);
           this.load.spritesheet('alex', src, {
           frameWidth: 16,
@@ -311,7 +318,7 @@
         
         // Load enemies with matching dimensions
         {
-          const src = url('../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 1.png');
+          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 1.png');
           logAdd('sheet','enemy1', src);
           this.load.spritesheet('enemy1', src, {
           frameWidth: 16,
@@ -322,7 +329,7 @@
         }
         
         {
-          const src = url('../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 2.png');
+          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 2.png');
           logAdd('sheet','enemy2', src);
           this.load.spritesheet('enemy2', src, {
           frameWidth: 16,
@@ -333,7 +340,7 @@
         }
         
         {
-          const src = url('../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 3.png');
+          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 3.png');
           logAdd('sheet','enemy3', src);
           this.load.spritesheet('enemy3', src, {
           frameWidth: 16,
@@ -344,26 +351,26 @@
         }
         // Boss spritesheet (Moose)
         {
-          const src = url('../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Moose.png');
+          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Moose.png');
           logAdd('sheet','boss', src);
           this.load.spritesheet('boss', src, {
-          frameWidth: 16,
-          frameHeight: 32,
-          margin: 1,
-          spacing: 1
+            frameWidth: 16,
+            frameHeight: 32,
+            margin: 1,
+            spacing: 1
           });
         }
         
         // Load background
         {
-          const src = url('../assets/backgrounds/NES - River City Ransom _ Street Gangs - Backgrounds - Downtown.png');
+          const src = asset('backgrounds/NES - River City Ransom _ Street Gangs - Backgrounds - Downtown.png');
           logAdd('image','downtown', src);
           this.load.image('downtown', src);
         }
         
         // Optional: GandalfHardcore layered character parts (compose into one sprite)
         {
-          const base = '../assets/GandalfHardcore FREE Character Asset Pack/GandalfHardcore Character Asset Pack';
+          const base = `${ASSETS_BASE}/GandalfHardcore FREE Character Asset Pack/GandalfHardcore Character Asset Pack`;
           const parts = [
             ['gh_skin', `${base}/Character skin colors/Male Skin3.png`],
             ['gh_pants', `${base}/Male Clothing/Blue Pants.png`],
@@ -377,13 +384,13 @@
   // (Knight assets removed)
 
         // Load authentic River City Ransom music
-  this.load.audio('bgm', url('../assets/audio/river_city_ransom_ost_mp3/River City Anthem.mp3'));
-  this.load.audio('street_music', url('../assets/audio/river_city_ransom_ost_mp3/Street of No Escape.mp3'));
+  this.load.audio('bgm', asset('audio/river_city_ransom_ost_mp3/River City Anthem.mp3'));
+  this.load.audio('street_music', asset('audio/river_city_ransom_ost_mp3/Street of No Escape.mp3'));
   // Short SFX
-  this.load.audio('sfx_punch1', url('../assets/audio/river_city_ransom_ost_mp3/classic-punch.mp3'));
-  this.load.audio('sfx_punch2', url('../assets/audio/river_city_ransom_ost_mp3/fist-fight.mp3'));
-  this.load.audio('sfx_jump1',  url('../assets/audio/river_city_ransom_ost_mp3/jump-01.mp3'));
-  this.load.audio('sfx_jump2',  url('../assets/audio/river_city_ransom_ost_mp3/jump-02.mp3'));
+  this.load.audio('sfx_punch1', asset('audio/river_city_ransom_ost_mp3/classic-punch.mp3'));
+  this.load.audio('sfx_punch2', asset('audio/river_city_ransom_ost_mp3/fist-fight.mp3'));
+  this.load.audio('sfx_jump1',  asset('audio/river_city_ransom_ost_mp3/jump-01.mp3'));
+  this.load.audio('sfx_jump2',  asset('audio/river_city_ransom_ost_mp3/jump-02.mp3'));
       }
       
       create() {
@@ -788,20 +795,24 @@
             // If already present, keep it and inform
             if (this.boss && this.boss.active && !this.boss._defeated) { this.showMessage('Boss already present.'); return this.boss; }
             // Pick a sprite key that exists (fallback to enemy1 if boss sheet missing)
-      const spriteKey = this.textures.exists('boss') ? 'boss' : (this.textures.exists('enemy1') ? 'enemy1' : null);
-      if (!spriteKey) { this.showMessage('Boss/enemy sprite missing.'); return null; }
+            const spriteKey = this.textures.exists('boss') ? 'boss' : (this.textures.exists('enemy1') ? 'enemy1' : null);
             const bx = Math.max((this.alex?.x || 200) + 70, 60);
             // Fallback ground if baseY not initialized yet
             const groundY = Number.isFinite(this.baseYMax) ? this.baseYMax : ((this.scale.height || this.scale.gameSize?.height || 480) - 18);
             const by = groundY;
-      const boss = this.add.sprite(bx, by, spriteKey, 0).setOrigin(0.5, 1).setDepth(10);
+            if (!spriteKey) {
+              this.showMessage('Boss sprite not loaded (check 404s). No spawn.');
+              try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = false; } catch(_) {}
+              return null;
+            }
+            const boss = this.add.sprite(bx, by, spriteKey, 0).setOrigin(0.5, 1).setDepth(10);
             const enemyScale = this.bg?.scaleX || 1;
             boss.setScale(enemyScale);
-      boss.health = 140; boss.type = spriteKey; boss.speed = 0.8; boss.attackCooldown = 0; boss.attackCadence = 850; boss.attackReach = 30; boss.attackWidth = 24; boss.attackHeight = 20;
+            boss.health = 140; boss.type = spriteKey; boss.speed = 0.8; boss.attackCooldown = 0; boss.attackCadence = 850; boss.attackReach = 30; boss.attackWidth = 24; boss.attackHeight = 20;
+            const animKey = spriteKey === 'boss' ? 'boss-idle' : `${spriteKey}-idle`;
+            try { boss.play(animKey); } catch(_) {}
             this.bossName = this.bossName || 'Miller';
             this.boss = boss;
-      const animKey = spriteKey === 'boss' ? 'boss-idle' : `${spriteKey}-idle`;
-            try { boss.play(animKey); } catch(_) {}
       try { boss.setTintFill(0xff55ff); this.time.delayedCall(180, () => boss.clearTint()); } catch(_) {}
             this.showMessage(`${this.bossName} spawned nearby.`);
             // Reflect in Dev UI if present
@@ -1175,16 +1186,16 @@
           const b = this.boss;
           const dx = this.alex.x - b.x;
           const dy = (this.alexBaseY - b.y);
-          b.setFlipX(dx < 0);
+          try { b.setFlipX && b.setFlipX(dx < 0); } catch(_) {}
           const alignedY = Math.abs(dy) <= 12;
           const distX = Math.abs(dx);
           const reach = b.attackReach || 28;
           if (distX > reach + 2 || !alignedY) {
             b.x += Math.sign(dx) * (b.speed || 0.8);
             if (!alignedY) b.y += Math.sign(this.alexBaseY - b.y) * 0.6;
-            if (b.anims.currentAnim?.key !== `${b.type}-walk`) b.play(`${b.type}-walk`);
+            try { if (b.anims?.currentAnim?.key !== `${b.type}-walk`) b.play && b.play(`${b.type}-walk`); } catch(_) {}
           } else {
-            if (b.anims.currentAnim?.key !== `${b.type}-idle`) b.play(`${b.type}-idle`);
+            try { if (b.anims?.currentAnim?.key !== `${b.type}-idle`) b.play && b.play(`${b.type}-idle`); } catch(_) {}
             if (time >= (b.attackCooldown||0)) {
               const w = b.attackWidth || 22, h = b.attackHeight || 20;
               const ox = b.flipX ? -reach : reach;
