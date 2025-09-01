@@ -135,11 +135,10 @@
   const bgWidth = texture.source[0].width;
   const bgHeight = texture.source[0].height;
         
-  // Crop to remove the top green band and bottom credit bar, while keeping a TALLER
-  // slice of the scene so the playfield can fill the 80% canvas height.
-  // Tweaked based on your screenshot: include more of the buildings/grass.
-  const CROP_TOP_PCT = 0.865;    // move crop down to remove most sky
-  const CROP_BOTTOM_PCT = 0.982; // stop above the purple credit strip
+  // Crop to keep the actual play area: trim off the sky and bottom credits.
+  // This slice contains the buildings/grass/fence/road.
+  const CROP_TOP_PCT = 0.72;     // where the playfield starts
+  const CROP_BOTTOM_PCT = 0.985; // just before the purple credit strip
   const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
   const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
   this.bg.setCrop(0, cropY, bgWidth, cropH);
@@ -250,7 +249,7 @@
   console.log('Baden City Ransom scene ready. Background cropped to road.');
         
         // Ensure background continues to fit if the canvas size changes
-        this.scale.on('resize', (gameSize) => {
+  this.scale.on('resize', (gameSize) => {
           const w = gameSize.width, h = gameSize.height;
           const scale = h / this._bgCropH;
           this.bg.setScale(scale);
@@ -365,7 +364,7 @@
     
     // Game configuration with adjusted canvas for bigger UI bars
     const config = {
-      type: Phaser.CANVAS,
+      type: Phaser.AUTO,
   width: 800,
   height: 480, // 80% of a 600 reference height
   parent: 'canvasWrap',
