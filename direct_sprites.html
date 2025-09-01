@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>River City Ransom - Direct Sprite Test</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 20px; 
+      background: #000; 
+      color: #fff; 
+      font-family: monospace; 
+      text-align: center;
+    }
+    #gameContainer { 
+      border: 3px solid #ffff00;
+      margin: 20px auto;
+      display: inline-block;
+    }
+    .status {
+      background: #004400;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎮 RIVER CITY RANSOM - DIRECT SPRITE TEST</h1>
+  
+  <div class="status" id="status">
+    Loading sprites directly from files...
+  </div>
+
+  <div id="gameContainer"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  
+  <script>
+    class DirectSpriteTest extends Phaser.Scene {
+      constructor() {
+        super({ key: 'DirectSpriteTest' });
+      }
+      
+      preload() {
+        console.log('Loading sprites directly from PNG files...');
+        document.getElementById('status').innerHTML = '📦 Loading Alex directly from PNG file...';
+        
+        // Load sprites directly from the PNG files instead of assets.js
+        this.load.image('alex_direct', 'NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png');
+        this.load.image('ryan_direct', 'NES - River City Ransom _ Street Gangs - Playable Characters - Ryan.png');
+        this.load.image('downtown_bg', 'NES - River City Ransom _ Street Gangs - Backgrounds - Downtown.png');
+        this.load.image('enemy1_direct', 'NES - River City Ransom _ Street Gangs - Enemies &amp; Bosses - Gang Member - Type 1.png');
+        
+        // Error handling
+        this.load.on('loaderror', (file) => {
+          console.error('Failed to load:', file.key, file.src);
+          document.getElementById('status').innerHTML = '❌ Failed to load: ' + file.key;
+        });
+        
+        this.load.on('progress', (progress) => {
+          document.getElementById('status').innerHTML = `📦 Loading... ${Math.round(progress * 100)}%`;
+        });
+      }
+      
+      create() {
+        console.log('Creating direct sprite test...');
+        document.getElementById('status').innerHTML = '🎨 Displaying sprites...';
+        
+        // Create background
+        this.add.rectangle(400, 300, 800, 600, 0x4A90E2); // Sky
+        this.add.rectangle(400, 450, 800, 300, 0x666666); // Street
+        
+        // Try to add background if it loaded
+        if (this.textures.exists('downtown_bg')) {
+          const bg = this.add.image(400, 300, 'downtown_bg');
+          bg.setScale(0.8);
+          console.log('Background loaded successfully!');
+        }
+        
+        // Try to display Alex sprite if it loaded
+        if (this.textures.exists('alex_direct')) {
+          const alexSprite = this.add.image(200, 200, 'alex_direct');
+          alexSprite.setScale(4); // Make it big so we can see it
+          this.add.text(200, 150, 'Alex Sprite Sheet (Direct)', { fontSize: '14px', fill: '#ffff00' }).setOrigin(0.5);
+          console.log('Alex sprite loaded successfully!');
+          document.getElementById('status').innerHTML = '✅ Alex sprite loaded from PNG file!';
+        } else {
+          console.log('Alex sprite failed to load from PNG file');
+          document.getElementById('status').innerHTML = '❌ Alex sprite failed to load from PNG file';
+        }
+        
+        // Try to display Ryan sprite
+        if (this.textures.exists('ryan_direct')) {
+          const ryanSprite = this.add.image(400, 200, 'ryan_direct');
+          ryanSprite.setScale(4);
+          this.add.text(400, 150, 'Ryan Sprite Sheet', { fontSize: '14px', fill: '#ffff00' }).setOrigin(0.5);
+          console.log('Ryan sprite loaded successfully!');
+        }
+        
+        // Try to display Enemy sprite
+        if (this.textures.exists('enemy1_direct')) {
+          const enemySprite = this.add.image(600, 200, 'enemy1_direct');
+          enemySprite.setScale(4);
+          this.add.text(600, 150, 'Enemy Sprite Sheet', { fontSize: '14px', fill: '#ffff00' }).setOrigin(0.5);
+          console.log('Enemy sprite loaded successfully!');
+        }
+        
+        // Create controllable Alex (rectangle version as backup)
+        this.alex = this.add.rectangle(400, 450, 32, 48, 0xFF6B6B);
+        this.alex.setStrokeStyle(3, 0x000000);
+        
+        // Add title
+        this.add.text(400, 50, 'RIVER CITY RANSOM - DIRECT LOAD', {
+          fontSize: '24px',
+          fill: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 2
+        }).setOrigin(0.5);
+        
+        this.add.text(400, 500, 'Arrow Keys = Move Red Box', {
+          fontSize: '16px',
+          fill: '#00ff00'
+        }).setOrigin(0.5);
+        
+        // Setup controls
+        this.cursors = this.input.keyboard.createCursorKeys();
+        
+        console.log('Direct sprite test created!');
+      }
+      
+      update() {
+        // Alex movement
+        if (this.cursors.left.isDown) {
+          this.alex.x -= 3;
+        }
+        if (this.cursors.right.isDown) {
+          this.alex.x += 3;
+        }
+        if (this.cursors.up.isDown) {
+          this.alex.y -= 3;
+        }
+        if (this.cursors.down.isDown) {
+          this.alex.y += 3;
+        }
+        
+        // Keep Alex on screen
+        this.alex.x = Phaser.Math.Clamp(this.alex.x, 30, 770);
+        this.alex.y = Phaser.Math.Clamp(this.alex.y, 120, 580);
+      }
+    }
+    
+    const config = {
+      type: Phaser.CANVAS,
+      width: 800,
+      height: 600,
+      parent: 'gameContainer',
+      backgroundColor: '#1a1a2e',
+      scene: DirectSpriteTest,
+      render: {
+        pixelArt: true,
+        antialias: false
+      }
+    };
+    
+    console.log('Starting direct sprite test...');
+    const game = new Phaser.Game(config);
+    
+    game.events.on('ready', () => {
+      console.log('Direct sprite test ready!');
+    });
+  </script>
+</body>
+</html>

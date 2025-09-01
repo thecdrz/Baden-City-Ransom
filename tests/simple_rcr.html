@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RCR - Simple Character Display</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      background: linear-gradient(45deg, #1a1a2e, #16213e); 
+      color: #fff; 
+      font-family: 'Courier New', monospace; 
+      overflow: hidden;
+    }
+    #gameContainer { 
+      width: 100vw; 
+      height: 100vh; 
+    }
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0,0,0,0.8);
+      padding: 15px;
+      border-radius: 5px;
+      font-size: 14px;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer"></div>
+  <div id="controls">
+    <div style="color: #ffff00; margin-bottom: 10px;">🎮 RIVER CITY RANSOM</div>
+    <div>Arrow Keys: Move Alex around</div>
+    <div>A: Punch | S: Kick</div>
+    <div style="margin-top: 10px; color: #00ff00;">Characters should be visible now!</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  <script src="assets.js"></script>
+  
+  <script>
+    class SimpleRCR extends Phaser.Scene {
+      constructor() {
+        super({ key: 'SimpleRCR' });
+      }
+      
+      preload() {
+        // Load background
+        this.load.image('bg', RCR_ASSETS['Backgrounds___Downtown']);
+        
+        // Load character sprites as single images (not spritesheets)
+        this.load.image('alex_img', RCR_ASSETS['Playable_Characters___Alex']);
+        this.load.image('ryan_img', RCR_ASSETS['Playable_Characters___Ryan']);
+        this.load.image('enemy1_img', RCR_ASSETS['Enemies_andamp;_Bosses___Gang_Member___Type_1']);
+        this.load.image('enemy2_img', RCR_ASSETS['Enemies_andamp;_Bosses___Gang_Member___Type_2']);
+        this.load.image('enemy3_img', RCR_ASSETS['Enemies_andamp;_Bosses___Gang_Member___Type_3']);
+        
+        // Also try to load as spritesheets with multiple common sizes
+        this.load.spritesheet('alex_16x24', RCR_ASSETS['Playable_Characters___Alex'], {
+          frameWidth: 16,
+          frameHeight: 24
+        });
+        
+        this.load.spritesheet('alex_24x32', RCR_ASSETS['Playable_Characters___Alex'], {
+          frameWidth: 24,
+          frameHeight: 32
+        });
+        
+        this.load.spritesheet('alex_32x32', RCR_ASSETS['Playable_Characters___Alex'], {
+          frameWidth: 32,
+          frameHeight: 32
+        });
+      }
+      
+      create() {
+        // Add background
+        const bg = this.add.image(400, 300, 'bg');
+        bg.setDisplaySize(800, 600); // Scale to fit screen
+        
+        // Display sprite sheets as images first (this WILL work)
+        const alexSheet = this.add.image(150, 150, 'alex_img');
+        alexSheet.setScale(3);
+        this.add.text(100, 100, 'Alex Sprite Sheet', { fontSize: '14px', fill: '#ffff00' });
+        
+        const ryanSheet = this.add.image(400, 150, 'ryan_img');
+        ryanSheet.setScale(3);
+        this.add.text(350, 100, 'Ryan Sprite Sheet', { fontSize: '14px', fill: '#ffff00' });
+        
+        const enemySheet = this.add.image(650, 150, 'enemy1_img');
+        enemySheet.setScale(3);
+        this.add.text(600, 100, 'Enemy Sprite Sheet', { fontSize: '14px', fill: '#ffff00' });
+        
+        // Now try to create animated sprites from the spritesheets
+        let player = null;
+        
+        // Try different sprite sheet configurations
+        if (this.textures.exists('alex_16x24')) {
+          player = this.add.sprite(200, 400, 'alex_16x24', 0);
+          player.setScale(4);
+          this.add.text(150, 350, 'Alex 16x24 (Animated)', { fontSize: '12px', fill: '#00ff00' });
+          
+          // Create simple animation
+          this.anims.create({
+            key: 'alex_walk',
+            frames: this.anims.generateFrameNumbers('alex_16x24', { start: 0, end: 3 }),
+            frameRate: 8,
+            repeat: -1
+          });
+          player.play('alex_walk');
+        }
+        
+        if (this.textures.exists('alex_24x32') && !player) {
+          player = this.add.sprite(400, 400, 'alex_24x32', 0);
+          player.setScale(4);
+          this.add.text(350, 350, 'Alex 24x32 (Animated)', { fontSize: '12px', fill: '#00ff00' });
+          
+          this.anims.create({
+            key: 'alex_walk_24',
+            frames: this.anims.generateFrameNumbers('alex_24x32', { start: 0, end: 3 }),
+            frameRate: 8,
+            repeat: -1
+          });
+          player.play('alex_walk_24');
+        }
+        
+        if (this.textures.exists('alex_32x32') && !player) {
+          player = this.add.sprite(600, 400, 'alex_32x32', 0);
+          player.setScale(4);
+          this.add.text(550, 350, 'Alex 32x32 (Animated)', { fontSize: '12px', fill: '#00ff00' });
+          
+          this.anims.create({
+            key: 'alex_walk_32',
+            frames: this.anims.generateFrameNumbers('alex_32x32', { start: 0, end: 3 }),
+            frameRate: 8,
+            repeat: -1
+          });
+          player.play('alex_walk_32');
+        }
+        
+        // Store player reference for movement
+        this.player = player;
+        
+        // Input
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keys = this.input.keyboard.addKeys('A,S');
+        
+        // Title
+        this.add.text(400, 50, 'RIVER CITY RANSOM', {
+          fontSize: '32px',
+          fill: '#ffff00',
+          fontFamily: 'Courier New',
+          stroke: '#000000',
+          strokeThickness: 3
+        }).setOrigin(0.5);
+        
+        console.log('Scene created successfully!');
+        console.log('Available textures:', this.textures.list.map(t => t.key));
+      }
+      
+      update() {
+        // Move the player if it exists
+        if (this.player) {
+          if (this.cursors.left.isDown) {
+            this.player.x -= 2;
+            this.player.setFlipX(true);
+          }
+          if (this.cursors.right.isDown) {
+            this.player.x += 2;
+            this.player.setFlipX(false);
+          }
+          if (this.cursors.up.isDown) {
+            this.player.y -= 2;
+          }
+          if (this.cursors.down.isDown) {
+            this.player.y += 2;
+          }
+        }
+      }
+    }
+    
+    const config = {
+      type: Phaser.CANVAS,
+      width: 800,
+      height: 600,
+      parent: 'gameContainer',
+      backgroundColor: '#1a1a2e',
+      scene: SimpleRCR,
+      render: {
+        pixelArt: true,
+        antialias: false,
+        roundPixels: true
+      },
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+      }
+    };
+    
+    const game = new Phaser.Game(config);
+    console.log('River City Ransom game started!');
+  </script>
+</body>
+</html>

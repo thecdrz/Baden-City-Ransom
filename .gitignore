@@ -1,0 +1,45 @@
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+$RECYCLE.BIN/
+
+# IDE/editor
+.vscode/
+*.code-workspace
+
+# Logs and temp
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.tmp/
+.temp/
+tmp/
+
+# Node
+node_modules/
+dist/
+build/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Misc
+*.swp
+*.swo
+*.bak
+*.orig
+
+# Local env/secrets
+.env
+.env.*
+
+# Keep assets tracked; do not ignore assets/
+# assets/

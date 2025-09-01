@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sprite Dimension Tester</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      background: #000; 
+      color: #fff; 
+      font-family: monospace; 
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.9);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 10px;
+      z-index: 1000;
+      max-width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">Testing sprite dimensions...</div>
+  
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  
+  <script>
+    class SpriteDimensionTester extends Phaser.Scene {
+      constructor() {
+        super({ key: 'SpriteDimensionTester' });
+      }
+      
+      preload() {
+        // Load Alex as full image first
+        this.load.image('alex_full', 'NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png');
+        
+        // Test different frame dimensions
+        const testSizes = [
+          { w: 16, h: 16 },
+          { w: 16, h: 24 },
+          { w: 16, h: 32 },
+          { w: 24, h: 24 },
+          { w: 24, h: 32 },
+          { w: 32, h: 32 },
+          { w: 32, h: 48 }
+        ];
+        
+        testSizes.forEach((size, index) => {
+          this.load.spritesheet(`alex_${size.w}x${size.h}`, 
+            'NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png', {
+            frameWidth: size.w,
+            frameHeight: size.h
+          });
+        });
+      }
+      
+      create() {
+        const info = document.getElementById('info');
+        
+        // Show full sprite sheet first
+        if (this.textures.exists('alex_full')) {
+          const fullSprite = this.add.image(100, 50, 'alex_full');
+          fullSprite.setScale(2);
+          this.add.text(10, 10, 'Full Sprite Sheet (2x)', { fill: '#fff', fontSize: '10px' });
+          
+          const texture = this.textures.get('alex_full');
+          const width = texture.source[0].width;
+          const height = texture.source[0].height;
+          info.innerHTML = `Full sprite: ${width}x${height}px<br><br>Testing dimensions:`;
+        }
+        
+        // Test different frame sizes
+        let x = 50;
+        let y = 200;
+        const testSizes = [
+          { w: 16, h: 16 },
+          { w: 16, h: 24 },
+          { w: 16, h: 32 },
+          { w: 24, h: 24 },
+          { w: 24, h: 32 },
+          { w: 32, h: 32 },
+          { w: 32, h: 48 }
+        ];
+        
+        testSizes.forEach((size, index) => {
+          const key = `alex_${size.w}x${size.h}`;
+          if (this.textures.exists(key)) {
+            // Show first frame
+            const sprite = this.add.sprite(x, y, key, 0);
+            sprite.setScale(3);
+            
+            this.add.text(x - 20, y + 40, `${size.w}x${size.h}`, { 
+              fill: '#fff', 
+              fontSize: '8px',
+              align: 'center'
+            });
+            
+            // Show frame 1 if it exists
+            if (this.textures.get(key).frameTotal > 1) {
+              const sprite2 = this.add.sprite(x, y + 60, key, 1);
+              sprite2.setScale(3);
+              this.add.text(x - 10, y + 100, 'F1', { fill: '#fff', fontSize: '8px' });
+            }
+            
+            x += 80;
+            if (x > 600) {
+              x = 50;
+              y += 140;
+            }
+          }
+        });
+        
+        info.innerHTML += '<br>Look for the size where Alex appears as a complete character!';
+      }
+    }
+    
+    const config = {
+      type: Phaser.CANVAS,
+      width: 800,
+      height: 600,
+      backgroundColor: '#333',
+      scene: SpriteDimensionTester,
+      render: {
+        pixelArt: true,
+        antialias: false
+      }
+    };
+    
+    const game = new Phaser.Game(config);
+  </script>
+</body>
+</html>

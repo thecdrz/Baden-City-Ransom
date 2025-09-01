@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>River City Ransom - Fixed Version</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      background: #000; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      min-height: 100vh;
+      font-family: monospace;
+    }
+    #gameContainer { 
+      border: 2px solid #333;
+      position: relative;
+    }
+    #instructions {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 12px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.7);
+      padding: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="instructions">
+      Arrow Keys: Move | A: Punch | S: Kick | Space: Run
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  <script src="assets.js"></script>
+  
+  <script>
+    class RCRScene extends Phaser.Scene {
+      constructor() {
+        super({ key: 'RCRScene' });
+      }
+      
+      preload() {
+        console.log('Loading RCR assets...');
+        console.log('Available assets:', Object.keys(RCR_ASSETS).length);
+        
+        // Load background
+        this.load.image('downtown', RCR_ASSETS['Backgrounds___Downtown']);
+        
+        // Test multiple sprite sizes for Alex
+        if (RCR_ASSETS['Playable_Characters___Alex']) {
+          // Try 16x16 (very small, might be NES accurate)
+          this.load.spritesheet('alex16', RCR_ASSETS['Playable_Characters___Alex'], {
+            frameWidth: 16,
+            frameHeight: 16
+          });
+          
+          // Try 16x24 (common for NES characters)
+          this.load.spritesheet('alex16x24', RCR_ASSETS['Playable_Characters___Alex'], {
+            frameWidth: 16,
+            frameHeight: 24
+          });
+          
+          // Try 24x24 (square sprites)
+          this.load.spritesheet('alex24', RCR_ASSETS['Playable_Characters___Alex'], {
+            frameWidth: 24,
+            frameHeight: 24
+          });
+          
+          // Try 32x32 (larger sprites)
+          this.load.spritesheet('alex32', RCR_ASSETS['Playable_Characters___Alex'], {
+            frameWidth: 32,
+            frameHeight: 32
+          });
+          
+          // Load as single image to examine
+          this.load.image('alex_sheet', RCR_ASSETS['Playable_Characters___Alex']);
+        }
+        
+        // Load enemy with multiple sizes
+        if (RCR_ASSETS['Enemies_andamp;_Bosses___Gang_Member___Type_1']) {
+          this.load.spritesheet('enemy16', RCR_ASSETS['Enemies_andamp;_Bosses___Gang_Member___Type_1'], {
+            frameWidth: 16,
+            frameHeight: 24
+          });
+          
+          this.load.image('enemy_sheet', RCR_ASSETS['Enemies_andamp;_Bosses___Gang_Member___Type_1']);
+        }
+      }
+      
+      create() {
+        console.log('Creating RCR scene...');
+        
+        // Add background (scale to fit)
+        const bg = this.add.image(400, 300, 'downtown');
+        bg.setScale(0.8);
+        
+        // Show the raw sprite sheet first to see actual layout
+        if (this.textures.exists('alex_sheet')) {
+          const sheet = this.add.image(100, 100, 'alex_sheet');
+          sheet.setOrigin(0, 0);
+          sheet.setScale(3); // Zoom in to see details
+          this.add.text(10, 80, 'Alex Sprite Sheet:', { fontSize: '12px', fill: '#ffffff' });
+        }
+        
+        // Show enemy sprite sheet
+        if (this.textures.exists('enemy_sheet')) {
+          const enemySheet = this.add.image(100, 250, 'enemy_sheet');
+          enemySheet.setOrigin(0, 0);
+          enemySheet.setScale(3);
+          this.add.text(10, 230, 'Enemy Sprite Sheet:', { fontSize: '12px', fill: '#ffffff' });
+        }
+        
+        // Test different Alex sprite sizes
+        const testPositions = [
+          { x: 300, y: 450, size: '16x16', key: 'alex16' },
+          { x: 400, y: 450, size: '16x24', key: 'alex16x24' },
+          { x: 500, y: 450, size: '24x24', key: 'alex24' },
+          { x: 600, y: 450, size: '32x32', key: 'alex32' }
+        ];
+        
+        testPositions.forEach(pos => {
+          if (this.textures.exists(pos.key)) {
+            const sprite = this.add.sprite(pos.x, pos.y, pos.key, 0);
+            sprite.setScale(4); // Scale up to see clearly
+            this.add.text(pos.x - 20, pos.y - 40, pos.size, { fontSize: '10px', fill: '#ffffff' });
+            
+            // Try to animate
+            try {
+              this.anims.create({
+                key: pos.key + '-walk',
+                frames: this.anims.generateFrameNumbers(pos.key, { start: 0, end: 3 }),
+                frameRate: 6,
+                repeat: -1
+              });
+              sprite.play(pos.key + '-walk');
+            } catch (e) {
+              console.log(`Animation failed for ${pos.key}:`, e);
+            }
+          }
+        });
+        
+        // Add enemy test
+        if (this.textures.exists('enemy16')) {
+          const enemy = this.add.sprite(700, 450, 'enemy16', 0);
+          enemy.setScale(4);
+          this.add.text(680, 410, 'Enemy 16x24', { fontSize: '10px', fill: '#ffffff' });
+        }
+        
+        // Add instructions
+        this.add.text(400, 550, 'Check console for sprite loading details', {
+          fontSize: '14px',
+          fill: '#ffff00',
+          align: 'center'
+        }).setOrigin(0.5);
+        
+        // Debug texture information
+        console.log('Loaded textures:');
+        this.textures.list.forEach(texture => {
+          console.log(`- ${texture.key}: ${texture.source[0].width}x${texture.source[0].height}`);
+        });
+      }
+    }
+    
+    // Game configuration
+    const config = {
+      type: Phaser.CANVAS, // Force Canvas for compatibility
+      width: 800,
+      height: 600,
+      parent: 'gameContainer',
+      backgroundColor: '#2c3e50',
+      scene: RCRScene,
+      render: {
+        pixelArt: true,
+        antialias: false,
+        roundPixels: true
+      },
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+      }
+    };
+    
+    // Initialize game
+    const game = new Phaser.Game(config);
+    
+    // Error handling
+    game.events.on('ready', () => {
+      console.log('Game ready!');
+    });
+    
+    game.events.on('destroy', () => {
+      console.log('Game destroyed');
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>River City Ransom - Working Test</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 20px; 
+      background: #000; 
+      color: #fff; 
+      font-family: monospace; 
+      text-align: center;
+    }
+    #gameContainer { 
+      border: 3px solid #00ff00;
+      margin: 20px auto;
+      display: inline-block;
+    }
+    .status {
+      background: #004400;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 5px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎮 RIVER CITY RANSOM - ENGINE TEST</h1>
+  
+  <div class="status">
+    ✅ Testing game engine without problematic assets...
+  </div>
+
+  <div class="status">
+    🕹️ Controls: Arrow Keys = Move | A = Punch | S = Kick
+  </div>
+
+  <div id="gameContainer"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  
+  <script>
+    class WorkingScene extends Phaser.Scene {
+      constructor() {
+        super({ key: 'WorkingScene' });
+        console.log('🎮 Scene created');
+      }
+      
+      preload() {
+        console.log('📦 Preload started');
+        
+        // Create simple colored rectangles instead of loading broken assets
+        this.load.image('bg', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        
+        console.log('📦 Simple assets ready');
+      }
+      
+      create() {
+        console.log('🎨 Creating scene...');
+        
+        // Create a city-like background with rectangles
+        this.add.rectangle(400, 300, 800, 600, 0x4A90E2); // Sky
+        this.add.rectangle(400, 450, 800, 300, 0x666666); // Street
+        
+        // Create buildings
+        for (let i = 0; i < 5; i++) {
+          const x = 100 + i * 150;
+          this.add.rectangle(x, 350, 80, 200, 0x8B4513); // Brown building
+          this.add.rectangle(x, 250, 80, 40, 0x654321); // Roof
+        }
+        
+        // Create Alex as a simple colored rectangle
+        this.alex = this.add.rectangle(200, 400, 24, 32, 0xFF6B6B);
+        this.alex.setStrokeStyle(2, 0x000000);
+        
+        // Create Ryan
+        this.ryan = this.add.rectangle(250, 400, 24, 32, 0x4ECDC4);
+        this.ryan.setStrokeStyle(2, 0x000000);
+        
+        // Create some enemies
+        this.enemies = [];
+        for (let i = 0; i < 3; i++) {
+          const enemy = this.add.rectangle(500 + i * 60, 400, 24, 32, 0xFFE66D);
+          enemy.setStrokeStyle(2, 0x000000);
+          this.enemies.push(enemy);
+        }
+        
+        // Add title
+        this.add.text(400, 50, 'RIVER CITY RANSOM', {
+          fontSize: '32px',
+          fill: '#ffffff',
+          fontFamily: 'Arial',
+          stroke: '#000000',
+          strokeThickness: 3
+        }).setOrigin(0.5);
+        
+        // Add subtitle
+        this.add.text(400, 90, 'Engine Test - Simple Graphics', {
+          fontSize: '16px',
+          fill: '#ffff00',
+          fontFamily: 'Arial'
+        }).setOrigin(0.5);
+        
+        // Add character labels
+        this.add.text(200, 360, 'ALEX', { fontSize: '12px', fill: '#ffffff', fontFamily: 'Arial' }).setOrigin(0.5);
+        this.add.text(250, 360, 'RYAN', { fontSize: '12px', fill: '#ffffff', fontFamily: 'Arial' }).setOrigin(0.5);
+        this.add.text(530, 360, 'ENEMIES', { fontSize: '12px', fill: '#ffffff', fontFamily: 'Arial' }).setOrigin(0.5);
+        
+        // Setup controls
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keys = this.input.keyboard.addKeys('A,S');
+        
+        // Movement variables
+        this.speed = 150;
+        
+        console.log('✅ Scene created successfully!');
+      }
+      
+      update(time, delta) {
+        const moveSpeed = this.speed * (delta / 1000);
+        
+        // Alex movement
+        if (this.cursors.left.isDown) {
+          this.alex.x -= moveSpeed;
+          this.alex.setFillStyle(0xFF9999); // Lighter red when moving
+        } else if (this.cursors.right.isDown) {
+          this.alex.x += moveSpeed;
+          this.alex.setFillStyle(0xFF9999);
+        } else if (this.cursors.up.isDown) {
+          this.alex.y -= moveSpeed;
+          this.alex.setFillStyle(0xFF9999);
+        } else if (this.cursors.down.isDown) {
+          this.alex.y += moveSpeed;
+          this.alex.setFillStyle(0xFF9999);
+        } else {
+          this.alex.setFillStyle(0xFF6B6B); // Normal red when idle
+        }
+        
+        // Attack animations
+        if (Phaser.Input.Keyboard.JustDown(this.keys.A)) {
+          this.alex.setFillStyle(0xFF0000); // Bright red for punch
+          setTimeout(() => this.alex.setFillStyle(0xFF6B6B), 200);
+        }
+        
+        if (Phaser.Input.Keyboard.JustDown(this.keys.S)) {
+          this.alex.setFillStyle(0xFF3333); // Different red for kick
+          setTimeout(() => this.alex.setFillStyle(0xFF6B6B), 200);
+        }
+        
+        // Keep Alex on screen
+        this.alex.x = Phaser.Math.Clamp(this.alex.x, 20, 780);
+        this.alex.y = Phaser.Math.Clamp(this.alex.y, 120, 480);
+        
+        // Simple enemy AI - make them bounce around
+        this.enemies.forEach((enemy, index) => {
+          enemy.x += Math.sin(time * 0.001 + index) * 0.5;
+          enemy.y += Math.cos(time * 0.002 + index) * 0.3;
+          
+          // Change color occasionally
+          if (Math.random() < 0.01) {
+            enemy.setFillStyle(Phaser.Utils.Array.GetRandom([0xFFE66D, 0xFFB74D, 0xFF8A65]));
+          }
+        });
+      }
+    }
+    
+    // Game configuration
+    const config = {
+      type: Phaser.CANVAS,
+      width: 800,
+      height: 600,
+      parent: 'gameContainer',
+      backgroundColor: '#2c3e50',
+      scene: WorkingScene,
+      render: {
+        pixelArt: true,
+        antialias: false
+      }
+    };
+    
+    console.log('🚀 Starting game engine test...');
+    
+    try {
+      const game = new Phaser.Game(config);
+      console.log('✅ Game engine working perfectly!');
+      
+      game.events.on('ready', () => {
+        console.log('🎮 Game ready to play!');
+      });
+      
+    } catch (error) {
+      console.error('❌ Game engine failed:', error);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>River City Ransom - Web Edition</title>
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+    body { 
+      background: #000; 
+      color: #fff; 
+      font-family: 'Courier New', monospace;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #game-container { 
+      position: relative;
+      width: 960px;
+      height: 720px;
+      background: #000;
+      border: 2px solid #333;
+    }
+    canvas { 
+      image-rendering: pixelated; 
+      image-rendering: crisp-edges;
+      image-rendering: -moz-crisp-edges;
+      image-rendering: -webkit-crisp-edges;
+    }
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #00ff00;
+      font-size: 24px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="loading">
+      <div>RIVER CITY RANSOM</div>
+      <div style="font-size: 14px; margin-top: 20px;">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Phaser 3 Framework -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  
+  <!-- River City Ransom Assets -->
+  <script src="assets.js"></script>
+  
+  <script>
+    // River City Ransom Configuration
+    const RCR_CONFIG = {
+      // Game Display
+      screen: { width: 960, height: 720, pixelPerfect: true, zoom: 3 },
+      
+      // Physics & Movement
+      physics: { 
+        gravity: 980,
+        walkSpeed: 100,
+        runSpeed: 180,
+        jumpPower: -420,
+        friction: 0.8
+      },
+      
+      // Player Stats System
+      playerStats: {
+        alex: { punch: 16, kick: 16, weapon: 16, throw: 16, agility: 16, defense: 16, strength: 16, willpower: 16, stamina: 16 },
+        ryan: { punch: 16, kick: 16, weapon: 16, throw: 16, agility: 16, defense: 16, strength: 16, willpower: 16, stamina: 16 }
+      },
+      
+      // Combat System
+      combat: {
+        punchDamage: 8,
+        kickDamage: 12,
+        throwDamage: 15,
+        weaponMultiplier: 1.5,
+        hitStun: 300,
+        invulnTime: 800,
+        comboWindow: 500
+      },
+      
+      // Economy
+      economy: {
+        startingMoney: 100,
+        dropChance: 0.3,
+        coinValues: [5, 10, 15, 20]
+      },
+      
+      // Enemy Types
+      enemies: {
+        generic: { hp: 25, damage: 6, speed: 70, worth: 15 },
+        boss: { hp: 60, damage: 12, speed: 85, worth: 50 }
+      },
+      
+      // Areas/Stages
+      areas: [
+        { name: "Armstrong Thru-Way", bg: "Backgrounds___Armstrong_Thru_Way", music: "street" },
+        { name: "Downtown", bg: "Backgrounds___Downtown", music: "downtown" },
+        { name: "River City High", bg: "Backgrounds___River_City_High", music: "school" }
+      ]
+    };
+
+    // Asset Management
+    class AssetManager {
+      constructor(scene) {
+        this.scene = scene;
+        this.loadedAssets = new Set();
+      }
+      
+      loadRCRAssets() {
+        // Load backgrounds
+        Object.keys(RCR_ASSETS).forEach(key => {
+          if (key.includes('Backgrounds')) {
+            this.scene.load.image(key, RCR_ASSETS[key]);
+          } else if (key.includes('Playable_Characters')) {
+            // Try 24x32 for RCR sprites (more likely correct size)
+            this.scene.load.spritesheet(key, RCR_ASSETS[key], { 
+              frameWidth: 24, 
+              frameHeight: 32 
+            });
+          } else if (key.includes('Enemies') || key.includes('Gang_Member')) {
+            this.scene.load.spritesheet(key, RCR_ASSETS[key], { 
+              frameWidth: 24, 
+              frameHeight: 32 
+            });
+          } else if (key.includes('Miscellaneous')) {
+            this.scene.load.image(key, RCR_ASSETS[key]);
+          }
+        });
+      }
+      
+      createAnimations() {
+        // Player animations (Alex)
+        this.scene.anims.create({
+          key: 'alex-idle',
+          frames: this.scene.anims.generateFrameNumbers('Playable_Characters___Alex', { frames: [0] }),
+          frameRate: 8,
+          repeat: -1
+        });
+        
+        this.scene.anims.create({
+          key: 'alex-walk',
+          frames: this.scene.anims.generateFrameNumbers('Playable_Characters___Alex', { frames: [1, 2] }),
+          frameRate: 8,
+          repeat: -1
+        });
+        
+        this.scene.anims.create({
+          key: 'alex-punch',
+          frames: this.scene.anims.generateFrameNumbers('Playable_Characters___Alex', { frames: [3] }),
+          frameRate: 15,
+          repeat: 0
+        });
+        
+        this.scene.anims.create({
+          key: 'alex-kick',
+          frames: this.scene.anims.generateFrameNumbers('Playable_Characters___Alex', { frames: [4] }),
+          frameRate: 12,
+          repeat: 0
+        });
+        
+        this.scene.anims.create({
+          key: 'alex-jump',
+          frames: this.scene.anims.generateFrameNumbers('Playable_Characters___Alex', { frames: [5] }),
+          frameRate: 8,
+          repeat: 0
+        });
+        
+        this.scene.anims.create({
+          key: 'alex-hit',
+          frames: this.scene.anims.generateFrameNumbers('Playable_Characters___Alex', { frames: [6] }),
+          frameRate: 8,
+          repeat: 0
+        });
+        
+        // Enemy animations
+        for (let i = 1; i <= 9; i++) {
+          const key = `Enemies_andamp;_Bosses___Gang_Member___Type_${i}`;
+          
+          this.scene.anims.create({
+            key: `enemy${i}-idle`,
+            frames: this.scene.anims.generateFrameNumbers(key, { frames: [0] }),
+            frameRate: 8,
+            repeat: -1
+          });
+          
+          this.scene.anims.create({
+            key: `enemy${i}-walk`,
+            frames: this.scene.anims.generateFrameNumbers(key, { frames: [1, 2] }),
+            frameRate: 8,
+            repeat: -1
+          });
+          
+          this.scene.anims.create({
+            key: `enemy${i}-attack`,
+            frames: this.scene.anims.generateFrameNumbers(key, { frames: [3] }),
+            frameRate: 10,
+            repeat: 0
+          });
+        }
+      }
+    }
+    
+    // Player Controller
+    class Player extends Phaser.Physics.Arcade.Sprite {
+      constructor(scene, x, y, character = 'alex') {
+        const spriteKey = character === 'alex' ? 'Playable_Characters___Alex' : 'Playable_Characters___Ryan';
+        super(scene, x, y, spriteKey);
+        
+        scene.add.existing(this);
+        scene.physics.add.existing(this);
+        
+        // Character setup
+        this.character = character;
+        this.stats = { ...RCR_CONFIG.playerStats[character] };
+        this.maxHealth = this.stats.stamina * 8;
+        this.health = this.maxHealth;
+        this.money = RCR_CONFIG.economy.startingMoney;
+        
+        // Combat states
+        this.isAttacking = false;
+        this.attackType = null;
+        this.invulnerable = false;
+        this.stunned = false;
+        this.combo = 0;
+        this.lastAttackTime = 0;
+        
+        // Physics
+        this.body.setSize(18, 28);
+        this.body.setOffset(3, 4);
+        this.setCollideWorldBounds(true);
+        this.body.setMaxVelocity(RCR_CONFIG.physics.runSpeed, 600);
+        
+        // Input
+        this.cursors = scene.input.keyboard.createCursorKeys();
+        this.keys = scene.input.keyboard.addKeys('A,S,D,SPACE');
+        
+        // Initial animation
+        this.play(`${character}-idle`);
+        
+        // UI Elements
+        this.createHUD();
+      }
+      
+      createHUD() {
+        const scene = this.scene;
+        
+        // Health bar
+        this.healthBarBg = scene.add.rectangle(60, 30, 120, 10, 0x330000);
+        this.healthBar = scene.add.rectangle(60, 30, 120, 10, 0x00ff00);
+        this.healthBarBg.setScrollFactor(0);
+        this.healthBar.setScrollFactor(0);
+        
+        // Money display
+        this.moneyText = scene.add.text(20, 50, `$${this.money}`, {
+          fontFamily: 'Courier New',
+          fontSize: '16px',
+          color: '#ffff00'
+        });
+        this.moneyText.setScrollFactor(0);
+        
+        // Stats display
+        this.statsText = scene.add.text(20, 70, this.getStatsString(), {
+          fontFamily: 'Courier New',
+          fontSize: '12px',
+          color: '#ffffff'
+        });
+        this.statsText.setScrollFactor(0);
+      }
+      
+      getStatsString() {
+        const s = this.stats;
+        return `P:${s.punch} K:${s.kick} W:${s.weapon} T:${s.throw} A:${s.agility} D:${s.defense}`;
+      }
+      
+      update(time) {
+        if (this.stunned && time > this.stunEndTime) {
+          this.stunned = false;
+        }
+        
+        if (this.invulnerable && time > this.invulnEndTime) {
+          this.invulnerable = false;
+          this.clearTint();
+        }
+        
+        // Handle input
+        this.handleMovement();
+        this.handleCombat(time);
+        
+        // Update HUD
+        this.updateHUD();
+        
+        // Handle combo timeout
+        if (time - this.lastAttackTime > RCR_CONFIG.combat.comboWindow) {
+          this.combo = 0;
+        }
+      }
+      
+      handleMovement() {
+        if (this.stunned || this.isAttacking) return;
+        
+        let velocityX = 0;
+        let velocityY = this.body.velocity.y;
+        
+        // Horizontal movement
+        if (this.cursors.left.isDown) {
+          velocityX = -RCR_CONFIG.physics.walkSpeed;
+          this.setFlipX(true);
+          if (!this.body.onFloor()) {
+            this.play(`${this.character}-jump`, true);
+          } else {
+            this.play(`${this.character}-walk`, true);
+          }
+        } else if (this.cursors.right.isDown) {
+          velocityX = RCR_CONFIG.physics.walkSpeed;
+          this.setFlipX(false);
+          if (!this.body.onFloor()) {
+            this.play(`${this.character}-jump`, true);
+          } else {
+            this.play(`${this.character}-walk`, true);
+          }
+        } else if (this.body.onFloor() && !this.isAttacking) {
+          this.play(`${this.character}-idle`, true);
+        }
+        
+        // Vertical movement (jump)
+        if (this.cursors.up.isDown && this.body.onFloor()) {
+          velocityY = RCR_CONFIG.physics.jumpPower;
+          this.play(`${this.character}-jump`);
+        }
+        
+        // Apply movement with running modifier
+        if (this.keys.SPACE.isDown && velocityX !== 0) {
+          velocityX *= (RCR_CONFIG.physics.runSpeed / RCR_CONFIG.physics.walkSpeed);
+        }
+        
+        this.setVelocity(velocityX, velocityY);
+      }
+      
+      handleCombat(time) {
+        if (this.stunned) return;
+        
+        // Punch attack
+        if (Phaser.Input.Keyboard.JustDown(this.keys.A) && !this.isAttacking) {
+          this.performAttack('punch', time);
+        }
+        
+        // Kick attack
+        if (Phaser.Input.Keyboard.JustDown(this.keys.S) && !this.isAttacking) {
+          this.performAttack('kick', time);
+        }
+      }
+      
+      performAttack(type, time) {
+        this.isAttacking = true;
+        this.attackType = type;
+        this.lastAttackTime = time;
+        
+        // Increment combo if within window
+        if (time - this.lastAttackTime < RCR_CONFIG.combat.comboWindow) {
+          this.combo = Math.min(this.combo + 1, 5);
+        } else {
+          this.combo = 1;
+        }
+        
+        // Play animation
+        this.play(`${this.character}-${type}`);
+        
+        // Create hitbox after slight delay
+        this.scene.time.delayedCall(100, () => {
+          this.createHitbox(type);
+        });
+        
+        // End attack after animation
+        this.scene.time.delayedCall(type === 'punch' ? 300 : 400, () => {
+          this.isAttacking = false;
+          this.attackType = null;
+        });
+      }
+      
+      createHitbox(type) {
+        const damage = type === 'punch' ? 
+          RCR_CONFIG.combat.punchDamage + this.stats.punch : 
+          RCR_CONFIG.combat.kickDamage + this.stats.kick;
+        
+        const range = type === 'punch' ? 40 : 50;
+        const width = type === 'punch' ? 30 : 35;
+        const height = 25;
+        
+        const direction = this.flipX ? -1 : 1;
+        const hitboxX = this.x + (direction * range);
+        const hitboxY = this.y - 10;
+        
+        // Check for enemy hits
+        const enemies = this.scene.enemies.children.entries;
+        enemies.forEach(enemy => {
+          if (enemy.active && 
+              Math.abs(enemy.x - hitboxX) < width &&
+              Math.abs(enemy.y - hitboxY) < height) {
+            this.hitEnemy(enemy, damage + this.combo);
+          }
+        });
+        
+        // Visual effect
+        this.scene.createHitEffect(hitboxX, hitboxY);
+      }
+      
+      hitEnemy(enemy, damage) {
+        if (!enemy.invulnerable) {
+          enemy.takeDamage(damage, this.x < enemy.x ? 1 : -1);
+          this.gainExperience(1);
+        }
+      }
+      
+      takeDamage(damage, direction) {
+        if (this.invulnerable) return;
+        
+        this.health -= Math.max(1, damage - this.stats.defense);
+        this.invulnerable = true;
+        this.invulnEndTime = this.scene.time.now + RCR_CONFIG.combat.invulnTime;
+        this.stunned = true;
+        this.stunEndTime = this.scene.time.now + RCR_CONFIG.combat.hitStun;
+        
+        // Knockback
+        this.setVelocity(direction * 100, -100);
+        
+        // Visual feedback
+        this.setTintFill(0xff0000);
+        this.play(`${this.character}-hit`);
+        
+        // Check for death
+        if (this.health <= 0) {
+          this.die();
+        }
+      }
+      
+      die() {
+        this.scene.gameOver();
+      }
+      
+      gainMoney(amount) {
+        this.money += amount;
+      }
+      
+      gainExperience(amount) {
+        // Simple stat increase system
+        const statTypes = ['punch', 'kick', 'weapon', 'throw', 'agility', 'defense', 'strength', 'willpower', 'stamina'];
+        const randomStat = Phaser.Utils.Array.GetRandom(statTypes);
+        if (Math.random() < 0.1) { // 10% chance per hit
+          this.stats[randomStat] = Math.min(this.stats[randomStat] + 1, 99);
+        }
+      }
+      
+      updateHUD() {
+        // Update health bar
+        const healthPercent = this.health / this.maxHealth;
+        this.healthBar.scaleX = healthPercent;
+        if (healthPercent > 0.6) {
+          this.healthBar.setFillStyle(0x00ff00);
+        } else if (healthPercent > 0.3) {
+          this.healthBar.setFillStyle(0xffff00);
+        } else {
+          this.healthBar.setFillStyle(0xff0000);
+        }
+        
+        // Update money
+        this.moneyText.setText(`$${this.money}`);
+        
+        // Update stats
+        this.statsText.setText(this.getStatsString());
+      }
+    }
+    
+    // Enemy AI
+    class Enemy extends Phaser.Physics.Arcade.Sprite {
+      constructor(scene, x, y, type = 1) {
+        const spriteKey = `Enemies_andamp;_Bosses___Gang_Member___Type_${type}`;
+        super(scene, x, y, spriteKey);
+        
+        scene.add.existing(this);
+        scene.physics.add.existing(this);
+        
+        // Enemy setup
+        this.enemyType = type;
+        this.maxHealth = RCR_CONFIG.enemies.generic.hp;
+        this.health = this.maxHealth;
+        this.damage = RCR_CONFIG.enemies.generic.damage;
+        this.speed = RCR_CONFIG.enemies.generic.speed;
+        this.worth = RCR_CONFIG.enemies.generic.worth;
+        
+        // AI states
+        this.state = 'idle';
+        this.target = null;
+        this.lastStateChange = 0;
+        this.attackCooldown = 0;
+        
+        // Combat states
+        this.isAttacking = false;
+        this.invulnerable = false;
+        this.stunned = false;
+        
+        // Physics
+        this.body.setSize(24, 40);
+        this.body.setOffset(4, 8);
+        this.body.setMaxVelocity(this.speed, 600);
+        
+        // Start with idle animation
+        this.play(`enemy${type}-idle`);
+        
+        // Health bar
+        this.createHealthBar();
+      }
+      
+      createHealthBar() {
+        this.healthBarBg = this.scene.add.rectangle(this.x, this.y - 30, 32, 4, 0x660000);
+        this.healthBarFg = this.scene.add.rectangle(this.x, this.y - 30, 32, 4, 0xff0000);
+      }
+      
+      update(time) {
+        if (!this.active) return;
+        
+        // Update health bar position
+        this.healthBarBg.setPosition(this.x, this.y - 30);
+        this.healthBarFg.setPosition(this.x, this.y - 30);
+        
+        // Handle states
+        if (this.stunned && time > this.stunEndTime) {
+          this.stunned = false;
+        }
+        
+        if (this.invulnerable && time > this.invulnEndTime) {
+          this.invulnerable = false;
+          this.clearTint();
+        }
+        
+        // AI behavior
+        this.updateAI(time);
+      }
+      
+      updateAI(time) {
+        if (this.stunned || this.isAttacking) return;
+        
+        const player = this.scene.player;
+        const distanceToPlayer = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
+        
+        // State machine
+        switch (this.state) {
+          case 'idle':
+            if (distanceToPlayer < 200) {
+              this.state = 'chase';
+              this.target = player;
+            }
+            break;
+            
+          case 'chase':
+            if (distanceToPlayer < 50 && time > this.attackCooldown) {
+              this.state = 'attack';
+              this.performAttack(time);
+            } else if (distanceToPlayer < 200) {
+              this.chaseTarget();
+            } else {
+              this.state = 'idle';
+            }
+            break;
+            
+          case 'attack':
+            // Attack state is handled by performAttack timeout
+            break;
+        }
+      }
+      
+      chaseTarget() {
+        if (!this.target) return;
+        
+        const direction = this.target.x > this.x ? 1 : -1;
+        this.setVelocityX(direction * this.speed * 0.7);
+        this.setFlipX(direction < 0);
+        this.play(`enemy${this.enemyType}-walk`, true);
+      }
+      
+      performAttack(time) {
+        this.isAttacking = true;
+        this.setVelocityX(0);
+        this.play(`enemy${this.enemyType}-attack`);
+        
+        // Create attack hitbox after delay
+        this.scene.time.delayedCall(200, () => {
+          this.createAttackHitbox();
+        });
+        
+        // End attack and set cooldown
+        this.scene.time.delayedCall(600, () => {
+          this.isAttacking = false;
+          this.state = 'chase';
+          this.attackCooldown = time + 1500; // 1.5 second cooldown
+        });
+      }
+      
+      createAttackHitbox() {
+        const player = this.scene.player;
+        const distance = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
+        
+        if (distance < 60 && !player.invulnerable) {
+          const direction = this.x < player.x ? 1 : -1;
+          player.takeDamage(this.damage, direction);
+        }
+      }
+      
+      takeDamage(damage, direction) {
+        if (this.invulnerable) return;
+        
+        this.health -= damage;
+        this.invulnerable = true;
+        this.invulnEndTime = this.scene.time.now + 500;
+        this.stunned = true;
+        this.stunEndTime = this.scene.time.now + 300;
+        
+        // Knockback
+        this.setVelocity(direction * 80, -80);
+        
+        // Visual feedback
+        this.setTintFill(0xffffff);
+        
+        // Update health bar
+        const healthPercent = Math.max(0, this.health / this.maxHealth);
+        this.healthBarFg.scaleX = healthPercent;
+        
+        // Check for death
+        if (this.health <= 0) {
+          this.die();
+        }
+      }
+      
+      die() {
+        // Drop money
+        if (Math.random() < RCR_CONFIG.economy.dropChance) {
+          const coinValue = Phaser.Utils.Array.GetRandom(RCR_CONFIG.economy.coinValues);
+          this.scene.createCoin(this.x, this.y, coinValue);
+        }
+        
+        // Remove health bar
+        this.healthBarBg.destroy();
+        this.healthBarFg.destroy();
+        
+        // Death effect
+        this.scene.createDeathEffect(this.x, this.y);
+        
+        // Remove from scene
+        this.destroy();
+      }
+    }
+    
+    // Main Game Scene
+    class GameScene extends Phaser.Scene {
+      constructor() {
+        super({ key: 'GameScene' });
+      }
+      
+      preload() {
+        // Show loading progress
+        const loadingText = document.getElementById('loading');
+        
+        this.load.on('progress', (value) => {
+          loadingText.innerHTML = `
+            <div>RIVER CITY RANSOM</div>
+            <div style="font-size: 14px; margin-top: 20px;">Loading... ${Math.round(value * 100)}%</div>
+          `;
+        });
+        
+        this.load.on('complete', () => {
+          loadingText.style.display = 'none';
+        });
+        
+        // Load all RCR assets
+        this.assetManager = new AssetManager(this);
+        this.assetManager.loadRCRAssets();
+      }
+      
+      create() {
+        // Create animations
+        this.assetManager.createAnimations();
+        
+        // Set world bounds
+        this.physics.world.setBounds(0, 0, 2400, 720);
+        
+        // Create background
+        this.createBackground();
+        
+        // Create ground
+        this.createGround();
+        
+        // Create player
+        this.player = new Player(this, 100, 500, 'alex');
+        
+        // Create enemies group
+        this.enemies = this.physics.add.group();
+        
+        // Spawn some enemies
+        this.spawnEnemies();
+        
+        // Setup camera
+        this.cameras.main.setBounds(0, 0, 2400, 720);
+        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+        this.cameras.main.setZoom(RCR_CONFIG.screen.zoom);
+        
+        // Collisions
+        this.physics.add.collider(this.player, this.ground);
+        this.physics.add.collider(this.enemies, this.ground);
+        
+        // Effects group
+        this.effects = this.add.group();
+        this.coins = this.physics.add.group();
+        
+        // Coin collection
+        this.physics.add.overlap(this.player, this.coins, this.collectCoin, null, this);
+      }
+      
+      createBackground() {
+        // Use one of the RCR backgrounds
+        const bgKey = 'Backgrounds___Downtown';
+        
+        // Create multiple instances for scrolling
+        for (let i = 0; i < 4; i++) {
+          const bg = this.add.image(i * 600, 360, bgKey);
+          bg.setScale(2.5);
+          bg.setScrollFactor(0.5);
+        }
+      }
+      
+      createGround() {
+        this.ground = this.physics.add.staticGroup();
+        
+        // Create ground platforms
+        for (let x = 0; x < 2400; x += 64) {
+          const groundTile = this.add.rectangle(x + 32, 680, 64, 80, 0x444444);
+          this.physics.add.existing(groundTile, true);
+          this.ground.add(groundTile);
+        }
+      }
+      
+      spawnEnemies() {
+        // Spawn various enemy types across the level
+        for (let i = 0; i < 8; i++) {
+          const x = 300 + (i * 250);
+          const y = 500;
+          const type = Math.floor(Math.random() * 9) + 1;
+          
+          const enemy = new Enemy(this, x, y, type);
+          this.enemies.add(enemy);
+        }
+      }
+      
+      update(time, delta) {
+        // Update player
+        this.player.update(time);
+        
+        // Update enemies
+        this.enemies.children.entries.forEach(enemy => {
+          if (enemy.active) {
+            enemy.update(time);
+          }
+        });
+      }
+      
+      createHitEffect(x, y) {
+        const effect = this.add.circle(x, y, 15, 0xffffff, 0.8);
+        this.tweens.add({
+          targets: effect,
+          scaleX: 1.5,
+          scaleY: 1.5,
+          alpha: 0,
+          duration: 200,
+          onComplete: () => effect.destroy()
+        });
+      }
+      
+      createDeathEffect(x, y) {
+        // Simple death effect
+        const particles = this.add.particles(x, y, 'white', {
+          speed: { min: 50, max: 100 },
+          scale: { start: 0.3, end: 0 },
+          lifespan: 300,
+          quantity: 5
+        });
+        
+        this.time.delayedCall(300, () => particles.destroy());
+      }
+      
+      createCoin(x, y, value) {
+        // Create a simple coin representation
+        const coin = this.physics.add.sprite(x, y - 20, null);
+        coin.setTintFill(0xffff00);
+        coin.body.setSize(16, 16);
+        coin.coinValue = value;
+        coin.body.setVelocity(
+          Phaser.Math.Between(-50, 50),
+          Phaser.Math.Between(-100, -50)
+        );
+        coin.body.setBounce(0.7);
+        coin.body.setCollideWorldBounds(true);
+        
+        this.coins.add(coin);
+        
+        // Auto-collect after 10 seconds
+        this.time.delayedCall(10000, () => {
+          if (coin.active) coin.destroy();
+        });
+      }
+      
+      collectCoin(player, coin) {
+        player.gainMoney(coin.coinValue);
+        
+        // Collection effect
+        const text = this.add.text(coin.x, coin.y - 20, `$${coin.coinValue}`, {
+          fontSize: '14px',
+          color: '#ffff00'
+        });
+        
+        this.tweens.add({
+          targets: text,
+          y: text.y - 30,
+          alpha: 0,
+          duration: 800,
+          onComplete: () => text.destroy()
+        });
+        
+        coin.destroy();
+      }
+      
+      gameOver() {
+        this.add.text(480, 360, 'GAME OVER', {
+          fontSize: '48px',
+          color: '#ff0000',
+          fontFamily: 'Courier New'
+        }).setOrigin(0.5).setScrollFactor(0);
+        
+        this.time.delayedCall(3000, () => {
+          this.scene.restart();
+        });
+      }
+    }
+    
+    // Initialize Game
+    const gameConfig = {
+      type: Phaser.CANVAS,
+      parent: 'game-container',
+      width: RCR_CONFIG.screen.width,
+      height: RCR_CONFIG.screen.height,
+      pixelArt: RCR_CONFIG.screen.pixelPerfect,
+      roundPixels: true,
+      physics: {
+        default: 'arcade',
+        arcade: {
+          gravity: { y: RCR_CONFIG.physics.gravity },
+          debug: false
+        }
+      },
+      scene: [GameScene]
+    };
+    
+    // Start the game when assets are loaded
+    window.addEventListener('load', () => {
+      const game = new Phaser.Game(gameConfig);
+    });
+  </script>
+</body>
+</html>

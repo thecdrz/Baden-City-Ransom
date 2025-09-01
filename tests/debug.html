@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RCR Debug - Asset Test</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 20px; 
+      background: #000; 
+      color: #fff; 
+      font-family: monospace;
+    }
+    #gameContainer { 
+      width: 960px; 
+      height: 720px; 
+      margin: 0 auto; 
+      border: 2px solid #333;
+    }
+    #debug { 
+      margin: 20px 0; 
+      padding: 10px; 
+      background: #111; 
+      border: 1px solid #333;
+    }
+  </style>
+</head>
+<body>
+  <div id="debug">
+    <h3>River City Ransom - Asset Debug</h3>
+    <div id="assetCount">Loading assets...</div>
+    <div id="assetList"></div>
+  </div>
+  
+  <div id="gameContainer"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  <script src="assets.js"></script>
+  
+  <script>
+    // Debug: Check if assets loaded
+    console.log('RCR_ASSETS keys:', Object.keys(RCR_ASSETS));
+    document.getElementById('assetCount').innerHTML = `Found ${Object.keys(RCR_ASSETS).length} assets`;
+    
+    // List all assets
+    let assetList = '';
+    Object.keys(RCR_ASSETS).forEach(key => {
+      assetList += `<div>${key}</div>`;
+    });
+    document.getElementById('assetList').innerHTML = assetList;
+    
+    // Simple Phaser scene to test asset loading
+    class DebugScene extends Phaser.Scene {
+      constructor() {
+        super({ key: 'DebugScene' });
+      }
+      
+      preload() {
+        console.log('Preloading assets...');
+        
+        // Test load a background
+        this.load.image('bg1', RCR_ASSETS['Backgrounds___Armstrong_Thru_Way_1']);
+        
+        // Test load Alex with different frame sizes
+        this.load.spritesheet('alex32x48', RCR_ASSETS['Playable_Characters___Alex'], {
+          frameWidth: 32,
+          frameHeight: 48
+        });
+        
+        this.load.spritesheet('alex24x32', RCR_ASSETS['Playable_Characters___Alex'], {
+          frameWidth: 24,
+          frameHeight: 32
+        });
+        
+        this.load.spritesheet('alex16x24', RCR_ASSETS['Playable_Characters___Alex'], {
+          frameWidth: 16,
+          frameHeight: 24
+        });
+        
+        // Also try as a single image to see the full sprite sheet
+        this.load.image('alex_full', RCR_ASSETS['Playable_Characters___Alex']);
+        
+        // Test load an enemy
+        this.load.spritesheet('enemy1', RCR_ASSETS['Enemies_andamp;_Bosses___Gang_Member___Type_1'], {
+          frameWidth: 32,  
+          frameHeight: 48
+        });
+      }
+      
+      create() {
+        console.log('Creating debug scene...');
+        
+        // Add background
+        const bg = this.add.image(480, 360, 'bg1');
+        bg.setScale(0.5); // Scale down to fit
+        
+        // Show the full Alex sprite sheet to see the actual layout
+        const alexFull = this.add.image(100, 100, 'alex_full');
+        alexFull.setScale(2);
+        alexFull.setOrigin(0, 0);
+        this.add.text(10, 80, 'Full Alex Sprite Sheet:', { fontSize: '12px', fill: '#fff' });
+        
+        // Test different frame sizes
+        const alex32 = this.add.sprite(200, 400, 'alex32x48', 0);
+        alex32.setScale(3);
+        this.add.text(150, 350, 'Alex 32x48', { fontSize: '14px', fill: '#fff' });
+        
+        const alex24 = this.add.sprite(350, 400, 'alex24x32', 0);
+        alex24.setScale(3);
+        this.add.text(300, 350, 'Alex 24x32', { fontSize: '14px', fill: '#fff' });
+        
+        const alex16 = this.add.sprite(500, 400, 'alex16x24', 0);
+        alex16.setScale(3);
+        this.add.text(450, 350, 'Alex 16x24', { fontSize: '14px', fill: '#fff' });
+        
+        // Add enemy sprite  
+        const enemy = this.add.sprite(700, 400, 'enemy1', 0);
+        enemy.setScale(3);
+        this.add.text(650, 350, 'Enemy', { fontSize: '14px', fill: '#fff' });
+        
+        // Try to create animations for all sizes
+        try {
+          this.anims.create({
+            key: 'alex32-walk',
+            frames: this.anims.generateFrameNumbers('alex32x48', { frames: [0, 1, 0, 2] }),
+            frameRate: 8,
+            repeat: -1
+          });
+          alex32.play('alex32-walk');
+        } catch(e) {
+          console.log('32x48 animation failed:', e);
+        }
+        
+        try {
+          this.anims.create({
+            key: 'alex24-walk',
+            frames: this.anims.generateFrameNumbers('alex24x32', { frames: [0, 1, 0, 2] }),
+            frameRate: 8,
+            repeat: -1
+          });
+          alex24.play('alex24-walk');
+        } catch(e) {
+          console.log('24x32 animation failed:', e);
+        }
+        
+        try {
+          this.anims.create({
+            key: 'alex16-walk',
+            frames: this.anims.generateFrameNumbers('alex16x24', { frames: [0, 1, 0, 2] }),
+            frameRate: 8,
+            repeat: -1
+          });
+          alex16.play('alex16-walk');
+        } catch(e) {
+          console.log('16x24 animation failed:', e);
+        }
+        
+        console.log('Debug scene created successfully!');
+      }
+    }
+    
+    // Game config
+    const config = {
+      type: Phaser.CANVAS,
+      width: 960,
+      height: 720,
+      parent: 'gameContainer',
+      backgroundColor: '#2c3e50',
+      scene: DebugScene,
+      render: {
+        pixelArt: true,
+        antialias: false
+      },
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+      }
+    };
+    
+    // Start the game
+    const game = new Phaser.Game(config);
+    
+    console.log('Game initialized!');
+  </script>
+</body>
+</html>

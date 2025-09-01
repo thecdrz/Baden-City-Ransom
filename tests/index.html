@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Streets of Pixels — One-Level Beat 'Em Up</title>
+  <style>
+    /* Keep it crisp & retro */
+    html, body { height: 100%; }
+    body { margin: 0; background:#0b0d12; color:#e7f1ff; font-family: Consolas, Monaco, 'Courier New', monospace; }
+    #game { width: 100vw; height: 100vh; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+  </style>
+  <!--
+  README — Run & Controls
+  ---------------------------------------------
+  This is a single-file Phaser 3 game (no external assets). All sprites, tiles, and audio
+  are generated at runtime with Canvas/WebAudio. Open index.html in Chrome/Edge and play.
+
+  If your browser blocks audio auto-play, press any key to start. For best results, run a tiny local server:
+
+  Windows PowerShell / macOS / Linux (requires Python 3 installed):
+
+  > python -m http.server 8080
+
+  Then open http://localhost:8080 in your browser and click the page.
+
+  Controls
+  - Left/Right Arrows: Move
+  - Up Arrow: Jump
+  - A: Punch (fast, short)
+  - S: Kick  (slower, longer)
+  - M: Mute/Unmute audio
+  - Esc: Pause/Resume
+  - R: Restart (from Game Over or Clear screen)
+
+  Goal
+  Walk right through a procedural city block. Defeat all waves. When the far-right door
+  unlocks, enter to clear the stage.
+
+  Notes
+  - 60 FPS target. Uses Arcade Physics.
+  - World: ~5 screens wide parallax streetscape.
+  - No copyrighted names, art, or music.
+  -->
+</head>
+<body>
+  <div id="game"></div>
+
+  <!-- Phaser 3 from CDN (the only external resource) -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+
+  <script type="module">
+    // ==============================================
+    // Config — tweak core numbers, palette, and spawns
+    // ==============================================
+    const CFG = {
+      game: { width: 960, height: 540, zoom: 1, gravityY: 900, pixelArt: true },
+      world: { screens: 5, groundY: 448, leftBound: 0 },
+      palette: {
+        // Warm stage vibe similar to classic: mustard sky, teal/stone facade
+        sky: '#f1c21b', skyline: '#2d2a26', buildings: '#3f4a54', wall: '#3a4452',
+        fence: '#848b98', street: '#1a1e26', sidewalk: '#b3b7c0', curb: '#7e8794', stripe: '#bfc5cf',
+        windowLight: '#ffe6a3', windowDark: '#3a3a3a', column: '#768290', doorFrame: '#a4832b', panel: '#3d2e12',
+        playerLight: '#79a8ff', playerDark: '#264d9b', playerSkin: '#ffd7a8',
+        thugA: '#b8613c', thugADark: '#6e2f17', thugB: '#70c27c', thugBDark: '#2a6b35',
+        doorClosed: '#6d6d6d', doorOpen: '#9bd96d', crate: '#8b5a2b', dumpster: '#2d6b7a',
+        white: '#ffffff', uiGreen: '#7CFC9A', uiRed: '#ff5757', uiYellow: '#ffd166'
+      },
+      player: {
+        speed: 120, jumpV: -380, hp: 100,
+        punch: { damage: 8, startup: 80, active: 90, recovery: 120, range: 36, width: 28, height: 28, knockback: {x: 60, y: -80} },
+        kick:  { damage: 14, startup: 140, active: 110, recovery: 160, range: 46, width: 34, height: 30, knockback: {x: 90, y: -90} },
+        iframes: 600, hitstun: 220, hitFlashEvery: 60
+      },
+      enemyA: { name: 'brawler', speed: 70, hp: 50, damage: 12, telegraph: 220, attackReach: 30, hitstun: 220 },
+      enemyB: { name: 'scrapper', speed: 100, hp: 35, damage: 8, telegraph: 180, attackReach: 28, rushChance: 0.25, hitstun: 200 },
+      combat: { victimHitIcd: 150 },
+      // Waves total: Thug A = 4, Thug B = 6
+      waves: [
+        { x: 600,  enemies: [{t:'B', n:2}] },
+        { x: 1400, enemies: [{t:'A', n:1}, {t:'B', n:2}] },
+        { x: 2200, enemies: [{t:'A', n:1}, {t:'B', n:2}] },
+        { x: 3000, enemies: [{t:'A', n:2}, {t:'B', n:0}] }
+      ],
+      door: { width: 96, height: 160 },
+      particles: { step: { lifespan: 350, speed: 30, quantity: 4 }, land: { lifespan: 450, speed: 90, quantity: 8 } },
+      misc: { freezeOnHeavyMs: 60, pauseOverlayAlpha: 0.55, mobileControls: false }
+    };
+
+    // Compute derived world size
+    CFG.world.width = CFG.game.width * CFG.world.screens;
+
+    // ==============================================
+    // Lightweight Sfx helper with WebAudio
+    // ==============================================
+    class Sfx {
+      constructor() {
+        this.ctx = null;
+        this.master = null;
+        this.musicGain = null;
+        this.fxGain = null;
+        this.muted = false;
+        this.musicTimer = null;
+      }
+      ensureCtx() {
+        if (this.ctx) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.7; // global volume
+        this.master.connect(this.ctx.destination);
+        this.musicGain = this.ctx.createGain();
+        this.musicGain.gain.value = 0.25;
+        this.fxGain = this.ctx.createGain();
+        this.fxGain.gain.value = 0.9;
+        this.musicGain.connect(this.master);
+        this.fxGain.connect(this.master);
+      }
+      resumeOnGesture() {
+        if (!this.ctx) this.ensureCtx();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+      }
+      muteToggle() {
+        this.muted = !this.muted;
+        if (this.master) this.master.gain.value = this.muted ? 0.0 : 0.7;
+      }
+      // Simple envelope helper
+      env(node, a=0.002, d=0.08) {
+        const t = this.ctx.currentTime;
+        node.gain.setValueAtTime(0, t);
+        node.gain.linearRampToValueAtTime(1, t + a);
+        node.gain.exponentialRampToValueAtTime(0.001, t + a + d);
+      }
+      noiseBuffer() {
+        const len = 0.2 * 44100;
+        const buf = this.ctx.createBuffer(1, len, 44100);
+        const data = buf.getChannelData(0);
+        for (let i=0;i<len;i++) data[i] = (Math.random()*2 - 1) * (1 - i/len);
+        return buf;
+      }
+      thwack() { // punch/kick
+        this.ensureCtx();
+        const o = this.ctx.createOscillator();
+        o.type = 'square'; o.frequency.setValueAtTime(220, this.ctx.currentTime);
+        const g = this.ctx.createGain();
+        this.env(g, 0.001, 0.06);
+        o.connect(g).connect(this.fxGain);
+        o.start(); o.stop(this.ctx.currentTime + 0.08);
+        // add noise snap
+        const n = this.ctx.createBufferSource();
+        n.buffer = this.noiseBuffer();
+        const ng = this.ctx.createGain(); this.env(ng, 0.001, 0.04);
+        n.connect(ng).connect(this.fxGain);
+        n.start(); n.stop(this.ctx.currentTime + 0.08);
+      }
+      whoosh() { // jump
+        this.ensureCtx();
+        const o = this.ctx.createOscillator(); o.type='triangle';
+        const g = this.ctx.createGain(); this.env(g, 0.005, 0.15);
+        o.frequency.setValueAtTime(600, this.ctx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(220, this.ctx.currentTime + 0.2);
+        o.connect(g).connect(this.fxGain); o.start(); o.stop(this.ctx.currentTime+0.22);
+      }
+      oof() { // enemy hit
+        this.ensureCtx();
+        const o = this.ctx.createOscillator(); o.type='sawtooth';
+        const g = this.ctx.createGain(); this.env(g, 0.002, 0.12);
+        o.frequency.setValueAtTime(160, this.ctx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(70, this.ctx.currentTime + 0.15);
+        o.connect(g).connect(this.fxGain); o.start(); o.stop(this.ctx.currentTime+0.18);
+      }
+      drop() { // KO
+        this.ensureCtx();
+        const o = this.ctx.createOscillator(); o.type='square';
+        const g = this.ctx.createGain(); this.env(g, 0.002, 0.35);
+        o.frequency.setValueAtTime(200, this.ctx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(55, this.ctx.currentTime + 0.35);
+        o.connect(g).connect(this.fxGain); o.start(); o.stop(this.ctx.currentTime+0.37);
+      }
+      startMusic() {
+        this.ensureCtx();
+        if (this.musicTimer) return; // already playing
+        const scale = [0, 3, 5, 7, 10]; // minor pentatonic semitones
+        const base = 110; // Hz
+        const stepMs = 260; // arpeggio speed
+        let step = 0;
+        this.musicTimer = setInterval(() => {
+          if (!this.ctx) return;
+          const t = this.ctx.currentTime;
+          // bass
+          const o1 = this.ctx.createOscillator(); o1.type = 'square';
+          const g1 = this.ctx.createGain(); g1.gain.value = 0.0;
+          const note = scale[step % scale.length];
+          o1.frequency.setValueAtTime(base * Math.pow(2, note/12), t);
+          g1.gain.setValueAtTime(0.0001, t);
+          g1.gain.exponentialRampToValueAtTime(0.14, t+0.01);
+          g1.gain.exponentialRampToValueAtTime(0.0001, t+0.22);
+          o1.connect(g1).connect(this.musicGain); o1.start(); o1.stop(t+0.25);
+          // lead blip
+          const o2 = this.ctx.createOscillator(); o2.type='triangle';
+          const g2 = this.ctx.createGain(); g2.gain.value=0.0;
+          const note2 = scale[(step*2) % scale.length] + 12;
+          o2.frequency.setValueAtTime(base * Math.pow(2, note2/12), t);
+          g2.gain.setValueAtTime(0.0001, t);
+          g2.gain.exponentialRampToValueAtTime(0.12, t+0.005);
+          g2.gain.exponentialRampToValueAtTime(0.0001, t+0.16);
+          o2.connect(g2).connect(this.musicGain); o2.start(); o2.stop(t+0.18);
+          step++;
+        }, stepMs);
+      }
+      stopMusic() {
+        if (this.musicTimer) { clearInterval(this.musicTimer); this.musicTimer = null; }
+      }
+    }
+    const SFX = new Sfx();
+
+    // ==============================================
+    // Canvas texture helpers
+    // ==============================================
+    function makeCanvasTexture(scene, key, w, h, drawFn) {
+      const tex = scene.textures.createCanvas(key, w, h);
+      const ctx = tex.getContext();
+      drawFn(ctx, w, h);
+      tex.refresh();
+      return tex;
+    }
+
+    function drawPixelHuman(ctx, w, h, colors, variant='player', pose='idle', flip=false) {
+      // Simple pixel-person built from rectangles; variant tweaks proportions & colors.
+      // Coordinates in a small grid scaled up by px.
+      const px = Math.floor(Math.min(w,h) / 16);
+      const sc = px;
+      const mid = Math.floor(w/2);
+      ctx.clearRect(0,0,w,h);
+      ctx.imageSmoothingEnabled = false;
+      // shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(mid-4*sc, h-2*sc, 8*sc, 1*sc);
+      const c1 = colors.primary, c2 = colors.secondary, skin = colors.skin;
+      // base proportions
+      const wide = variant==='A' ? 5 : (variant==='B' ? 3 : 4);
+      const chest = 4; const leg = 5; const head = 3;
+      const dir = flip ? -1 : 1;
+      const x0 = mid + (flip ? 2*sc : -2*sc);
+      // legs
+      ctx.fillStyle = c2; // pants
+      const stride = pose==='walk1' ? 1 : pose==='walk2' ? -1 : 0;
+      ctx.fillRect(x0 - dir*2*sc, h-(leg*sc), 2*sc, leg*sc);
+      ctx.fillRect(x0 + dir*0*sc, h-(leg*sc) + stride*sc, 2*sc, leg*sc);
+      // body
+      ctx.fillStyle = c1; // shirt/jacket
+      ctx.fillRect(x0 - dir*2*sc, h-(leg*sc) - chest*sc, wide*sc, chest*sc);
+      // head
+      ctx.fillStyle = skin; ctx.fillRect(x0 - dir*1*sc, h-(leg*sc)-chest*sc - head*sc, 2*sc, head*sc);
+      // arms
+      ctx.fillStyle = c1;
+      let aY = h-(leg*sc) - Math.floor(chest*sc*0.6);
+      if (pose==='punch') { // extend front arm
+        ctx.fillRect(x0 + dir*(wide-1)*sc, aY, 2*sc, sc);
+      } else if (pose==='kick') {
+        // front leg extended
+        ctx.fillStyle = c2;
+        ctx.fillRect(x0 + dir*(wide)*sc, h-(leg*sc)+sc, 2*sc, sc);
+      } else if (pose==='jump') {
+        // tuck limbs
+        ctx.fillRect(x0 - dir*3*sc, aY-1*sc, 1*sc, 2*sc);
+        ctx.fillRect(x0 + dir*(wide)*sc, aY-1*sc, 1*sc, 2*sc);
+      } else if (pose==='hit') {
+        // raise arms
+        ctx.fillRect(x0 - dir*3*sc, aY-1*sc, 1*sc, 2*sc);
+      } else {
+        // idle/walk arms
+        ctx.fillRect(x0 - dir*3*sc, aY, 1*sc, 2*sc);
+        ctx.fillRect(x0 + dir*(wide)*sc, aY, 1*sc, 2*sc);
+      }
+      // outline for readability
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = Math.max(1, Math.floor(sc/2));
+      ctx.strokeRect(x0 - dir*2*sc, h-(leg*sc) - chest*sc, wide*sc, (chest+leg)*sc);
+    }
+
+    function genHumanFrames(scene, baseKey, variant, colors) {
+      const frames = {};
+      const size = { w: 48, h: 64 };
+      const poses = ['idle','walk1','walk2','punch1','punch2','kick1','kick2','jump','fall','land','hit'];
+      poses.forEach(p => {
+        const key = `${baseKey}_${p}`;
+        makeCanvasTexture(scene, key, size.w, size.h, (ctx,w,h)=>{
+          drawPixelHuman(ctx,w,h, colors, variant, p, false);
+        });
+        frames[p] = key;
+      });
+      return frames;
+    }
+
+    function makeParallaxTexture(scene, key, w, h, layer) {
+      const P = CFG.palette;
+      makeCanvasTexture(scene, key, w, h, (ctx,W,H)=>{
+        ctx.clearRect(0,0,W,H);
+        if (layer==='sky') {
+          // sky gradient background
+          const g = ctx.createLinearGradient(0,0,0,H);
+          g.addColorStop(0, P.sky);
+          g.addColorStop(1, '#d49b00');
+          ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+          // skyline silhouettes
+          ctx.fillStyle = P.skyline;
+          for (let x=0; x<W; x+=80) {
+            const bw = 60 + Math.floor(Math.random()*30);
+            const bh = 80 + Math.floor(Math.random()*80);
+            ctx.fillRect(x, H-bh-110, bw, bh);
+          }
+          // mid buildings blocks
+          ctx.fillStyle = P.buildings;
+          for (let x=0; x<W; x+=64) {
+            const bw = 48 + Math.floor(Math.random()*24);
+            const bh = 50 + Math.floor(Math.random()*60);
+            ctx.fillRect(x+10, H-bh-70, bw, bh);
+          }
+        } else if (layer==='mid') {
+          // additional mid-ground low-contrast blocks with gaps (transparent background)
+          ctx.fillStyle = 'rgba(110,140,170,0.20)';
+          for (let x=0; x<W; x+=120) {
+            const bw = 80 + Math.floor(Math.random()*40);
+            const bh = 50 + Math.floor(Math.random()*40);
+            ctx.fillRect(x+20, H-bh-150, bw, bh);
+          }
+        } else if (layer==='near') {
+          // facade wall with columns, windows and occasional large doors
+          const top = H-220, bottom = H-120;
+          ctx.fillStyle = P.wall; ctx.fillRect(0, top, W, bottom-top);
+          // columns
+          for (let x=0; x<W; x+=160) {
+            ctx.fillStyle = P.column; ctx.fillRect(x, top, 18, bottom-top);
+          }
+          // windows row
+          for (let x=24; x<W; x+=96) {
+            ctx.fillStyle = P.windowDark; ctx.fillRect(x, top+16, 52, 34);
+            ctx.fillStyle = P.windowLight; ctx.fillRect(x+4, top+20, 44, 26);
+          }
+          // roll-up doors and big doors alternating
+          for (let x=80; x<W; x+=320) {
+            // roll-up
+            ctx.fillStyle = '#6e6e6e';
+            ctx.fillRect(x, bottom-78, 120, 78);
+            ctx.fillStyle = '#9a9a9a';
+            for (let yy=bottom-78; yy<bottom; yy+=6) ctx.fillRect(x+2, yy, 116, 2);
+            // big door nearby
+            const dx = x+150;
+            ctx.fillStyle = P.doorFrame; ctx.fillRect(dx, bottom-90, 64, 90);
+            ctx.fillStyle = P.panel;
+            for (let r=0;r<4;r++) for (let c=0;c<2;c++) ctx.fillRect(dx+8+c*24, bottom-82+r*20, 18, 16);
+          }
+        } else if (layer==='street') {
+          // sidewalk slabs + curb + street markings
+          const curbY = H-96;
+          ctx.fillStyle = P.sidewalk; ctx.fillRect(0, curbY, W, 32);
+          ctx.strokeStyle = '#9aa3ad'; ctx.lineWidth = 2;
+          for (let x=0; x<W; x+=48) { ctx.beginPath(); ctx.moveTo(x, curbY+2); ctx.lineTo(x, curbY+30); ctx.stroke(); }
+          // curb line
+          ctx.fillStyle = P.curb; ctx.fillRect(0, curbY+32, W, 6);
+          // street
+          ctx.fillStyle = P.street; ctx.fillRect(0, H-58, W, 58);
+          // dashed line
+          ctx.fillStyle = P.stripe;
+          for (let x=0; x<W; x+=96) ctx.fillRect(x+24, H-32, 54, 6);
+          // occasional drain grate
+          for (let x=140; x<W; x+=420) {
+            ctx.fillStyle = '#444b56'; ctx.fillRect(x, curbY+20, 48, 8);
+            ctx.fillStyle = '#2a2f36'; for (let gx=x+4; gx<x+44; gx+=6) ctx.fillRect(gx, curbY+20, 2, 8);
+          }
+        }
+      });
+    }
+
+    function makeProp(scene, key, w, h, kind) {
+      const P = CFG.palette;
+      makeCanvasTexture(scene, key, w, h, (ctx,W,H)=>{
+        ctx.fillStyle = kind==='crate' ? P.crate : P.dumpster;
+        ctx.fillRect(0,0,W,H);
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2; ctx.strokeRect(0,0,W,H);
+        if (kind==='crate') {
+          ctx.strokeStyle = '#5a3a18';
+          ctx.beginPath();
+          ctx.moveTo(0,0); ctx.lineTo(W,H);
+          ctx.moveTo(W,0); ctx.lineTo(0,H);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = '#3b8b98';
+          ctx.fillRect(6, 6, W-12, H-18);
+          ctx.fillStyle = '#1f3f46'; ctx.fillRect(0, H-12, W, 12);
+        }
+      });
+    }
+
+    function makeDoor(scene) {
+      const { width, height } = CFG.door; const P = CFG.palette;
+      makeCanvasTexture(scene, 'door_closed', width, height, (ctx,W,H)=>{
+        ctx.fillStyle = CFG.palette.doorClosed; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = '#4b4b4b'; for (let y=10;y<H-10;y+=8) ctx.fillRect(8,y,W-16,3);
+        ctx.strokeStyle = '#2d2d2d'; ctx.lineWidth=3; ctx.strokeRect(0,0,W,H);
+      });
+      makeCanvasTexture(scene, 'door_open', width, height, (ctx,W,H)=>{
+        ctx.fillStyle = CFG.palette.doorOpen; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = '#c7ffc0'; for (let y=10;y<H-10;y+=8) ctx.fillRect(8,y,W-16,2);
+        ctx.strokeStyle = '#4e9140'; ctx.lineWidth=3; ctx.strokeRect(0,0,W,H);
+      });
+    }
+
+    function makeCircleTex(scene, key, r, color) {
+      makeCanvasTexture(scene, key, r*2, r*2, (ctx,W,H)=>{
+        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(r, r, r, 0, Math.PI*2); ctx.fill();
+      });
+    }
+
+    // ==============================================
+    // BootScene — generate textures & set up anims
+    // ==============================================
+    class BootScene extends Phaser.Scene {
+      constructor() { super('boot'); }
+      preload() {}
+      create() {
+        // Input gesture will resume audio and start music
+        this.input.once('pointerdown', ()=>{ SFX.resumeOnGesture(); SFX.startMusic(); });
+        this.input.keyboard.once('keydown', ()=>{ SFX.resumeOnGesture(); SFX.startMusic(); });
+
+  // Background layers textures (skyline, mid buildings, near wall/fence, street)
+  makeParallaxTexture(this, 'bg_sky', 1024, 512, 'sky');
+  makeParallaxTexture(this, 'bg_mid', 1024, 512, 'mid');
+  makeParallaxTexture(this, 'bg_near', 1024, 512, 'near');
+  makeParallaxTexture(this, 'bg_street', 1024, 512, 'street');
+
+        // Props & particles & door
+        makeProp(this, 'crate', 64, 48, 'crate');
+        makeProp(this, 'dumpster', 96, 56, 'dumpster');
+        makeDoor(this);
+        makeCircleTex(this, 'dust', 2, '#d8d8d8');
+
+        // Characters
+        const playerFrames = genHumanFrames(this, 'player', 'player', {
+          primary: CFG.palette.playerLight, secondary: CFG.palette.playerDark, skin: CFG.palette.playerSkin
+        });
+        const thugAFrames = genHumanFrames(this, 'thugA', 'A', {
+          primary: CFG.palette.thugA, secondary: CFG.palette.thugADark, skin: '#f0c090'
+        });
+        const thugBFrames = genHumanFrames(this, 'thugB', 'B', {
+          primary: CFG.palette.thugB, secondary: CFG.palette.thugBDark, skin: '#f6d0a0'
+        });
+
+        // Animations (built from multi-texture frames)
+        this.anims.create({ key: 'p_idle', frames: [{key: playerFrames.idle}], frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'p_walk', frames: [{key: playerFrames.walk1},{key: playerFrames.idle},{key: playerFrames.walk2},{key: playerFrames.idle}], frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'p_punch', frames: [{key: playerFrames.punch1},{key: playerFrames.punch2}], frameRate: 18, repeat: 0 });
+        this.anims.create({ key: 'p_kick', frames: [{key: playerFrames.kick1},{key: playerFrames.kick2}], frameRate: 14, repeat: 0 });
+        this.anims.create({ key: 'p_jump', frames: [{key: playerFrames.jump},{key: playerFrames.fall},{key: playerFrames.land}], frameRate: 6, repeat: 0 });
+        this.anims.create({ key: 'p_hit', frames: [{key: playerFrames.hit}], frameRate: 1, repeat: 0 });
+
+        this.anims.create({ key: 'a_idle', frames: [{key: thugAFrames.idle}], frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'a_walk', frames: [{key: thugAFrames.walk1},{key: thugAFrames.idle},{key: thugAFrames.walk2}], frameRate: 7, repeat: -1 });
+        this.anims.create({ key: 'a_attack', frames: [{key: thugAFrames.punch1},{key: thugAFrames.punch2}], frameRate: 10, repeat: 0 });
+        this.anims.create({ key: 'a_hit', frames: [{key: thugAFrames.hit}], frameRate: 1, repeat: 0 });
+
+        this.anims.create({ key: 'b_idle', frames: [{key: thugBFrames.idle}], frameRate: 6, repeat: -1 });
+        this.anims.create({ key: 'b_walk', frames: [{key: thugBFrames.walk1},{key: thugBFrames.idle},{key: thugBFrames.walk2}], frameRate: 9, repeat: -1 });
+        this.anims.create({ key: 'b_attack', frames: [{key: thugBFrames.punch1},{key: thugBFrames.punch2}], frameRate: 12, repeat: 0 });
+        this.anims.create({ key: 'b_hit', frames: [{key: thugBFrames.hit}], frameRate: 1, repeat: 0 });
+
+        this.scene.start('game');
+      }
+    }
+
+    // ==============================================
+    // GameScene — level, physics, AI, combat, HUD
+    // ==============================================
+    class GameScene extends Phaser.Scene {
+      constructor() { super('game'); }
+      create() {
+        const W = CFG.world.width; const H = CFG.game.height; const groundY = CFG.world.groundY;
+        this.isPaused = false; this.gameOver = false; this.gameClear = false;
+        this.waveIndex = 0; this.waveActive = false; this.waveEnemies = new Set();
+        this.waveGateX = 0; this.wavesCleared = 0; this.totalWaves = CFG.waves.length;
+
+        // Camera fade-in
+        this.cameras.main.setBackgroundColor('#0b0d12');
+        this.cameras.main.fadeIn(300, 0,0,0);
+
+        // Fallback background fill (behind parallax) to avoid full black if textures fail
+        this.add.rectangle(0, 0, CFG.game.width, CFG.game.height, 0x1b2431, 1)
+          .setOrigin(0,0)
+          .setScrollFactor(0)
+          .setDepth(-1000);
+
+        // Debug UI to verify render loop
+        this.add.text(8, 8, 'STAGE 1', { fontFamily:'monospace', fontSize:'14px', color:'#d7eaff' })
+          .setScrollFactor(0)
+          .setDepth(5000);
+
+  // Parallax layers (tileSprites updated with camera scroll)
+  // Use viewport-sized tileSprites; scroll via tilePositionX
+  this.bgSky = this.add.tileSprite(0,0, CFG.game.width, CFG.game.height, 'bg_sky').setOrigin(0,0).setScrollFactor(0);
+  this.bgMid = this.add.tileSprite(0,0, CFG.game.width, CFG.game.height, 'bg_mid').setOrigin(0,0).setScrollFactor(0);
+  this.bgNear = this.add.tileSprite(0,0, CFG.game.width, CFG.game.height, 'bg_near').setOrigin(0,0).setScrollFactor(0);
+  this.bgStreet = this.add.tileSprite(0,0, CFG.game.width, CFG.game.height, 'bg_street').setOrigin(0,0).setScrollFactor(0);
+
+  // A simple ground stripe to guarantee something visible even if textures fail
+  const g = this.add.graphics();
+  g.fillStyle(0x2b313c, 1);
+  g.fillRect(0, groundY-8, CFG.world.width, 8);
+
+        // Physics world
+        this.physics.world.setBounds(0, 0, W, H);
+
+        // Ground as static tile-sized bodies for predictability
+        this.ground = this.physics.add.staticGroup();
+        for (let x=0; x<W; x+=32) {
+          const block = this.add.rectangle(x+16, groundY, 32, H-groundY, 0x000000, 0);
+          this.physics.add.existing(block, true);
+          this.ground.add(block);
+        }
+
+        // Props: crates and dumpsters
+        this.props = this.physics.add.staticGroup();
+        const propDefs = [
+          { key:'dumpster', x: 520, y: groundY-28, w:96, h:56 },
+          { key:'crate', x: 980, y: groundY-24, w:64, h:48 },
+          { key:'crate', x: 1560, y: groundY-24, w:64, h:48 },
+          { key:'dumpster', x: 2100, y: groundY-28, w:96, h:56 },
+          { key:'crate', x: 2680, y: groundY-24, w:64, h:48 },
+          { key:'dumpster', x: 3320, y: groundY-28, w:96, h:56 },
+        ];
+        propDefs.forEach(p=>{
+          const s = this.add.image(p.x, p.y, p.key).setOrigin(0.5,1);
+          this.physics.add.existing(s, true);
+          s.body.setSize(p.w, p.h).setOffset(-p.w/2, -p.h);
+          this.props.add(s);
+        });
+
+        // Door at far right
+        this.doorOpen = false; this.enterHint = null;
+        this.door = this.add.image(W - 120, groundY, 'door_closed').setOrigin(0.5,1);
+        this.physics.add.existing(this.door, true);
+        this.door.body.setSize(CFG.door.width, CFG.door.height).setOffset(-CFG.door.width/2, -CFG.door.height);
+
+        // Player
+  this.player = this.physics.add.sprite(80, groundY-10, 'player_idle');
+        this.player.play('p_idle');
+        this.player.setCollideWorldBounds(true);
+        this.player.setBounce(0);
+        this.player.body.setSize(20, 44).setOffset(14, 20);
+        this.player.maxHp = CFG.player.hp; this.player.hp = CFG.player.hp;
+  this.player.facing = 1; this.player.invulnUntil = 0; this.player.canActAt = 0; this.player.isAttacking = false; this.player.combo = 0; this.player.lastOnGround = true; this.player.lastStepAt = 0;
+
+        // Particles (dust)
+        this.particles = this.add.particles('dust');
+        this.stepEmitter = this.particles.createEmitter({ lifespan: CFG.particles.step.lifespan, speed: CFG.particles.step.speed, quantity: CFG.particles.step.quantity, scale: { start: 1, end: 0 }, on: false });
+        this.landEmitter = this.particles.createEmitter({ lifespan: CFG.particles.land.lifespan, speed: CFG.particles.land.speed, quantity: CFG.particles.land.quantity, scale: { start: 1.2, end: 0 }, on: false });
+
+        // Groups
+        this.enemies = this.physics.add.group();
+        this.attackBoxes = this.physics.add.group(); // sensors
+
+        // Colliders
+        this.physics.add.collider(this.player, this.ground);
+        this.physics.add.collider(this.enemies, this.ground);
+        this.physics.add.collider(this.props, this.player);
+        this.physics.add.collider(this.props, this.enemies);
+
+        // Overlaps for attacks
+        this.physics.add.overlap(this.attackBoxes, this.enemies, (hitbox, enemy)=>{
+          if (!hitbox.active || !enemy.active) return;
+          const now = this.time.now;
+          if (enemy.lastHitAt && now - enemy.lastHitAt < CFG.combat.victimHitIcd) return;
+          // Check block-through-prop: crude LOS check along X using props bounds
+          const hbCenter = hitbox.body && hitbox.body.center ? hitbox.body.center : { x: hitbox.x, y: hitbox.y };
+          const enCenter = enemy.body && enemy.body.center ? enemy.body.center : { x: enemy.x, y: enemy.y };
+          if (this.hitBlockedByProp(hbCenter, enCenter)) return;
+          enemy.lastHitAt = now;
+          const isKick = (hitbox.data && hitbox.data.get('kind')==='kick');
+          const dmg = isKick ? CFG.player.kick.damage : CFG.player.punch.damage;
+          const kb = isKick ? CFG.player.kick.knockback : CFG.player.punch.knockback;
+          const dir = (hitbox.data && hitbox.data.get('dir')) || (hitbox.flipX ? -1 : 1);
+          this.damageEnemy(enemy, dmg, kb, dir);
+          this.spawnHitPopup(enemy.x, enemy.y-50, `-${dmg}`);
+          SFX.thwack();
+          if (isKick) this.freezeFrame(CFG.misc.freezeOnHeavyMs);
+          hitbox.destroy();
+        });
+
+        // Enemy hits player
+        this.physics.add.overlap(this.enemies, this.player, (e,p)=>{
+          if (!e.active || !p.active) return;
+          const now = this.time.now;
+          if (p.invulnUntil && now < p.invulnUntil) return;
+          if (!e.isAttacking) return;
+          // Must be in front of enemy and not blocked by props
+          const inFront = (e.facing > 0 && p.x >= e.x) || (e.facing < 0 && p.x <= e.x);
+          if (!inFront) return;
+          const eC = e.body && e.body.center ? e.body.center : { x: e.x, y: e.y };
+          const pC = p.body && p.body.center ? p.body.center : { x: p.x, y: p.y };
+          if (this.hitBlockedByProp(eC, pC)) return;
+          // Apply dmg
+          const dmg = e.kind==='A' ? CFG.enemyA.damage : CFG.enemyB.damage;
+          const dir = (p.x < e.x) ? -1 : 1;
+          p.hp = Math.max(0, p.hp - dmg);
+          p.invulnUntil = now + CFG.player.iframes;
+          p.canActAt = now + CFG.player.hitstun;
+          p.setVelocity(dir * -180, -140);
+          p.play('p_hit');
+          this.flashSprite(p);
+          this.cameras.main.shake(80, 0.002);
+          SFX.oof();
+          if (p.hp <= 0) this.onGameOver();
+        });
+
+        // Camera
+  this.cameras.main.startFollow(this.player, false, 0.15, 0.08);
+  this.cameras.main.setZoom(1.15);
+        this.cameras.main.setBounds(0,0,W,H);
+
+        // Input
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+        this.keyS = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+        this.keyM = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+        this.keyR = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+        this.keyESC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+        this.keyM.on('down', ()=> SFX.muteToggle());
+        this.keyESC.on('down', ()=> this.togglePause());
+
+        // HUD
+        this.hud = this.add.container(16, 16).setScrollFactor(0);
+        this.hudLabel = this.add.text(0,0,'HP', { fontFamily:'monospace', fontSize: '16px', color: CFG.palette.uiYellow });
+        this.hudBarBg = this.add.rectangle(0, 20, 200, 16, 0x333333).setOrigin(0,0);
+        this.hudBar = this.add.rectangle(0, 20, 200, 16, 0x5CFF90).setOrigin(0,0);
+        this.hud.add([this.hudLabel, this.hudBarBg, this.hudBar]);
+
+        // Wave flash overlay
+        this.flash = this.add.rectangle(0,0, CFG.game.width, CFG.game.height, 0xffffff, 0.06).setScrollFactor(0).setOrigin(0,0);
+        this.flash.alpha = 0;
+
+        // Pause overlay
+        this.pauseOverlay = this.add.rectangle(0,0, CFG.game.width, CFG.game.height, 0x000000, CFG.misc.pauseOverlayAlpha).setScrollFactor(0).setOrigin(0,0).setVisible(false);
+        this.pauseText = this.add.text(CFG.game.width/2, CFG.game.height/2, 'PAUSED', { fontFamily:'monospace', fontSize:'26px', color:'#ffffff' }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
+        // Win/Lose text
+        this.centerText = this.add.text(CFG.game.width/2, CFG.game.height/2, '', { fontFamily:'monospace', fontSize:'26px', color:'#ffffff', align:'center' }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+
+        // Start music after tiny delay
+        this.time.delayedCall(250, ()=>{ SFX.startMusic(); });
+
+        // Start at far left
+        this.player.setX(60);
+
+        // Fade in start flash
+        this.sceneFlash();
+
+  // Debug stamp to confirm GameScene active
+  this.add.text(8, 28, 'GameScene OK', { fontFamily:'monospace', fontSize:'12px', color:'#9fe3ff' }).setScrollFactor(0).setDepth(5000);
+      }
+
+      togglePause() {
+        if (this.gameOver || this.gameClear) return;
+        this.isPaused = !this.isPaused;
+        this.physics.world.isPaused = this.isPaused;
+        this.pauseOverlay.setVisible(this.isPaused);
+        this.pauseText.setVisible(this.isPaused);
+      }
+
+      sceneFlash() {
+        this.flash.alpha = 0.0; this.tweens.add({ targets: this.flash, alpha: { from: 0.25, to: 0 }, duration: 250, ease: 'Quad.easeOut' });
+      }
+
+      freezeFrame(ms) {
+        const cam = this.cameras.main; const old = this.time.timeScale; const oldPhys = this.physics.world.timeScale;
+        this.time.timeScale = 0.0001; this.physics.world.timeScale = 0.0001; cam.shake(80, 0.004);
+        setTimeout(()=>{ this.time.timeScale = old; this.physics.world.timeScale = oldPhys; }, ms);
+      }
+
+      flashSprite(sprite) {
+        const tw = this.tweens.add({ targets: sprite, alpha: { from: 0.3, to: 1 }, duration: 60, yoyo: true, repeat: 3 });
+        return tw;
+      }
+
+      spawnHitPopup(x,y, text) {
+        const t = this.add.text(x,y, text, { fontFamily:'monospace', fontSize:'14px', color:'#ffffff' }).setOrigin(0.5);
+        t.setDepth(1000);
+        this.tweens.add({ targets: t, y: y-20, alpha: 0, duration: 350, onComplete: ()=> t.destroy() });
+      }
+
+      update(time, dt) {
+        // Parallax update
+        const sx = this.cameras.main.scrollX;
+  this.bgSky.tilePositionX = sx * 0.2;
+  this.bgMid.tilePositionX = sx * 0.45;
+  this.bgNear.tilePositionX = sx * 0.75;
+  this.bgStreet.tilePositionX = sx * 1.0;
+
+        if (this.isPaused || this.gameOver || this.gameClear) return;
+
+        // Trigger waves by position
+        if (!this.waveActive && this.waveIndex < CFG.waves.length) {
+          const wave = CFG.waves[this.waveIndex];
+          if (this.player.x > wave.x) this.startWave(wave);
+        }
+
+        // Soft forward gate during wave
+        if (this.waveActive && this.player.x > this.waveGateX && this.player.body.velocity.x > 0) {
+          this.player.setX(this.waveGateX);
+          this.player.setVelocityX(0);
+        }
+
+        this.updatePlayer(time, dt);
+        this.updateEnemies(time, dt);
+
+        // Door unlocking and win detection
+        if (!this.doorOpen && this.wavesCleared >= this.totalWaves) {
+          this.doorOpen = true; this.door.setTexture('door_open');
+          // hint
+          this.enterHint = this.add.text(this.door.x, this.door.y - CFG.door.height - 10, '→ ENTER', { fontFamily:'monospace', fontSize:'16px', color: CFG.palette.uiGreen }).setOrigin(0.5, 1);
+          // glowing tween
+          this.tweens.add({ targets: this.door, alpha: { from: 1, to: 0.7 }, duration: 400, yoyo: true, repeat: -1 });
+        }
+        if (this.doorOpen) {
+          // Check overlap with door
+          if (Math.abs(this.player.x - this.door.x) < 40 && this.player.body.onFloor()) {
+            this.onGameClear();
+          }
+          // Or walking off right
+          if (this.player.x > CFG.world.width - 20) this.onGameClear();
+        }
+
+        // HUD update
+        const hpPct = Phaser.Math.Clamp(this.player.hp / this.player.maxHp, 0, 1);
+        this.hudBar.width = 200 * hpPct;
+        this.hudLabel.setText(`HP ${Math.ceil(this.player.hp)}`);
+
+        // Enemy HP bars follow
+        this.enemies.children.iterate(e=>{
+          if (e && e.active && e.hpBar) { e.hpBar.setPosition(e.x, e.y-54); if (e.hpBarBg) e.hpBarBg.setPosition(e.x, e.y-54); }
+        });
+
+        // I-frame flicker
+        if (this.time.now < this.player.invulnUntil) {
+          const phase = Math.floor((this.player.invulnUntil - this.time.now) / CFG.player.hitFlashEvery) % 2;
+          if (phase===0) this.player.setTintFill(0xffffff); else this.player.clearTint();
+        } else {
+          this.player.clearTint();
+        }
+      }
+
+      startWave(wave) {
+        this.waveActive = true;
+        this.waveGateX = wave.x + 220; // block slight forward progress
+        this.sceneFlash();
+        const enemiesToSpawn = [];
+        wave.enemies.forEach(def=>{ for (let i=0;i<def.n;i++) enemiesToSpawn.push(def.t); });
+        const baseX = wave.x + 60;
+        enemiesToSpawn.forEach((t, i)=>{
+          const x = baseX + 40*i + Phaser.Math.Between(-10, 40);
+          const e = this.spawnEnemy(t, x, CFG.world.groundY-10);
+          this.waveEnemies.add(e);
+        });
+        this.waveIndex++;
+      }
+
+      endWave() {
+        if (!this.waveActive) return;
+        // End only when all wave enemies are dead
+        let anyAlive = false;
+        this.waveEnemies.forEach(e=>{ if (e.active && e.state!=='KO') anyAlive = true; });
+        if (anyAlive) return;
+        this.waveActive = false; this.wavesCleared++;
+        this.waveEnemies.clear();
+        this.sceneFlash();
+      }
+
+      spawnEnemy(type, x, y) {
+    const keyBase = (type==='A') ? 'a' : 'b';
+    const texBase = (type==='A') ? 'thugA' : 'thugB';
+    const e = this.physics.add.sprite(x, y, `${texBase}_idle`).setOrigin(0.5,1);
+        e.kind = type;
+        e.maxHp = (type==='A') ? CFG.enemyA.hp : CFG.enemyB.hp; e.hp = e.maxHp;
+        e.speed = (type==='A') ? CFG.enemyA.speed : CFG.enemyB.speed;
+        e.damage = (type==='A') ? CFG.enemyA.damage : CFG.enemyB.damage;
+        e.state = 'Idle'; e.stateUntil = 0; e.lastDirSwitch = 0; e.isAttacking = false; e.lastHitAt = 0;
+        e.body.setSize(20, 44).setOffset(14, 20);
+        e.play(`${keyBase}_idle`);
+        this.enemies.add(e);
+    // Always-visible HP bar
+    e.hpBarBg = this.add.rectangle(e.x, e.y-54, 34, 4, 0x333333).setOrigin(0.5);
+    e.hpBar = this.add.rectangle(e.x, e.y-54, 34, 4, 0x00ff66).setOrigin(0.5);
+    e.hpBar.setDepth(e.depth+1);
+        return e;
+      }
+
+      updateEnemies(time, dt) {
+        const p = this.player;
+        this.enemies.children.iterate(e=>{
+          if (!e || !e.active) return;
+          const keyBase = (e.kind==='A') ? 'a' : 'b';
+          const onGround = e.body.onFloor();
+          // KO fade
+          if (e.state==='KO') {
+            e.setVelocityX(0);
+            e.alpha -= 0.01; if (e.alpha <= 0) e.destroy();
+            return;
+          }
+          // Stunned
+          if (e.state==='Stunned') {
+            e.setVelocityX(0);
+            if (time > e.stateUntil) e.state = 'Seek';
+            return;
+          }
+          // Simple state machine
+          const distX = p.x - e.x; const dir = Math.sign(distX) || 1;
+          const absX = Math.abs(distX);
+          // AI: limit direction change frequency to avoid jitter
+          if (time - e.lastDirSwitch > 200) { e.facing = dir; e.lastDirSwitch = time; }
+
+          if (e.state==='Idle') {
+            e.play(`${keyBase}_idle`, true);
+            e.state = 'Seek';
+          } else if (e.state==='Seek') {
+            e.play(`${keyBase}_walk`, true);
+            let v = e.speed * e.facing;
+            // rush chance for scrapper
+            if (e.kind==='B' && Math.random() < CFG.enemyB.rushChance) v *= 1.6;
+            e.setVelocityX(v);
+            if (absX < ((e.kind==='A')? CFG.enemyA.attackReach : CFG.enemyB.attackReach) + 10 && onGround) {
+              e.state = 'Telegraph'; e.stateUntil = time + ((e.kind==='A')? CFG.enemyA.telegraph : CFG.enemyB.telegraph);
+              e.play(`${keyBase}_attack`);
+              e.setVelocityX(0);
+            }
+          } else if (e.state==='Telegraph') {
+            // brief flash
+            if (!e._flashOnce) { this.flashSprite(e); e._flashOnce = true; }
+            if (time > e.stateUntil) {
+              e._flashOnce = false;
+              e.state = 'Attack'; e.isAttacking = true; e.stateUntil = time + 180;
+              // short lunge
+              e.setVelocityX(100 * e.facing);
+            }
+          } else if (e.state==='Attack') {
+            if (time > e.stateUntil) { e.isAttacking = false; e.state = 'Recover'; e.stateUntil = time + 180; e.setVelocityX(0); }
+          } else if (e.state==='Recover') {
+            if (time > e.stateUntil) { e.state = 'Seek'; }
+          }
+
+          // Flip
+          e.setFlipX(e.facing < 0);
+        });
+
+        // Check endWave condition
+        this.endWave();
+      }
+
+      hitBlockedByProp(p1, p2) {
+        // p1 and p2 are {x,y}. If any prop AABB lies between horizontally overlapping their y-range, block.
+        const xMin = Math.min(p1.x, p2.x), xMax = Math.max(p1.x, p2.x);
+        let blocked = false;
+        this.props.children.iterate(s=>{
+          if (blocked) return; if (!s.body) return;
+          const b = s.body; const bx1 = b.x, bx2 = b.x + b.width; const by1 = b.y, by2 = b.y + b.height;
+          const yMin = Math.min(p1.y, p2.y), yMax = Math.max(p1.y, p2.y);
+          const overlapsX = (bx1 <= xMax && bx2 >= xMin);
+          const overlapsY = (by1 <= yMax && by2 >= yMin);
+          if (overlapsX && overlapsY) blocked = true;
+        });
+        return blocked;
+      }
+
+      updatePlayer(time, dt) {
+        const p = this.player; const onGround = p.body.onFloor();
+        const canAct = time >= p.canActAt;
+        const left = this.cursors.left.isDown, right = this.cursors.right.isDown, up = this.cursors.up.isDown;
+        let vx = 0;
+        // Movement cancel window during attack recovery: allow slight move after 80ms
+        const allowDrift = p.isAttacking ? (time - (p.attackStartedAt||0) > 80) : true;
+        if (allowDrift && canAct) {
+          if (left) vx = -CFG.player.speed;
+          else if (right) vx = CFG.player.speed;
+        } else if (p.isAttacking && allowDrift) {
+          if (left) vx = -CFG.player.speed * 0.3; else if (right) vx = CFG.player.speed * 0.3;
+        }
+        p.setVelocityX(vx);
+
+        if (vx !== 0) p.facing = vx > 0 ? 1 : -1;
+        p.setFlipX(p.facing < 0);
+
+  // Jump
+        if (canAct && onGround && Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
+          p.setVelocityY(CFG.player.jumpV);
+          p.play('p_jump');
+          SFX.whoosh();
+          this.stepEmitter.explode(5, p.x, p.y);
+        }
+
+        // Land dust
+        if (!p.lastOnGround && onGround) {
+          this.landEmitter.explode(10, p.x, p.y);
+        }
+        p.lastOnGround = onGround;
+
+        // Footstep dust cadence
+        if (onGround && Math.abs(vx) > 1) {
+          if (time - p.lastStepAt > 180) { this.stepEmitter.explode(3, p.x, p.y); p.lastStepAt = time; }
+        }
+
+        // Attacks
+        if (canAct && !p.isAttacking) {
+          if (Phaser.Input.Keyboard.JustDown(this.keyA)) this.startAttack('punch');
+          else if (Phaser.Input.Keyboard.JustDown(this.keyS)) this.startAttack('kick');
+        }
+
+        // Animations
+        if (!p.isAttacking) {
+          if (!onGround) p.play('p_jump', true);
+          else if (vx !== 0) p.play('p_walk', true);
+          else p.play('p_idle', true);
+        }
+      }
+
+      startAttack(kind) {
+        const p = this.player; const now = this.time.now;
+        p.isAttacking = true; p.attackKind = kind; p.attackStartedAt = now;
+        const spec = CFG.player[kind];
+        p.canActAt = now + spec.startup + spec.active + spec.recovery;
+        p.play(kind==='punch' ? 'p_punch' : 'p_kick');
+        // Spawn hitbox after startup
+        this.time.delayedCall(spec.startup, ()=>{
+          if (!p.active) return;
+          const off = spec.range * (p.facing);
+          const rect = this.add.rectangle(p.x + off, p.y - 20, spec.width, spec.height, 0xff0000, 0);
+          this.physics.add.existing(rect);
+          const box = rect;
+          box.setVisible(false);
+          box.body.allowGravity = false;
+          box.body.setImmovable(true);
+          box.flipX = (p.facing < 0);
+          box.data = new Phaser.Data.DataManager(box); box.data.set('kind', kind); box.data.set('dir', p.facing);
+          this.attackBoxes.add(box);
+          // keep in front of player briefly
+          const keep = this.time.addEvent({ delay: 16, repeat: Math.floor(spec.active / 16), callback: ()=>{
+            if (box.active) box.setPosition(p.x + off, p.y - 20);
+          }});
+          this.time.delayedCall(spec.active, ()=>{ if (box && box.active) box.destroy(); });
+        });
+        // End attacking flag after all
+        this.time.delayedCall(spec.startup + spec.active + spec.recovery, ()=>{ if (p.active) p.isAttacking = false; });
+      }
+
+      damageEnemy(e, dmg, kb, dir) {
+        if (!e.active) return;
+        e.hp = Math.max(0, e.hp - dmg);
+        e.play((e.kind==='A'?'a':'b')+'_hit');
+        e.state = 'Stunned'; e.stateUntil = this.time.now + ((e.kind==='A')? CFG.enemyA.hitstun : CFG.enemyB.hitstun);
+        e.setVelocity(dir * kb.x, kb.y);
+        this.flashSprite(e);
+        // small hp bar over enemy
+        if (!e.hpBar) {
+          e.hpBar = this.add.rectangle(e.x, e.y-54, 34, 4, 0x00ff66).setOrigin(0.5);
+          e.hpBarBg = this.add.rectangle(e.x, e.y-54, 34, 4, 0x333333).setOrigin(0.5).setDepth(e.depth-1);
+        }
+        const pct = Phaser.Math.Clamp(e.hp / e.maxHp, 0, 1);
+        e.hpBar.width = 34 * pct; e.hpBar.setFillStyle(pct>0.4 ? 0x00ff66 : 0xff5555);
+        e.hpBar.setPosition(e.x, e.y-54); if (e.hpBarBg) e.hpBarBg.setPosition(e.x, e.y-54);
+        this.cameras.main.shake(60, 0.002);
+        if (e.hp <= 0) {
+          SFX.drop();
+          e.state = 'KO'; e.isAttacking = false; e.setVelocity(0,0);
+          this.time.delayedCall(50, ()=>{ if (e.hpBar) e.hpBar.destroy(); if (e.hpBarBg) e.hpBarBg.destroy(); });
+        }
+      }
+
+      onGameOver() {
+        if (this.gameOver) return; this.gameOver = true;
+        this.centerText.setText('GAME OVER — Press R to Restart'); this.centerText.setVisible(true);
+        this.physics.world.isPaused = true;
+        this.keyR.once('down', ()=> this.scene.restart());
+      }
+
+      onGameClear() {
+        if (this.gameClear) return; this.gameClear = true;
+        this.centerText.setText('STAGE CLEAR — Press R to Replay'); this.centerText.setVisible(true);
+        this.physics.world.isPaused = true;
+        this.keyR.once('down', ()=> this.scene.restart());
+      }
+    }
+
+    // ==============================================
+    // Phaser Game setup
+    // ==============================================
+    const phaserConfig = {
+      type: Phaser.CANVAS,
+      parent: 'game',
+      width: CFG.game.width,
+      height: CFG.game.height,
+      pixelArt: CFG.game.pixelArt,
+      roundPixels: true,
+      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+      physics: { default: 'arcade', arcade: { gravity: { y: CFG.game.gravityY }, debug: false } },
+      scene: [BootScene, GameScene]
+    };
+
+    try {
+      const game = new Phaser.Game(phaserConfig);
+    } catch (err) {
+      const host = document.getElementById('game');
+      const msg = document.createElement('div');
+      msg.style.cssText = 'color:#fff;padding:16px;font-family:monospace;';
+      msg.textContent = 'Failed to initialize Phaser. Check your network (CDN) or open DevTools console for errors.';
+      host.appendChild(msg);
+      console.error('Phaser init error:', err);
+    }
+
+    // Keyboard bootstrap for audio on key press if user never clicked
+    window.addEventListener('keydown', ()=>{ SFX.resumeOnGesture(); SFX.startMusic(); }, { once: true });
+  </script>
+</body>
+</html>

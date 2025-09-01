@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>River City Ransom - AUTHENTIC</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      background: #000; 
+      color: #fff; 
+      font-family: monospace; 
+      overflow: hidden;
+    }
+    #gameContainer { 
+      width: 100vw; 
+      height: 100vh;
+      position: relative;
+    }
+    #hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100px; /* Increased from 80px */
+      background: #000;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      font-size: 24px; /* Increased from 20px */
+      font-weight: bold;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      padding: 0 30px;
+      box-sizing: border-box;
+      border-bottom: 3px solid #444;
+    }
+    
+    #dialogue {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 120px; /* Increased from 100px */
+      background: #000;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      font-size: 22px; /* Increased from 18px for better readability */
+      font-weight: bold;
+      z-index: 1000;
+      padding: 15px 30px;
+      box-sizing: border-box;
+      border-top: 3px solid #444;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top HUD Bar - Player Stats -->
+  <div id="hud">
+    <div style="display: flex; justify-content: space-between; width: 100%;">
+      <div>
+        <span style="color: #ffff00;">ALEX</span>
+        <span style="margin-left: 20px;">Health: <span id="health">100</span></span>
+      </div>
+      <div>
+        <span>Money: $<span id="money">26.50</span></span>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Game Canvas -->
+  <div id="gameContainer"></div>
+  
+  <!-- Bottom Dialogue Bar - Messages/Chat -->
+  <div id="dialogue">
+    <div id="dialogue-text">🎮 RIVER CITY RANSOM - Use Arrow Keys to Move, A to Punch, S to Kick</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  
+  <script>
+    class RiverCityRansomGame extends Phaser.Scene {
+      constructor() {
+        super({ key: 'RiverCityRansomGame' });
+      }
+      
+      preload() {
+        console.log('Loading authentic RCR sprites...');
+        
+        // Load sprites with smaller, more accurate dimensions
+        this.load.spritesheet('alex', '../assets/sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png', {
+          frameWidth: 24,
+          frameHeight: 24
+        });
+        
+        this.load.spritesheet('ryan', '../assets/sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Ryan.png', {
+          frameWidth: 24,
+          frameHeight: 24
+        });
+        
+        // Load enemies with matching dimensions
+        this.load.spritesheet('enemy1', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 1.png', {
+          frameWidth: 24,
+          frameHeight: 24
+        });
+        
+        this.load.spritesheet('enemy2', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 2.png', {
+          frameWidth: 24,
+          frameHeight: 24
+        });
+        
+        this.load.spritesheet('enemy3', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 3.png', {
+          frameWidth: 24,
+          frameHeight: 24
+        });
+        
+        // Load background
+        this.load.image('downtown', '../assets/backgrounds/NES - River City Ransom _ Street Gangs - Backgrounds - Downtown.png');
+        
+        // Load authentic River City Ransom music
+        this.load.audio('bgm', '../assets/audio/river_city_ransom_ost_mp3/River City Anthem.mp3');
+        this.load.audio('street_music', '../assets/audio/river_city_ransom_ost_mp3/Street of No Escape.mp3');
+        this.load.audio('punch_sound', '../assets/audio/river_city_ransom_ost_mp3/Just For Kicks.mp3');
+      }
+      
+      create() {
+        console.log('Creating authentic River City Ransom...');
+        
+        // Add background - remove green area, stretch road down to arrow bottom
+        const bg = this.add.image(400, 290, 'downtown'); // Position for proper stretching
+        const texture = this.textures.get('downtown');
+        const bgWidth = texture.source[0].width;
+        const bgHeight = texture.source[0].height;
+        
+        // Crop to remove green area completely, keep only road section
+        bg.setCrop(0, bgHeight * 0.42, bgWidth, bgHeight * 0.25); // Skip green, just road
+        bg.setDisplaySize(800, 580); // Stretch road down to meet arrow bottom
+        
+        console.log(`Background: ${bgWidth}x${bgHeight}, showing middle third`);
+        
+        // Create Alex player (adjusted for smaller canvas)
+        this.alex = this.add.sprite(200, 280, 'alex', 0);
+        this.alex.setScale(3);
+        this.alex.health = 100;
+        this.alex.money = 26.50; // Match reference format
+        
+        // Create Ryan (Player 2)
+        this.ryan = this.add.sprite(250, 280, 'ryan', 0);
+        this.ryan.setScale(3);
+        
+        // Create enemy gang members
+        this.enemies = [];
+        const enemyTypes = ['enemy1', 'enemy2', 'enemy3'];
+        for (let i = 0; i < 3; i++) {
+          const enemyType = enemyTypes[i];
+          if (this.textures.exists(enemyType)) {
+            const enemy = this.add.sprite(500 + i * 80, 280, enemyType, 0);
+            enemy.setScale(3); // Match player scale
+            enemy.health = 30;
+            enemy.type = enemyType;
+            enemy.aiTimer = 0;
+            this.enemies.push(enemy);
+          }
+        }
+        
+        // Create Alex animations - safer frame handling
+        this.anims.create({
+          key: 'alex-idle',
+          frames: [{ key: 'alex', frame: 0 }],
+          frameRate: 1,
+          repeat: 0
+        });
+        
+        this.anims.create({
+          key: 'alex-walk',
+          frames: [{ key: 'alex', frame: 0 }, { key: 'alex', frame: 1 }],
+          frameRate: 6,
+          repeat: -1
+        });
+        
+        this.anims.create({
+          key: 'alex-punch',
+          frames: [{ key: 'alex', frame: 0 }],
+          frameRate: 8,
+          repeat: 0
+        });
+        
+        this.anims.create({
+          key: 'alex-kick',
+          frames: [{ key: 'alex', frame: 0 }],
+          frameRate: 8,
+          repeat: 0
+        });
+        
+        // Create enemy animations for each type - simplified
+        const enemyAnimTypes = ['enemy1', 'enemy2', 'enemy3'];
+        enemyAnimTypes.forEach(enemyType => {
+          if (this.textures.exists(enemyType)) {
+            this.anims.create({
+              key: `${enemyType}-idle`,
+              frames: [{ key: enemyType, frame: 0 }],
+              frameRate: 1,
+              repeat: 0
+            });
+            
+            this.anims.create({
+              key: `${enemyType}-walk`,
+              frames: [{ key: enemyType, frame: 0 }, { key: enemyType, frame: 1 }],
+              frameRate: 4,
+              repeat: -1
+            });
+          }
+        });
+        
+        // Start animations
+        this.alex.play('alex-idle');
+        this.ryan.play('alex-idle');
+        this.enemies.forEach(enemy => {
+          enemy.play(`${enemy.type}-idle`);
+        });
+        
+        // Input setup
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keys = this.input.keyboard.addKeys('A,S,D,SPACE');
+        
+        // Game state
+        this.isMoving = false;
+        this.isAttacking = false;
+        
+        console.log('River City Ransom ready to play!');
+        
+        // Play authentic RCR background music
+        if (this.sound.get('street_music')) {
+          this.sound.play('street_music', { loop: true, volume: 0.3 });
+        }
+        
+        // Function to show messages in dialogue bar
+        this.showMessage = (text) => {
+          document.getElementById('dialogue-text').innerHTML = text;
+        };
+        
+        this.showMessage('Welcome to River City! Fight your way through the gangs!');
+      }
+      
+      update(time) {
+        // Alex movement
+        let moving = false;
+        const speed = 2;
+        
+        if (this.cursors.left.isDown) {
+          this.alex.x -= speed;
+          this.alex.setFlipX(true);
+          moving = true;
+        } else if (this.cursors.right.isDown) {
+          this.alex.x += speed;
+          this.alex.setFlipX(false);
+          moving = true;
+        }
+        
+        if (this.cursors.up.isDown) {
+          this.alex.y -= speed;
+          moving = true;
+        } else if (this.cursors.down.isDown) {
+          this.alex.y += speed;
+          moving = true;
+        }
+        
+        // Animation handling
+        if (moving && !this.isAttacking) {
+          if (this.alex.anims.currentAnim?.key !== 'alex-walk') {
+            this.alex.play('alex-walk');
+          }
+        } else if (!this.isAttacking) {
+          if (this.alex.anims.currentAnim?.key !== 'alex-idle') {
+            this.alex.play('alex-idle');
+          }
+        }
+        
+        // Combat
+        if (Phaser.Input.Keyboard.JustDown(this.keys.A) && !this.isAttacking) {
+          this.isAttacking = true;
+          this.alex.play('alex-punch');
+          this.alex.once('animationcomplete', () => {
+            this.isAttacking = false;
+          });
+        }
+        
+        if (Phaser.Input.Keyboard.JustDown(this.keys.S) && !this.isAttacking) {
+          this.isAttacking = true;
+          this.alex.play('alex-kick');
+          this.alex.once('animationcomplete', () => {
+            this.isAttacking = false;
+          });
+        }
+        
+        // Keep Alex on screen (adjusted for smaller canvas with road at top)
+        this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, 750);
+        this.alex.y = Phaser.Math.Clamp(this.alex.y, 120, 340); // Road starts near top
+        
+        // Simple enemy AI
+        this.enemies.forEach(enemy => {
+          if (time > enemy.aiTimer) {
+            // Move towards Alex occasionally
+            if (Math.random() < 0.3) {
+              if (enemy.x > this.alex.x) {
+                enemy.x -= 0.5;
+                enemy.setFlipX(true);
+              } else {
+                enemy.x += 0.5;
+                enemy.setFlipX(false);
+              }
+              
+              if (enemy.anims.currentAnim?.key !== `${enemy.type}-walk`) {
+                enemy.play(`${enemy.type}-walk`);
+              }
+            } else {
+              if (enemy.anims.currentAnim?.key !== `${enemy.type}-idle`) {
+                enemy.play(`${enemy.type}-idle`);
+              }
+            }
+            
+            enemy.aiTimer = time + 1000; // Update AI every second
+          }
+        });
+        
+        // Update HUD elements
+        document.getElementById('health').innerHTML = this.alex.health;
+        document.getElementById('money').innerHTML = this.alex.money;
+      }
+    }
+    
+    // Game configuration with adjusted canvas for bigger UI bars
+    const config = {
+      type: Phaser.CANVAS,
+      width: 800,
+      height: 380, // Reduced to account for bigger bars (600 - 100 - 120)
+      parent: 'gameContainer',
+      backgroundColor: '#2c3e50',
+      scene: RiverCityRansomGame,
+      render: {
+        pixelArt: true,
+        antialias: false,
+        roundPixels: true
+      },
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+      }
+    };
+    
+    console.log('Starting authentic River City Ransom...');
+    const game = new Phaser.Game(config);
+    
+    game.events.on('ready', () => {
+      console.log('🎮 RIVER CITY RANSOM IS READY TO PLAY!');
+    });
+  </script>
+</body>
+</html>
