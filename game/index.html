@@ -501,15 +501,111 @@
     // Defaults matching prior working setup
     walk:  { row: 0, from: 0, to: Math.min(1, cols-1) },
     punch: { row: 1, from: 0, to: Math.min(2, cols-1) },
-    // Kick uses row 2 to avoid crouch/duck frames
+    // Kick provisional (will auto-tune below)
     kick:  { row: 2, from: 0, to: Math.min(2, cols-1) },
     // Jump left as-is since you’re happy with it
     jump:  { row: 0, from: 0, to: 0 }
   };
+
+  // Auto-select a non-ducking kick row by scanning pixels (if no explicit URL override)
+  (function autoPickKickRow(){
+    const hasOverride = new URLSearchParams(location.search).get('alexMap');
+    if (hasOverride) return; // user-specified mapping wins
+    try {
+      const tex = this.textures.get('alex');
+      const src = tex.getSourceImage();
+      if (!src) return;
+      const tmp = document.createElement('canvas');
+      const ctx = tmp.getContext('2d', { willReadFrequently: true });
+      const heightScores = [];
+      const scoreRow = (r) => {
+        // sample first 3 columns on this row
+        let heights = [];
+        for (let c = 0; c < Math.min(3, cols); c++) {
+          const fIdx = idx(r, c);
+          const f = this.textures.getFrame('alex', fIdx);
+          if (!f) continue;
+          tmp.width = f.cutWidth; tmp.height = f.cutHeight;
+          ctx.clearRect(0,0,tmp.width,tmp.height);
+          ctx.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
+          const data = ctx.getImageData(0,0,tmp.width,tmp.height).data;
+          // compute alpha bbox
+          let top = tmp.height, bottom = -1;
+          for (let y=0; y<tmp.height; y++) {
+            for (let x=0; x<tmp.width; x++) {
+              const a = data[(y*tmp.width + x)*4 + 3];
+              if (a > 8) { if (y < top) top = y; if (y > bottom) bottom = y; }
+            }
+          }
+          if (bottom >= top) heights.push(bottom - top + 1);
+        }
+        if (!heights.length) return 0;
+        heights.sort((a,b)=>a-b); const mid = heights[Math.floor(heights.length/2)];
+        return mid || 0;
+      };
+      for (let r=0;r<rows;r++) {
+        // skip rows already used by walk or punch
+        if (r === map.walk.row || r === map.punch.row) continue;
+        heightScores.push({ r, h: scoreRow(r) });
+      }
+      // prefer taller rows (avoid crouch/duck which are short)
+      heightScores.sort((a,b)=>b.h - a.h);
+      const best = heightScores.find(s => s.h >= 24) || heightScores[0];
+      if (best && Number.isFinite(best.r)) {
+        map.kick.row = best.r;
+        console.log('Auto-picked kick row', best);
+      }
+    } catch(e) { console.warn('autoPickKickRow failed', e); }
+  }).call(this);
+  // Build trimmed textures for used frames to remove deadspace
+  const usedIdx = new Set();
+  const addRange = (m) => { if (!m) return; for (let c=m.from; c<=m.to; c++) usedIdx.add(idx(m.row, c)); };
+  addRange(map.walk); addRange(map.punch); addRange(map.kick); usedIdx.add(idx(map.jump.row, map.jump.from));
+  const trimKeyOf = (fIndex) => `alex_t_${fIndex}`;
+  try {
+    const tmp = document.createElement('canvas');
+    const ctx = tmp.getContext('2d', { willReadFrequently: true });
+    usedIdx.forEach(fIndex => {
+      const f = this.textures.getFrame('alex', fIndex);
+      if (!f) return;
+      tmp.width = f.cutWidth; tmp.height = f.cutHeight;
+      ctx.clearRect(0,0,tmp.width,tmp.height);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
+      const img = ctx.getImageData(0,0,tmp.width,tmp.height);
+      const data = img.data;
+      let minX=tmp.width, minY=tmp.height, maxX=-1, maxY=-1;
+      for (let y=0;y<tmp.height;y++) {
+        for (let x=0;x<tmp.width;x++) {
+          const a = data[(y*tmp.width + x)*4 + 3];
+          if (a>8) { if (x<minX) minX=x; if (y<minY) minY=y; if (x>maxX) maxX=x; if (y>maxY) maxY=y; }
+        }
+      }
+      if (maxX<minX || maxY<minY) { // fully empty? create tiny transparent
+        minX=0; minY=0; maxX=1; maxY=1;
+      }
+      const w = Math.max(1, maxX-minX+1);
+      const h = Math.max(1, maxY-minY+1);
+      // Create a canvas texture per frame
+      const key = trimKeyOf(fIndex);
+      if (this.textures.exists(key)) this.textures.remove(key);
+      const ct = this.textures.createCanvas(key, w, h);
+      const c2 = ct.getContext();
+      c2.imageSmoothingEnabled = false;
+      c2.drawImage(tmp, minX, minY, w, h, 0, 0, w, h);
+      ct.refresh();
+    });
+  } catch(e) { console.warn('Trimming frames failed', e); }
+
   const range = (k) => {
     const m = map[k]; if (!m) return [{ key: 'alex', frame: 0 }];
     const frames = [];
-    for (let c=m.from; c<=m.to; c++) frames.push({ key: 'alex', frame: idx(m.row, c) });
+    for (let c=m.from; c<=m.to; c++) {
+      const fIndex = idx(m.row, c);
+      const tKey = trimKeyOf(fIndex);
+      if (this.textures.exists(tKey)) frames.push({ key: tKey, frame: 0 });
+      else frames.push({ key: 'alex', frame: fIndex });
+    }
     return frames.length?frames:[{ key: 'alex', frame: 0 }];
   };
   this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 1, repeat: -1 });
@@ -519,7 +615,12 @@
   this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 10, repeat: 0 });
   this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 10, repeat: 0 });
   // Jump: a single stable airborne frame; no yoyo to avoid odd flicker
-  this.anims.create({ key: 'alex-jump',  frames: [{ key: 'alex', frame: idx(map.jump.row, map.jump.from) }], frameRate: 1, repeat: -1 });
+  {
+    const jIndex = idx(map.jump.row, map.jump.from);
+    const tKey = trimKeyOf(jIndex);
+    const jf = this.textures.exists(tKey) ? [{ key: tKey, frame: 0 }] : [{ key: 'alex', frame: jIndex }];
+    this.anims.create({ key: 'alex-jump', frames: jf, frameRate: 1, repeat: -1 });
+  }
         
         // Create enemy animations for each type - simplified
     const enemyAnimTypes = ['enemy1', 'enemy2', 'enemy3'];
