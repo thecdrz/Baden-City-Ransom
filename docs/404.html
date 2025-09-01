@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>404 — Not Found</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html,body{height:100%}
+    body{margin:0;background:#0b0d12;color:#e7f1ff;font-family:Consolas,Monaco,'Courier New',monospace;display:grid;place-items:center}
+    a{color:#ffd166}
+  </style>
+  <link rel="canonical" href="./index.html" />
+  <meta name="robots" content="noindex" />
+  <meta name="referrer" content="no-referrer" />
+  <script>
+    // Try client-side redirect for SPAs / deep links
+    (function(){
+      var path = location.pathname || '/';
+      if (path && !path.endsWith('/')) {
+        // Often the GH Pages 404 lands at /repo/whatever -> bounce to root
+        setTimeout(function(){ location.replace('./index.html'); }, 1200);
+      }
+    })();
+  </script>
+  </head>
+  <body>
+    <main>
+      <h1>Page not found</h1>
+      <p>Redirecting to <a href="./index.html">Home</a>…</p>
+    </main>
+  </body>
+  </html>

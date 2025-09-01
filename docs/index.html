@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Baden City Ransom</title>
+  <style>
+    :root { --bg:#0b0d12; --fg:#e7f1ff; --accent:#ffd166; --muted:#9aa3ad; }
+    html, body { height: 100%; }
+    body { margin: 0; font-family: Consolas, Monaco, 'Courier New', monospace; background: var(--bg); color: var(--fg); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { padding: 28px 20px 8px; text-align: center; }
+    h1 { margin: 0; font-size: 28px; }
+    p { margin: 6px 0; color: var(--muted); }
+    main { max-width: 980px; margin: 0 auto; padding: 10px 20px 40px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+    .card { background: #121722; border: 1px solid #1e2633; border-radius: 10px; overflow: hidden; display:flex; flex-direction:column; }
+    .card h3 { margin: 0; padding: 14px 16px; font-size: 18px; background:#0f1420; border-bottom:1px solid #1e2633; }
+    .card .body { padding: 12px 16px; flex:1; }
+    .card .footer { padding: 12px 16px; border-top:1px solid #1e2633; background:#0f1420; }
+    .btn { display:inline-block; padding:10px 14px; background:#1e2633; color:var(--fg); border-radius:8px; }
+    .btn:hover { background:#263041; }
+    .note { font-size: 12px; color: var(--muted); }
+    .kbd { display:inline-block; padding:0 6px; border:1px solid #3a465a; border-bottom-width:2px; border-radius:4px; background:#0f1420; color:#cfe0ff; font-size:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Baden City Ransom</h1>
+    <p>Retro beat 'em up in Phaser. Best in Chrome/Edge desktop.</p>
+  </header>
+  <main>
+    <div class="grid">
+      <div class="card">
+        <h3>Play the Game</h3>
+        <div class="body">
+          <p>Opens the main build with title screen, HUD, music and 1v1 combat.</p>
+          <p class="note">Controls: Arrows move; <span class="kbd">A</span> punch; <span class="kbd">S</span> kick; <span class="kbd">D</span> jump; <span class="kbd">ESC</span>/<span class="kbd">P</span> pause; <span class="kbd">M</span> mute.</p>
+        </div>
+        <div class="footer"><a class="btn" href="./game/index.html">Launch</a></div>
+      </div>
+      <div class="card">
+        <h3>Test Pages</h3>
+        <div class="body">
+          <p>Diagnostics, sprite inspectors, and alternate scenes.</p>
+          <ul>
+            <li><a href="./tests/index.html">Tests Hub</a></li>
+            <li><a href="./rcr_authentic.html">RCR Authentic</a></li>
+            <li><a href="./rcr.html">RCR (alt)</a></li>
+          </ul>
+        </div>
+        <div class="footer"><span class="note">Useful while developing.</span></div>
+      </div>
+      <div class="card">
+        <h3>About</h3>
+        <div class="body">
+          <p>Static site — no backend needed. Runs entirely in your browser.</p>
+          <p class="note">Asset paths assume this folder is site root (GitHub Pages repo or /docs).</p>
+        </div>
+        <div class="footer"><a class="btn" href="https://github.com/thecdrz/Baden-City-Ransom" target="_blank" rel="noopener">Source</a></div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
