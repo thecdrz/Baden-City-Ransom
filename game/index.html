@@ -818,6 +818,9 @@
         } else {
           startMusic();
         }
+  // Auto-pause and resume music based on scene pause/resume
+  this.events.on('pause', () => { try { this.music?.pause(); } catch(_) {} });
+  this.events.on('resume', () => { try { this.music?.resume(); } catch(_) {} });
         // Small helper to play short SFX with minimal overlap
         this._sfxGateTs = 0;
         this.playSfx = (keys, volume=0.5, rate=1.0, duckMs=120, duckVol=0.25) => {

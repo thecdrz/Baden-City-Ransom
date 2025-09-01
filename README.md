@@ -2,6 +2,10 @@
 
 A faithful recreation of the classic NES game River City Ransom using the original sprite assets and Phaser 3.
 
+## Disclaimer
+
+This is a personal, non-commercial fan project made for educational and nostalgic purposes. No copyright infringement is intended. All trademarks and copyrights are the property of their respective owners. If you are a rights holder and would like content removed, please open an issue or contact me.
+
 ## 🎮 How to Play
 
 ### Controls
