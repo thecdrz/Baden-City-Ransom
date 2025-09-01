@@ -129,11 +129,11 @@
       create() {
   console.log('Creating authentic Baden City Ransom...');
         
-  // Add background - remove green area, stretch road down to bottom of canvas
-  this.bg = this.add.image(0, 0, 'downtown').setOrigin(0, 0);
-  const texture = this.textures.get('downtown');
-  const bgWidth = texture.source[0].width;
-  const bgHeight = texture.source[0].height;
+  // Add background – we'll create a CROPPED canvas texture so it works in both Canvas and WebGL
+  const srcTex = this.textures.get('downtown');
+  const srcImg = srcTex.getSourceImage();
+  const bgWidth = srcTex.source[0].width;
+  const bgHeight = srcTex.source[0].height;
         
   // Crop to keep the actual play area: trim off the sky and bottom credits.
   // This slice contains the buildings/grass/fence/road.
@@ -141,19 +141,30 @@
   const CROP_BOTTOM_PCT = 0.982; // just before the purple credit strip
   const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
   const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
-  this.bg.setCrop(0, cropY, bgWidth, cropH);
-  // Remember dimensions for scaling
   this._bgNaturalW = bgWidth;
   this._bgCropH = cropH;
-  
-  // Scale the cropped region so it fills the canvas height (80vh) and center horizontally
+
+  // Create a canvas texture with only the cropped slice
+  const playKey = 'downtown_play';
+  if (this.textures.exists(playKey)) this.textures.remove(playKey);
+  const playTex = this.textures.createCanvas(playKey, bgWidth, cropH);
+  const ctx = playTex.getContext();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(srcImg, 0, cropY, bgWidth, cropH, 0, 0, bgWidth, cropH);
+  playTex.refresh();
+
+  // Use the cropped canvas texture for the background
+  this.bg = this.add.image(0, 0, playKey).setOrigin(0, 0);
+
+  // Scale to fill the canvas height (80vh) and center horizontally
   const cw = this.scale.width;
   const ch = this.scale.height;
-  const scale = ch / this._bgCropH; // make the cropped slice exactly canvas height
+  const scale = ch / this._bgCropH;
   this.bg.setScale(scale);
   const displayW = this._bgNaturalW * scale;
   this.bg.x = Math.floor((cw - displayW) / 2);
   this.bg.y = 0;
+  this._parallaxX = 0;
         
   console.log(`Background: ${bgWidth}x${bgHeight}, cropY=${cropY}, cropH=${cropH}`);
         
@@ -249,12 +260,13 @@
   console.log('Baden City Ransom scene ready. Background cropped to road.');
         
         // Ensure background continues to fit if the canvas size changes
-  this.scale.on('resize', (gameSize) => {
+        this.scale.on('resize', (gameSize) => {
           const w = gameSize.width, h = gameSize.height;
           const scale = h / this._bgCropH;
           this.bg.setScale(scale);
           const displayW = this._bgNaturalW * scale;
-          this.bg.x = Math.floor((w - displayW) / 2);
+          const centerX = Math.floor((w - displayW) / 2);
+          this.bg.x = centerX + this._parallaxX;
           this.bg.y = 0;
         });
 
@@ -280,10 +292,12 @@
           this.alex.x -= speed;
           this.alex.setFlipX(true);
           moving = true;
+          this._parallaxX += 0.8; // subtle parallax
         } else if (this.cursors.right.isDown) {
           this.alex.x += speed;
           this.alex.setFlipX(false);
           moving = true;
+          this._parallaxX -= 0.8;
         }
         
         if (this.cursors.up.isDown) {
@@ -325,8 +339,15 @@
         // Keep Alex on screen (canvas-only area; road fills entire height)
         const ymin = 80;
         const ymax = this.scale.height - 40;
-        this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, this.scale.width - 50);
+  this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, this.scale.width - 50);
         this.alex.y = Phaser.Math.Clamp(this.alex.y, ymin, ymax);
+
+  // Clamp parallax so edges don't leave gaps
+  const displayWNow = this._bgNaturalW * this.bg.scaleX;
+  const maxOffset = Math.max(0, Math.floor((displayWNow - this.scale.width) / 2));
+  this._parallaxX = Phaser.Math.Clamp(this._parallaxX, -maxOffset, maxOffset);
+  const centerX = Math.floor((this.scale.width - displayWNow) / 2);
+  this.bg.x = centerX + this._parallaxX;
         
   // ... (resize listener moved to create())
         
