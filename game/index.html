@@ -261,10 +261,15 @@
   // Game state
   this.isMoving = false;
   this.isAttacking = false;
-  // Simple jump physics
-  this.alex.vy = 0;
+  // Lane movement + jump physics (jump height separate from lane Y)
+  this.baseYMin = 80;
+  this.baseYMax = ch - 18;
+  this.alexBaseY = this.baseYMax;
+  this.alexJumpZ = 0; // negative while rising
+  this.alexVy = 0;
   this.GRAVITY = 0.55;
   this.JUMP_VELOCITY = -9.5;
+  this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
         
   console.log('Baden City Ransom scene ready. Background cropped to road.');
         
@@ -283,8 +288,11 @@
           const playerScale = pixelScale * 1.0;
           const groundY = h - 18;
           this.alex.setScale(playerScale);
-          // keep feet on ground while preserving vertical velocity if jumping
-          if (this.alex.y >= groundY) { this.alex.y = groundY; this.alex.vy = 0; }
+          // update lane bounds and keep lane Y in range; recompute render Y
+          this.baseYMax = groundY;
+          this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
+          if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
+          this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
           this.ryan.setScale(playerScale); if (this.ryan.y > groundY) this.ryan.y = groundY;
           this.enemies.forEach(e=>{ e.setScale(playerScale); if (e.y > groundY) e.y = groundY; });
         });
@@ -324,19 +332,24 @@
           this._parallaxX -= 0.4;
         }
         
-        if (this.cursors.up.isDown) { this.alex.y -= speed; moving = true; }
-        else if (this.cursors.down.isDown) { this.alex.y += speed; moving = true; }
+        // Lane up/down movement along the road
+        if (this.cursors.up.isDown) { this.alexBaseY -= speed; moving = true; }
+        else if (this.cursors.down.isDown) { this.alexBaseY += speed; moving = true; }
+        this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
 
-        // Jump with D if on ground
-        const groundY = this.scale.height - 18;
-        const onGround = this.alex.y >= groundY - 0.5;
+        // Jump with D if not already airborne
+        const onGround = this.alexJumpZ === 0;
         if (Phaser.Input.Keyboard.JustDown(this.keys.D) && onGround) {
-          this.alex.vy = this.JUMP_VELOCITY;
+          this.alexVy = this.JUMP_VELOCITY;
         }
-        // Apply gravity
-        this.alex.y += this.alex.vy;
-        this.alex.vy += this.GRAVITY;
-        if (this.alex.y >= groundY) { this.alex.y = groundY; this.alex.vy = 0; }
+        // Apply jump gravity to jump height only
+        if (!onGround || this.alexVy !== 0) {
+          this.alexJumpZ += this.alexVy;
+          this.alexVy += this.GRAVITY;
+          if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
+        }
+        // Compose final render Y
+        this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
         
         // Animation handling
         if (moving && !this.isAttacking) {
@@ -367,10 +380,7 @@
         }
         
         // Keep Alex on screen (canvas-only area; road fills entire height)
-  const ymin = 80;
-  const ymax = this.scale.height - 18;
   this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, this.scale.width - 50);
-  this.alex.y = Phaser.Math.Clamp(this.alex.y, ymin, ymax);
 
   // Clamp parallax so edges don't leave gaps
   const displayWNow = this._bgNaturalW * this.bg.scaleX;
