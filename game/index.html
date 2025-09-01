@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Baden City Ransom - AUTHENTIC</title>
   <style>
-    body { 
+  html, body { height: 100%; }
+  body { 
       margin: 0; 
       padding: 0; 
       background: #000; 
@@ -15,11 +16,12 @@
     }
     /* Three-band layout: top HUD 10vh, game canvas 80vh, bottom dialogue 10vh */
     #canvasWrap {
-      width: 100vw;
+      width: 100%;
       height: 80vh;
       position: relative;
       background: #000; /* canvas sits here */
     }
+    #canvasWrap canvas { display:block; }
     #hud {
       position: absolute;
       top: 0;
@@ -37,6 +39,8 @@
       padding: 0 30px;
       box-sizing: border-box;
       border-bottom: 3px solid #444;
+  /* Hidden on title screen; revealed on game start */
+  display: none;
     }
     
     #dialogue {
@@ -54,6 +58,8 @@
       padding: 15px 30px;
       box-sizing: border-box;
       border-top: 3px solid #444;
+  /* Hidden on title screen; revealed on game start */
+  display: none;
     }
   </style>
 </head>
@@ -155,7 +161,18 @@
         this.load.on('loaderror', () => {});
       }
       create(){
-        const { width:w, height:h } = this.scale.gameSize;
+  const { width:w, height:h } = this.scale.gameSize;
+        // Ensure HUD and dialogue are hidden on the title screen
+        try {
+          const hud = document.getElementById('hud');
+          const dlg = document.getElementById('dialogue');
+          if (hud) hud.style.display = 'none';
+          if (dlg) dlg.style.display = 'none';
+          // Keep canvas at stable 80vh to avoid initial zoom drift
+          const wrap = document.getElementById('canvasWrap');
+          if (wrap) { wrap.style.height = '80vh'; }
+          try { this.scale.refresh && this.scale.refresh(); } catch(_) {}
+        } catch(_) {}
         // pick first loaded texture
         const pickKey = () => {
           const list = this.textures.list;
@@ -173,23 +190,54 @@
         }
         const img = chosen ? this.add.image(w/2, h/2, chosen) : this.add.rectangle(w/2, h/2, w*0.9, h*0.6, 0x101020).setStrokeStyle(4, 0xffffff);
         img.setOrigin(0.5,0.5);
+        let txt; // declared before fit() to avoid reference errors
         const fit = () => {
+          const TITLE_Y_BIAS = 0.09; // push image below center by ~9% of viewport height
+          const cw = this.scale.width || this.scale.gameSize?.width || w;
+          const ch = this.scale.height || this.scale.gameSize?.height || h;
           const iw = img.width || 1, ih = img.height || 1;
-          const sx = w/iw, sy = h/ih;
-          const s = Math.min(sx, sy);
+          const sx = cw/iw, sy = ch/ih;
+          const s = Math.min(sx, sy) * 0.93; // more padding so it never kisses the top
           img.setScale(s);
-          img.setPosition(this.scale.width/2, this.scale.height/2);
+          img.setPosition(cw/2, ch * (0.5 + TITLE_Y_BIAS));
+          if (txt) txt.setPosition(cw/2, ch*0.94);
         };
         fit();
-        this.scale.on('resize', () => fit());
+  this.scale.on('resize', () => fit());
+  // Refit shortly after DOM height change
+  try { this.time.delayedCall(60, () => fit()); } catch(_) {}
 
-  const txt = this.add.text(w/2, h*0.94, 'Press Enter or Click to Start', {
+  txt = this.add.text(w/2, h*0.94, 'Press Enter or Click to Start', {
           fontFamily:'monospace', fontSize:'24px', color:'#ffff00', stroke:'#000', strokeThickness:4
         }).setOrigin(0.5,1).setDepth(10);
   // Slow blinking effect
   this.tweens.add({ targets: txt, alpha: 0.25, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-        const start = () => this.scene.start('BadenCityRansomGame');
+        const start = () => {
+          // Tiny confirm beep
+          try {
+            const ctx = this.sound.context; const t = ctx.currentTime;
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.type = 'square'; o.frequency.setValueAtTime(880, t);
+            g.gain.setValueAtTime(0.001, t); g.gain.linearRampToValueAtTime(0.2, t+0.01); g.gain.exponentialRampToValueAtTime(0.001, t+0.12);
+            o.connect(g).connect(ctx.destination); o.start(t); o.stop(t+0.14);
+          } catch(_) {}
+          // Restore canvas to gameplay layout (80vh) and start game
+          try {
+            const wrap = document.getElementById('canvasWrap');
+            if (wrap) {
+              wrap.style.height = '80vh';
+              const cw = wrap.clientWidth || this.scale.gameSize?.width || this.scale.width || 800;
+              const ch = wrap.clientHeight || this.scale.gameSize?.height || this.scale.height || 480;
+              if (this.scale.resize) this.scale.resize(cw, ch); else if (this.scale.refresh) this.scale.refresh();
+            } else if (this.scale.refresh) {
+              this.scale.refresh();
+            }
+          } catch(_) {}
+          // Start the game on the next tick after resize is applied
+          try { this.time.delayedCall(16, () => this.scene.start('BadenCityRansomGame')); }
+          catch(_) { this.scene.start('BadenCityRansomGame'); }
+        };
         this.input.once('pointerdown', start);
         this.input.keyboard.once('keydown-ENTER', start);
         this.input.keyboard.once('keydown-SPACE', start);
@@ -305,11 +353,24 @@
         // Load authentic River City Ransom music
   this.load.audio('bgm', url('../assets/audio/river_city_ransom_ost_mp3/River City Anthem.mp3'));
   this.load.audio('street_music', url('../assets/audio/river_city_ransom_ost_mp3/Street of No Escape.mp3'));
-  this.load.audio('punch_sound', url('../assets/audio/river_city_ransom_ost_mp3/Just For Kicks.mp3'));
+  // Short SFX
+  this.load.audio('sfx_punch1', url('../assets/audio/river_city_ransom_ost_mp3/classic-punch.mp3'));
+  this.load.audio('sfx_punch2', url('../assets/audio/river_city_ransom_ost_mp3/fist-fight.mp3'));
+  this.load.audio('sfx_jump1',  url('../assets/audio/river_city_ransom_ost_mp3/jump-01.mp3'));
+  this.load.audio('sfx_jump2',  url('../assets/audio/river_city_ransom_ost_mp3/jump-02.mp3'));
       }
       
       create() {
   console.log('Creating authentic Baden City Ransom...');
+  // Ensure camera zoom is neutral (avoid accidental device zoom factors)
+  try { this.cameras.main.setZoom(1); } catch(_) {}
+        // Reveal HUD and dialogue now that gameplay begins
+        try {
+          const hud = document.getElementById('hud');
+          const dlg = document.getElementById('dialogue');
+          if (hud) hud.style.display = 'flex';
+          if (dlg) dlg.style.display = 'block';
+        } catch(_) {}
         const diag = (msg) => { const d = document.getElementById('dialogue-text'); if (d) d.textContent = String(msg); };
         const step = (name) => diag(`Init: ${name}`);
         try {
@@ -319,6 +380,33 @@
           const cw = this.scale.width || this.scale.gameSize?.width || canvasWrap?.clientWidth || this.sys.game.config.width || 800;
           const ch = this.scale.height || this.scale.gameSize?.height || canvasWrap?.clientHeight || this.sys.game.config.height || 480;
           return { cw, ch };
+        };
+        // Centralized resize application to keep math consistent
+        const applyResize = (w, h) => {
+          if (!w || !h) { const s = getSize(); w = s.cw; h = s.ch; }
+          const scale = h / (this._bgCropH || h);
+          if (this.bg) {
+            this.bg.setScale(scale);
+            const displayW = (this._bgNaturalW || w) * scale;
+            this.bg.x = 0;
+            this.bg.y = 0;
+            this.cameras.main.setBounds(0, 0, displayW, h);
+          }
+          // Recompute scales to match pixel size and keep feet on ground
+          const pixelScale = this.bg?.scaleX || 1;
+          const alexScale = pixelScale * (this._playerScaleAdjust || 1.0);
+          const enemyScale = pixelScale * 1.0;
+          const groundY = h - 18;
+          if (this.alex) {
+            this.alex.setScale(alexScale);
+          }
+          this.baseYMax = groundY;
+          this.baseYMin = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 2;
+          this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
+          if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
+          if (this.alex) this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
+          (this.enemies||[]).forEach(e=>{ e.setScale(enemyScale); if (e.y > groundY) e.y = groundY; });
+          if (this.boss) { this.boss.setScale(enemyScale); if (this.boss.y > groundY) this.boss.y = groundY; }
         };
         
   // Add background – create CROPPED canvas texture with a safe fallback
@@ -478,9 +566,9 @@
   const alexImg = this.textures.get('alex').source?.[0];
   const sheetW = alexImg?.width || 0;
   const sheetH = alexImg?.height || 0;
-  // Use the original on-sheet layout math that matched earlier working mappings
-  const cols = sheetW ? Math.max(1, Math.floor((sheetW - SHEET.margin + SHEET.spacing) / (SHEET.fw + SHEET.spacing))) : 8;
-  const rows = sheetH ? Math.max(1, Math.floor((sheetH - SHEET.margin + SHEET.spacing) / (SHEET.fh + SHEET.spacing))) : 6;
+  // Derive frames-per-row/col exactly like Phaser's spritesheet parser: (size - 2*margin + spacing) / (frame + spacing)
+  const cols = sheetW ? Math.max(1, Math.floor((sheetW - (SHEET.margin*2) + SHEET.spacing) / (SHEET.fw + SHEET.spacing))) : 8;
+  const rows = sheetH ? Math.max(1, Math.floor((sheetH - (SHEET.margin*2) + SHEET.spacing) / (SHEET.fh + SHEET.spacing))) : 6;
   const idx = (r,c) => (Math.max(0, Math.min(rows-1, r)) * cols) + Math.max(0, Math.min(cols-1, c));
   const parseMap = () => {
     const params = new URLSearchParams(location.search);
@@ -693,29 +781,16 @@
         this.scale.on('resize', (gameSize) => {
           const w = gameSize?.width || this.scale.width || this.scale.gameSize?.width || canvasWrap?.clientWidth || 800;
           const h = gameSize?.height || this.scale.height || this.scale.gameSize?.height || canvasWrap?.clientHeight || 480;
-          const scale = h / this._bgCropH;
-          this.bg.setScale(scale);
-          const displayW = this._bgNaturalW * scale;
-          this.bg.x = 0;
-          this.bg.y = 0;
-          cam.setBounds(0, 0, displayW, h);
-
-          // Recompute scales to match pixel size and keep feet on ground
-          const pixelScale = this.bg.scaleX;
-          const alexScale = pixelScale * (this._playerScaleAdjust || 1.0);
-          const enemyScale = pixelScale * 1.0;
-          const groundY = h - 18;
-          this.alex.setScale(alexScale);
-          // update lane bounds and keep lane Y in range; recompute render Y
-          this.baseYMax = groundY;
-          this.baseYMin = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 2;
-          this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
-          if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
-          this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
-          this.enemies.forEach(e=>{ e.setScale(enemyScale); if (e.y > groundY) e.y = groundY; });
-          if (this.boss) { this.boss.setScale(enemyScale); if (this.boss.y > groundY) this.boss.y = groundY; }
+          applyResize(w, h);
           updateDebug();
         });
+        // Apply a couple of staged resizes to settle layout after the Title height swap
+        const s0 = getSize();
+        applyResize(s0.cw, s0.ch);
+        try {
+          this.time.delayedCall(16, () => { const s = getSize(); applyResize(s.cw, s.ch); updateDebug(); });
+          this.time.delayedCall(80, () => { const s = getSize(); applyResize(s.cw, s.ch); updateDebug(); });
+        } catch(_) {}
   // Play authentic street music for this outdoor level
   step('music');
         this.sound.stopAll();
@@ -727,6 +802,56 @@
         } else {
           startMusic();
         }
+        // Small helper to play short SFX with minimal overlap
+        this._sfxGateTs = 0;
+        this.playSfx = (keys, volume=0.5, rate=1.0, duckMs=120, duckVol=0.25) => {
+          try {
+            if (this.sound.locked) return; // should be unlocked after title
+            const now = this.time.now || 0;
+            if (now - (this._sfxGateTs||0) < 40) return; // gentle spam gate
+            this._sfxGateTs = now;
+            const list = Array.isArray(keys) ? keys : [keys];
+            const key = list[(Math.random()*list.length)|0];
+            if (!this.sound?.get(key)) { /* okay */ }
+            const s = this.sound.add(key, { volume, rate });
+            s.once('complete', () => s.destroy());
+            // Brief music ducking while SFX plays
+            const prevVol = this.music?.volume ?? 0.35;
+            if (this.music && duckMs>0) {
+              this.music.setVolume(Math.max(0, Math.min(prevVol, duckVol)));
+              this.time.delayedCall(duckMs, () => { if (this.music) this.music.setVolume(prevVol); });
+            }
+            s.play();
+          } catch (_) { /* ignore */ }
+        };
+        // Lightweight synthesized SFX (no asset needed)
+        this.synth = {
+          click: (freq=1100, dur=0.035, vol=0.12) => {
+            try {
+              const ctx = this.sound.context; const t = ctx.currentTime;
+              const o = ctx.createOscillator(); const g = ctx.createGain();
+              o.type = 'square'; o.frequency.setValueAtTime(freq, t);
+              g.gain.setValueAtTime(0.0001, t);
+              g.gain.linearRampToValueAtTime(vol, t + 0.006);
+              g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+              o.connect(g).connect(ctx.destination);
+              o.start(t); o.stop(t + dur + 0.01);
+            } catch(_) {}
+          },
+          thump: (freq=90, dur=0.12, vol=0.22) => {
+            try {
+              const ctx = this.sound.context; const t = ctx.currentTime;
+              const o = ctx.createOscillator(); const g = ctx.createGain(); const f = ctx.createBiquadFilter();
+              o.type = 'sine'; o.frequency.setValueAtTime(freq, t);
+              f.type = 'lowpass'; f.frequency.setValueAtTime(240, t);
+              g.gain.setValueAtTime(0.0001, t);
+              g.gain.linearRampToValueAtTime(vol, t + 0.01);
+              g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+              o.connect(f).connect(g).connect(ctx.destination);
+              o.start(t); o.stop(t + dur + 0.02);
+            } catch(_) {}
+          }
+        };
         
         // Function to show messages in dialogue bar
         this.showMessage = (text) => {
@@ -760,7 +885,7 @@
         if (Phaser.Input.Keyboard.JustDown(this.cursors.left)) tap('left');
         if (Phaser.Input.Keyboard.JustDown(this.cursors.right)) tap('right');
 
-        const baseSpeed = 2;
+  const baseSpeed = 2;
         const speed = (this.runState.isRunning ? 3.8 : baseSpeed);
 
         if (!this.isAttacking && this.cursors.left.isDown) {
@@ -787,8 +912,11 @@
         const onGround = this.alexJumpZ === 0;
   if (!this.isAttacking && Phaser.Input.Keyboard.JustDown(this.keys.D) && onGround) {
           this.alexVy = this.JUMP_VELOCITY;
+          // Play one of the short jump SFX
+          this.playSfx(['sfx_jump1','sfx_jump2'], 0.45, 1.0);
         }
         // Apply jump gravity to jump height only
+        const wasAir = !onGround || this.alexVy !== 0;
         if (!onGround || this.alexVy !== 0) {
           this.alexJumpZ += this.alexVy;
           this.alexVy += this.GRAVITY;
@@ -796,6 +924,11 @@
         }
         // Compose final render Y
         this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
+        // Landing detect: transitioning from air to ground this frame
+        const nowOnGround = (this.alexJumpZ === 0 && this.alexVy === 0);
+        if (wasAir && nowOnGround) {
+          this.synth.thump(95, 0.1, 0.18);
+        }
         
   // Animation handling
         if (!onGround && !this.isAttacking) {
@@ -819,7 +952,8 @@
           // tiny procedural motion to sell the strike
           const tilt = kind === 'kick' ? 8 : 5;
           this.tweens.add({ targets: this.alex, angle: (this.alex.flipX?-tilt:tilt), duration: 80, yoyo: true, onComplete:()=>{ this.alex.setAngle(0); } });
-          // (temp) No SFX to avoid overlapping music; add a short SFX file later
+          // Play a short punch/kick SFX
+          this.playSfx(['sfx_punch1','sfx_punch2'], 0.5, kind==='kick' ? 0.95 : 1.02);
           // Build a simple hitbox in front of Alex once per press
           const reach = (kind === 'kick') ? 26 : 22;
           const w = (kind === 'kick') ? 22 : 18;
@@ -828,7 +962,7 @@
           // Place the hitbox around chest height (a bit above the feet)
           const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h - 6, w, h);
 
-          const applyHit = (target, dmg, knock=6) => {
+      const applyHit = (target, dmg, knock=6) => {
             if (!target || !target.active) return;
             const tb = target.getBounds();
             if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, tb)) {
@@ -837,6 +971,7 @@
               this.time.delayedCall(80, () => target.clearTint());
               // simple knockback
               target.x += this.alex.flipX ? -knock : knock;
+              this.synth.click(1300, 0.03, 0.10);
               if (target.health === 0 && !target._defeated) {
                 target._defeated = true; target.play(`${target.type||'boss'}-idle`);
                 this.tweens.add({ targets: target, alpha: 0, duration: 400, onComplete: () => target.destroy() });
@@ -915,6 +1050,7 @@
       height: 480, // 80% of a 600 reference height
       parent: 'canvasWrap',
       backgroundColor: '#000000',
+  resolution: 1,
       scene: [TitleScene, BadenCityRansomGame],
       render: {
         pixelArt: true,
