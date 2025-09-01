@@ -134,6 +134,8 @@
           // User-provided start screen
           '../assets/misc/BCR-StartScreen.ppng',
           '../assets/misc/BCR-StartScreen.png',
+          '../assets/BCR-StartScreen.ppng',
+          '../assets/BCR-StartScreen.png',
           '../assets/misc/Baden City Ransom Start.png',
           '../assets/misc/Baden City Ransom - Start.png',
           '../assets/misc/Start Screen.png',
@@ -164,6 +166,11 @@
           return null;
         };
         const chosen = pickKey();
+        if (chosen) {
+          console.log('Title image chosen:', this.textures.get(chosen)?.source?.[0]?.src || chosen);
+        } else {
+          console.warn('No title image matched; using placeholder rectangle');
+        }
         const img = chosen ? this.add.image(w/2, h/2, chosen) : this.add.rectangle(w/2, h/2, w*0.9, h*0.6, 0x101020).setStrokeStyle(4, 0xffffff);
         img.setOrigin(0.5,0.5);
         const fit = () => {
