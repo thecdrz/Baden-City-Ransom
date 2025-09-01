@@ -744,6 +744,13 @@
   step('input');
   this.cursors = this.input.keyboard.createCursorKeys();
         this.keys = this.input.keyboard.addKeys('A,S,D,SPACE');
+        // Pause / Mute keys
+        const KC = Phaser.Input.Keyboard.KeyCodes;
+        this.pauseKeys = {
+          esc: this.input.keyboard.addKey(KC.ESC),
+          p: this.input.keyboard.addKey(KC.P),
+          m: this.input.keyboard.addKey(KC.M)
+        };
         
   // Game state
   this.isMoving = false;
@@ -857,6 +864,18 @@
         this.showMessage = (text) => {
           document.getElementById('dialogue-text').innerHTML = text;
         };
+        // Expose simple toggles for PauseOverlay to call
+        this.toggleMusicMute = () => {
+          try { if (this.music) { this.music.setMute(!this.music.mute); this.showMessage(this.music.mute ? 'Music muted' : 'Music unmuted'); } } catch(_) {}
+        };
+        this.enterPause = () => {
+          try {
+            if (!this.scene.isActive('PauseOverlay')) {
+              this.scene.launch('PauseOverlay');
+              this.scene.pause();
+            }
+          } catch(_) {}
+        };
         
   this.showMessage('Welcome to Baden City! Fight your way through the gangs!');
   step('ready');
@@ -869,6 +888,15 @@
       }
       
       update(time) {
+        // Pause toggle
+        if (Phaser.Input.Keyboard.JustDown(this.pauseKeys.esc) || Phaser.Input.Keyboard.JustDown(this.pauseKeys.p)) {
+          this.enterPause();
+          return; // stop processing this frame
+        }
+        // Music mute toggle
+        if (Phaser.Input.Keyboard.JustDown(this.pauseKeys.m)) {
+          this.toggleMusicMute();
+        }
         // Alex movement with double-tap run
         let moving = false;
         const now = time;
@@ -1043,6 +1071,41 @@
       }
     }
     
+    // Simple overlay scene that pauses the game and listens for resume/mute
+    class PauseOverlay extends Phaser.Scene {
+      constructor(){ super({ key: 'PauseOverlay' }); }
+      create(){
+        const makeUi = () => {
+          const w = this.scale.width, h = this.scale.height;
+          if (this.maskRect) this.maskRect.destroy();
+          if (this.label) this.label.destroy();
+          this.maskRect = this.add.rectangle(0, 0, w, h, 0x000000, 0.55).setOrigin(0,0).setDepth(10000);
+          this.label = this.add.text(w/2, h/2, 'Paused\nESC or P: Resume\nM: Mute/Unmute Music', {
+            fontFamily: 'monospace', fontSize: '28px', color: '#ffff00', align: 'center', stroke:'#000', strokeThickness: 6
+          }).setOrigin(0.5).setDepth(10001);
+        };
+        makeUi();
+        this.scale.on('resize', makeUi, this);
+        const KC = Phaser.Input.Keyboard.KeyCodes;
+        this.keys = {
+          esc: this.input.keyboard.addKey(KC.ESC),
+          p: this.input.keyboard.addKey(KC.P),
+          m: this.input.keyboard.addKey(KC.M)
+        };
+        const resume = () => { try { this.scene.stop(); this.scene.resume('BadenCityRansomGame'); } catch(_) {} };
+        this.input.keyboard.on('keydown', (ev) => {
+          if (ev.code === 'Escape' || ev.code === 'KeyP') { resume(); }
+          else if (ev.code === 'KeyM') {
+            try { const gs = this.scene.get('BadenCityRansomGame'); gs.toggleMusicMute && gs.toggleMusicMute(); } catch(_) {}
+          }
+        });
+        // Also allow pointer click to resume for convenience
+        this.input.once('pointerdown', resume);
+      }
+      shutdown(){ this.scale.off('resize', undefined, this); }
+      destroy(){ this.scale && this.scale.off('resize', undefined, this); }
+    }
+    
     // Game configuration with adjusted canvas for bigger UI bars
     const config = {
       type: Phaser.AUTO,
@@ -1051,7 +1114,7 @@
       parent: 'canvasWrap',
       backgroundColor: '#000000',
   resolution: 1,
-      scene: [TitleScene, BadenCityRansomGame],
+  scene: [TitleScene, BadenCityRansomGame, PauseOverlay],
       render: {
         pixelArt: true,
         antialias: false,
