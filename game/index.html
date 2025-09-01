@@ -13,17 +13,19 @@
       font-family: monospace; 
       overflow: hidden;
     }
-    #gameContainer { 
-      width: 100vw; 
-      height: 100vh;
+    /* Three-band layout: top HUD 10vh, game canvas 80vh, bottom dialogue 10vh */
+    #canvasWrap {
+      width: 100vw;
+      height: 80vh;
       position: relative;
+      background: #000; /* canvas sits here */
     }
     #hud {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
-      height: 100px; /* Increased from 80px */
+  height: 10vh; /* top black bar */
       background: #000;
       color: #fff;
       font-family: 'Courier New', monospace;
@@ -42,7 +44,7 @@
       bottom: 0;
       left: 0;
       width: 100%;
-      height: 120px; /* Increased from 100px */
+  height: 10vh; /* bottom black bar */
       background: #000;
       color: #fff;
       font-family: 'Courier New', monospace;
@@ -69,8 +71,8 @@
     </div>
   </div>
   
-  <!-- Game Canvas -->
-  <div id="gameContainer"></div>
+  <!-- Game Canvas Area (80% height) -->
+  <div id="canvasWrap"></div>
   
   <!-- Bottom Dialogue Bar - Messages/Chat -->
   <div id="dialogue">
@@ -128,28 +130,30 @@
   console.log('Creating authentic Baden City Ransom...');
         
   // Add background - remove green area, stretch road down to bottom of canvas
-  const bg = this.add.image(0, 0, 'downtown').setOrigin(0, 0);
-        const texture = this.textures.get('downtown');
-        const bgWidth = texture.source[0].width;
-        const bgHeight = texture.source[0].height;
+  this.bg = this.add.image(0, 0, 'downtown').setOrigin(0, 0);
+  const texture = this.textures.get('downtown');
+  const bgWidth = texture.source[0].width;
+  const bgHeight = texture.source[0].height;
         
   // Crop to remove the green band entirely and keep road + curb only
-  const ROAD_TOP = 0.60;   // portion from top where road region begins (tuned up to remove any sky/trees)
-  const ROAD_HEIGHT = 0.40; // height portion to include (down to bottom)
-  bg.setCrop(0, Math.floor(bgHeight * ROAD_TOP), bgWidth, Math.floor(bgHeight * ROAD_HEIGHT));
-  // Fill the game canvas height exactly so the road reaches the bottom
-  bg.setDisplaySize(800, 380);
+  const ROAD_TOP = 0.60;   // portion from top where road region begins
+  const ROAD_HEIGHT = 0.40; // include down to the bottom
+  this.bg.setCrop(0, Math.floor(bgHeight * ROAD_TOP), bgWidth, Math.floor(bgHeight * ROAD_HEIGHT));
+  // Size background to current canvas size
+  const cw = this.scale.width;
+  const ch = this.scale.height;
+  this.bg.setDisplaySize(cw, ch);
         
         console.log(`Background: ${bgWidth}x${bgHeight}, showing middle third`);
         
-        // Create Alex player (adjusted for smaller canvas)
-        this.alex = this.add.sprite(200, 280, 'alex', 0);
+  // Create Alex player positioned near ground
+  this.alex = this.add.sprite(200, ch - 160, 'alex', 0);
         this.alex.setScale(3);
         this.alex.health = 100;
         this.alex.money = 26.50; // Match reference format
         
         // Create Ryan (Player 2)
-        this.ryan = this.add.sprite(250, 280, 'ryan', 0);
+  this.ryan = this.add.sprite(250, ch - 160, 'ryan', 0);
         this.ryan.setScale(3);
         
         // Create enemy gang members
@@ -297,9 +301,17 @@
           });
         }
         
-  // Keep Alex on screen (canvas-only area; road fills entire height)
-  this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, 750);
-  this.alex.y = Phaser.Math.Clamp(this.alex.y, 100, 340);
+        // Keep Alex on screen (canvas-only area; road fills entire height)
+        const ymin = 80;
+        const ymax = this.scale.height - 40;
+        this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, this.scale.width - 50);
+        this.alex.y = Phaser.Math.Clamp(this.alex.y, ymin, ymax);
+        
+        // Update sizing if the canvas resizes (RESIZE mode)
+        this.scale.on('resize', (gameSize)=>{
+          const w = gameSize.width, h = gameSize.height;
+          this.bg.setDisplaySize(w, h);
+        });
         
         // Simple enemy AI
         this.enemies.forEach(enemy => {
@@ -336,9 +348,9 @@
     // Game configuration with adjusted canvas for bigger UI bars
     const config = {
       type: Phaser.CANVAS,
-      width: 800,
-      height: 380, // Reduced to account for bigger bars (600 - 100 - 120)
-      parent: 'gameContainer',
+  width: 800,
+  height: 480, // 80% of a 600 reference height
+  parent: 'canvasWrap',
   backgroundColor: '#000000',
   scene: BadenCityRansomGame,
       render: {
@@ -347,8 +359,9 @@
         roundPixels: true
       },
       scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.NO_CENTER,
+        parent: 'canvasWrap'
       }
     };
     
