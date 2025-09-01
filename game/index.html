@@ -426,7 +426,7 @@
   this.alexBaseY = this.baseYMax;
   this.alexJumpZ = 0; // negative while rising
   this.alexVy = 0;
-  this.GRAVITY = 0.35; // slower fall for clearer airtime
+  this.GRAVITY = 0.28; // slightly slower fall for longer airtime
   this.JUMP_VELOCITY = -12.0; // slightly softer takeoff
   this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
         
@@ -554,11 +554,15 @@
           if (this.isAttacking) return;
           this.isAttacking = true;
           this.alex.play(kind === 'kick' ? 'alex-kick' : 'alex-punch');
+          // Play a feedback sound
+          try { this.sound.play('punch_sound', { volume: 0.5 }); } catch(e) {}
           // Build a simple hitbox in front of Alex once per press
-          const reach = 22;
-          const w = 16, h = 18;
+          const reach = (kind === 'kick') ? 26 : 22;
+          const w = (kind === 'kick') ? 22 : 18;
+          const h = 20;
           const ox = this.alex.flipX ? -reach : reach;
-          const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h, w, h);
+          // Place the hitbox around chest height (a bit above the feet)
+          const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h - 6, w, h);
 
           const applyHit = (target, dmg, knock=6) => {
             if (!target || !target.active) return;
@@ -578,7 +582,7 @@
           };
 
           // Damage numbers
-          const dmg = kind === 'kick' ? 15 : 10;
+          const dmg = kind === 'kick' ? 16 : 12;
           this.enemies.forEach(e => applyHit(e, dmg, 5));
           if (this.boss) applyHit(this.boss, dmg, 8);
 
