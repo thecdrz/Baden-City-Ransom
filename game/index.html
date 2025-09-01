@@ -498,12 +498,12 @@
     return out;
   };
   const map = parseMap() || {
-    // Defaults that are safe on the classic Alex sheet
+    // Defaults matching prior working setup
     walk:  { row: 0, from: 0, to: Math.min(1, cols-1) },
     punch: { row: 1, from: 0, to: Math.min(2, cols-1) },
-    // Move kick off the crouch row; try row 3 by default
-    kick:  { row: 3, from: 0, to: Math.min(2, cols-1) },
-    // Use a safe frame for jump to avoid invalid placeholders
+    // Kick uses row 2 to avoid crouch/duck frames
+    kick:  { row: 2, from: 0, to: Math.min(2, cols-1) },
+    // Jump left as-is since you’re happy with it
     jump:  { row: 0, from: 0, to: 0 }
   };
   const range = (k) => {
