@@ -544,7 +544,7 @@
         // Normalize scale baseline
         this._playerScaleAdjust = 1.0;
         this.alex.health = 100;
-        this.alex.money = 26.50; // Match reference format
+  this.alex.money = 4.20; // New default
         
         // Create enemy gang members
   step('spawn enemies');
@@ -566,10 +566,25 @@
           enemy.attackHeight = 18;
           this.enemies.push(enemy);
         }
-  // Skip boss for now (focus on 1v1)
-  step('skip boss');
-  this.boss = null;
+  // Spawn early boss for testing (Miller)
+  step('boss spawn (test)');
   this.bossName = 'Miller';
+  if (this.textures.exists('boss')) {
+    const bx = Math.max(360, Math.min(displayW - 140, 520));
+    const boss = this.add.sprite(bx, ch - 18, 'boss', 0).setOrigin(0.5, 1);
+    boss.setScale(playerScale);
+    boss.health = 140;
+    boss.type = 'boss';
+    boss.speed = 0.8;
+    boss.attackCooldown = 0;
+    boss.attackCadence = 850;
+    boss.attackReach = 30;
+    boss.attackWidth = 24;
+    boss.attackHeight = 20;
+    this.boss = boss;
+  } else {
+    this.boss = null;
+  }
         
         // Create Alex animations using heuristic row/column ranges with URL override support
   step('anims');
@@ -1091,6 +1106,33 @@
             }
           }
         });
+        // Boss AI (Miller) – same simple chase/attack loop
+        if (this.boss && !this.boss._defeated) {
+          const b = this.boss;
+          const dx = this.alex.x - b.x;
+          const dy = (this.alexBaseY - b.y);
+          b.setFlipX(dx < 0);
+          const alignedY = Math.abs(dy) <= 12;
+          const distX = Math.abs(dx);
+          const reach = b.attackReach || 28;
+          if (distX > reach + 2 || !alignedY) {
+            b.x += Math.sign(dx) * (b.speed || 0.8);
+            if (!alignedY) b.y += Math.sign(this.alexBaseY - b.y) * 0.6;
+            if (b.anims.currentAnim?.key !== `${b.type}-walk`) b.play(`${b.type}-walk`);
+          } else {
+            if (b.anims.currentAnim?.key !== `${b.type}-idle`) b.play(`${b.type}-idle`);
+            if (time >= (b.attackCooldown||0)) {
+              const w = b.attackWidth || 22, h = b.attackHeight || 20;
+              const ox = b.flipX ? -reach : reach;
+              const hitRect = new Phaser.Geom.Rectangle(b.x + ox - w/2, b.y - h - 6, w, h);
+              const pb = this.alex.getBounds();
+              if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
+                hurtPlayer(14, 12, b.flipX?-1:1);
+              }
+              b.attackCooldown = time + (b.attackCadence || 900);
+            }
+          }
+        }
         
         // Update HUD elements
         document.getElementById('health').innerHTML = this.alex.health;
