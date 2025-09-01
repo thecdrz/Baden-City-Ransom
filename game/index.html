@@ -143,10 +143,18 @@
   const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
   const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
   this.bg.setCrop(0, cropY, bgWidth, cropH);
-  // Size background to current canvas size
+  // Remember dimensions for scaling
+  this._bgNaturalW = bgWidth;
+  this._bgCropH = cropH;
+  
+  // Scale the cropped region so it fills the canvas height (80vh) and center horizontally
   const cw = this.scale.width;
   const ch = this.scale.height;
-  this.bg.setDisplaySize(cw, ch);
+  const scale = ch / this._bgCropH; // make the cropped slice exactly canvas height
+  this.bg.setScale(scale);
+  const displayW = this._bgNaturalW * scale;
+  this.bg.x = Math.floor((cw - displayW) / 2);
+  this.bg.y = 0;
         
   console.log(`Background: ${bgWidth}x${bgHeight}, cropY=${cropY}, cropH=${cropH}`);
         
@@ -244,7 +252,11 @@
         // Ensure background continues to fit if the canvas size changes
         this.scale.on('resize', (gameSize) => {
           const w = gameSize.width, h = gameSize.height;
-          this.bg.setDisplaySize(w, h);
+          const scale = h / this._bgCropH;
+          this.bg.setScale(scale);
+          const displayW = this._bgNaturalW * scale;
+          this.bg.x = Math.floor((w - displayW) / 2);
+          this.bg.y = 0;
         });
 
         // Play authentic RCR background music
