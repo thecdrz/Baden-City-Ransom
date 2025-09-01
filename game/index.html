@@ -125,7 +125,8 @@
         return `${basePath}/assets`;
       } catch (_) { return '/assets'; }
     })();
-    const asset = (p) => encodeURI(`${ASSETS_BASE}/${p}`);
+    // Fixed URL encoding to handle special characters properly
+    const asset = (p) => `${ASSETS_BASE}/${p}`;
 
     if (!window.Phaser) {
       const statusEl = document.getElementById('dialogue-text');
@@ -160,8 +161,8 @@
     class TitleScene extends Phaser.Scene {
       constructor(){ super({ key: 'TitleScene' }); }
       preload(){
-  const url = (p) => encodeURI(p);
-  const asset = (p) => encodeURI(`${ASSETS_BASE}/${p}`);
+  const url = (p) => p;
+  const asset = (p) => `${ASSETS_BASE}/${p}`;
         // Try URL param override first, else attempt a series of likely filenames
         const params = new URLSearchParams(location.search);
         const custom = params.get('titleImg');
@@ -304,7 +305,7 @@
         
         // Load sprites with authentic NES frame size (16x24)
         {
-          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png');
+          const src = asset('sprites/alex_sprite.png');
           logAdd('sheet','alex', src);
           this.load.spritesheet('alex', src, {
           frameWidth: 16,
@@ -318,7 +319,7 @@
         
         // Load enemies with matching dimensions
         {
-          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 1.png');
+          const src = asset('sprites/enemy1_sprite.png');
           logAdd('sheet','enemy1', src);
           this.load.spritesheet('enemy1', src, {
           frameWidth: 16,
@@ -329,7 +330,7 @@
         }
         
         {
-          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 2.png');
+          const src = asset('sprites/enemy2_sprite.png');
           logAdd('sheet','enemy2', src);
           this.load.spritesheet('enemy2', src, {
           frameWidth: 16,
@@ -340,7 +341,7 @@
         }
         
         {
-          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 3.png');
+          const src = asset('sprites/enemy3_sprite.png');
           logAdd('sheet','enemy3', src);
           this.load.spritesheet('enemy3', src, {
           frameWidth: 16,
@@ -349,21 +350,48 @@
           spacing: 1
           });
         }
-        // Boss spritesheet (Moose)
+        // Boss spritesheet (Moose) - Forcing inline loading to prevent issues
         {
-          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Moose.png');
+          // Use direct path to boss sprite
+          const src = asset('sprites/boss_sprite.png');
           logAdd('sheet','boss', src);
-          this.load.spritesheet('boss', src, {
+          
+          // Set specific dimensions for boss sprite
+          const bossConfig = {
             frameWidth: 16,
             frameHeight: 32,
             margin: 1,
             spacing: 1
+          };
+          
+          // Load the boss sprite
+          this.load.spritesheet('boss', src, bossConfig);
+          
+          // Add more detailed error/success handling for boss sprite
+          this.load.on('filecomplete-spritesheet-boss', (key, type, data) => {
+            console.log(`Boss spritesheet loaded successfully: ${key}`, data);
+            // Create a backup copy of the texture to ensure it's available
+            if (!this.textures.exists('boss_backup') && this.textures.exists('boss')) {
+              try {
+                this.textures.addImage('boss_backup', this.textures.get('boss').getSourceImage());
+                console.log('Created boss_backup texture');
+              } catch(e) {
+                console.error('Failed to create boss_backup texture', e);
+              }
+            }
+          });
+          
+          this.load.on('loaderror', (file) => {
+            if (file.key === 'boss') {
+              console.error('Boss spritesheet failed to load:', file.src);
+              document.getElementById('dialogue-text').innerHTML = 'Error loading boss sprite';
+            }
           });
         }
         
         // Load background
         {
-          const src = asset('backgrounds/NES - River City Ransom _ Street Gangs - Backgrounds - Downtown.png');
+          const src = asset('backgrounds/downtown_bg.png');
           logAdd('image','downtown', src);
           this.load.image('downtown', src);
         }
@@ -384,13 +412,13 @@
   // (Knight assets removed)
 
         // Load authentic River City Ransom music
-  this.load.audio('bgm', asset('audio/river_city_ransom_ost_mp3/River City Anthem.mp3'));
-  this.load.audio('street_music', asset('audio/river_city_ransom_ost_mp3/Street of No Escape.mp3'));
+  this.load.audio('bgm', asset('audio/river_city_ransom_ost_mp3/bgm_anthem.mp3'));
+  this.load.audio('street_music', asset('audio/river_city_ransom_ost_mp3/bgm_street.mp3'));
   // Short SFX
-  this.load.audio('sfx_punch1', asset('audio/river_city_ransom_ost_mp3/classic-punch.mp3'));
-  this.load.audio('sfx_punch2', asset('audio/river_city_ransom_ost_mp3/fist-fight.mp3'));
-  this.load.audio('sfx_jump1',  asset('audio/river_city_ransom_ost_mp3/jump-01.mp3'));
-  this.load.audio('sfx_jump2',  asset('audio/river_city_ransom_ost_mp3/jump-02.mp3'));
+  this.load.audio('sfx_punch1', asset('audio/river_city_ransom_ost_mp3/sfx_punch1.mp3'));
+  this.load.audio('sfx_punch2', asset('audio/river_city_ransom_ost_mp3/sfx_punch2.mp3'));
+  this.load.audio('sfx_jump1',  asset('audio/river_city_ransom_ost_mp3/sfx_jump1.mp3'));
+  this.load.audio('sfx_jump2',  asset('audio/river_city_ransom_ost_mp3/sfx_jump2.mp3'));
       }
       
       create() {
@@ -763,9 +791,31 @@
             });
           }
         });
-  // Boss animations
-  this.anims.create({ key: 'boss-idle', frames: [{ key: 'boss', frame: 0 }], frameRate: 1, repeat: 0 });
-  this.anims.create({ key: 'boss-walk', frames: [{ key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 6, repeat: -1 });
+  // Boss animations with properly defined frames
+  // First check if the boss texture exists and has frames
+  if (this.textures.exists('boss')) {
+    const frameCount = this.textures.get('boss').frameTotal;
+    console.log('Boss sprite frame count:', frameCount);
+    
+    // Ensure we have valid frames for animations
+    const frame0 = { key: 'boss', frame: 0 };
+    const frame1 = frameCount > 1 ? { key: 'boss', frame: 1 } : frame0;
+    
+    this.anims.create({ 
+      key: 'boss-idle', 
+      frames: [frame0], 
+      frameRate: 1, 
+      repeat: -1 
+    });
+    this.anims.create({ 
+      key: 'boss-walk', 
+      frames: [frame0, frame1], 
+      frameRate: 6, 
+      repeat: -1 
+    });
+  } else {
+    console.warn('Boss texture not loaded properly');
+  }
         
         // Start animations
   this.alex.play('alex-idle');
@@ -793,32 +843,146 @@
     this.spawnBossNearPlayer = () => {
           try {
             // If already present, keep it and inform
-            if (this.boss && this.boss.active && !this.boss._defeated) { this.showMessage('Boss already present.'); return this.boss; }
-            // Pick a sprite key that exists (fallback to enemy1 if boss sheet missing)
-            const spriteKey = this.textures.exists('boss') ? 'boss' : (this.textures.exists('enemy1') ? 'enemy1' : null);
-            const bx = Math.max((this.alex?.x || 200) + 70, 60);
-            // Fallback ground if baseY not initialized yet
-            const groundY = Number.isFinite(this.baseYMax) ? this.baseYMax : ((this.scale.height || this.scale.gameSize?.height || 480) - 18);
-            const by = groundY;
-            if (!spriteKey) {
-              this.showMessage('Boss sprite not loaded (check 404s). No spawn.');
-              try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = false; } catch(_) {}
-              return null;
+            if (this.boss && this.boss.active && !this.boss._defeated) { 
+              this.showMessage('Boss already present.'); 
+              return this.boss; 
             }
-            const boss = this.add.sprite(bx, by, spriteKey, 0).setOrigin(0.5, 1).setDepth(10);
-            const enemyScale = this.bg?.scaleX || 1;
-            boss.setScale(enemyScale);
-            boss.health = 140; boss.type = spriteKey; boss.speed = 0.8; boss.attackCooldown = 0; boss.attackCadence = 850; boss.attackReach = 30; boss.attackWidth = 24; boss.attackHeight = 20;
-            const animKey = spriteKey === 'boss' ? 'boss-idle' : `${spriteKey}-idle`;
-            try { boss.play(animKey); } catch(_) {}
-            this.bossName = this.bossName || 'Miller';
-            this.boss = boss;
-      try { boss.setTintFill(0xff55ff); this.time.delayedCall(180, () => boss.clearTint()); } catch(_) {}
-            this.showMessage(`${this.bossName} spawned nearby.`);
-            // Reflect in Dev UI if present
-            try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = true; } catch(_) {}
-            return boss;
-          } catch(_) { return null; }
+            
+            // Create a brand new boss sprite
+            const createNewBossSprite = () => {
+              // Force load the boss sprite directly from file - bypassing texture cache issues
+              const img = new Image();
+              img.src = asset('sprites/boss_sprite.png');
+              
+              // Create a new texture when image loads
+              img.onload = () => {
+                if (!this.textures.exists('boss_direct')) {
+                  this.textures.addImage('boss_direct', img);
+                  console.log('Created boss_direct texture from image');
+                  
+                  // Create a sprite with the new texture
+                  this.createBossWithTexture('boss_direct');
+                }
+              };
+              
+              img.onerror = (err) => {
+                console.error('Error loading boss image:', err);
+                // Fall back to enemy1 sprite if boss can't be loaded
+                const fallbackKey = this.textures.exists('enemy1') ? 'enemy1' : null;
+                if (fallbackKey) {
+                  this.createBossWithTexture(fallbackKey);
+                } else {
+                  this.showMessage('Boss sprite could not be loaded.');
+                }
+              };
+            };
+            
+            // Helper function to create boss with a specific texture
+            this.createBossWithTexture = (textureKey) => {
+              // Position boss at a good distance to ensure complete visibility
+              const bx = Math.max((this.alex?.x || 200) + 120, 140);
+              
+              // Fallback ground if baseY not initialized yet
+              const groundY = Number.isFinite(this.baseYMax) ? this.baseYMax : 
+                ((this.scale.height || this.scale.gameSize?.height || 480) - 18);
+              
+              // Create boss sprite
+              const boss = this.add.sprite(bx, groundY, textureKey, 0)
+                .setOrigin(0.5, 1)
+                .setDepth(10);
+              
+              console.log('Boss created with texture:', textureKey);
+              
+              // Set proper scale to match the game world
+              const enemyScale = this.bg?.scaleX || 1;
+              boss.setScale(enemyScale);
+              
+              // Make sure the boss sprite is fully visible
+              boss.x = Phaser.Math.Clamp(boss.x, 40, (this.bg.displayWidth || 800) - 40);
+              
+              // Set boss properties
+              boss.health = 140;
+              boss.type = textureKey;
+              boss.speed = 0.8;
+              boss.attackCooldown = 0;
+              boss.attackCadence = 850;
+              boss.attackReach = 30;
+              boss.attackWidth = 24;
+              boss.attackHeight = 20;
+              
+              // Create and play animations
+              const idleKey = `${textureKey}-idle`;
+              const walkKey = `${textureKey}-walk`;
+              
+              if (!this.anims.exists(idleKey)) {
+                this.anims.create({
+                  key: idleKey,
+                  frames: [{ key: textureKey, frame: 0 }],
+                  frameRate: 1,
+                  repeat: -1
+                });
+              }
+              
+              if (!this.anims.exists(walkKey)) {
+                this.anims.create({
+                  key: walkKey,
+                  frames: [
+                    { key: textureKey, frame: 0 },
+                    { key: textureKey, frame: 0 } // Use same frame as fallback
+                  ],
+                  frameRate: 6,
+                  repeat: -1
+                });
+              }
+              
+              boss.play(idleKey);
+              
+              this.bossName = this.bossName || 'Miller';
+              this.boss = boss;
+              
+              // Briefly highlight boss for visibility
+              boss.setTint(0xff55ff);
+              this.time.delayedCall(180, () => {
+                if (boss && boss.active) boss.clearTint();
+              });
+              
+              this.showMessage(`${this.bossName} spawned nearby.`);
+              
+              // Reflect in Dev UI
+              try { 
+                const cb = document.getElementById('devBoss'); 
+                if (cb) cb.checked = true; 
+              } catch(_) {}
+              
+              return boss;
+            };
+            
+            // Try creating boss with existing texture first
+            if (this.textures.exists('boss')) {
+              return this.createBossWithTexture('boss');
+            } else if (this.textures.exists('boss_direct')) {
+              return this.createBossWithTexture('boss_direct');
+            } else if (this.textures.exists('boss_backup')) {
+              return this.createBossWithTexture('boss_backup');
+            } else {
+              // If no boss texture exists, create one
+              createNewBossSprite();
+              // For immediate feedback, try enemy1 as fallback
+              if (this.textures.exists('enemy1')) {
+                return this.createBossWithTexture('enemy1');
+              }
+            }
+            
+          } catch(err) {
+            console.error('Boss spawn error:', err);
+            // Try with enemy1 if available
+            try {
+              if (this.textures.exists('enemy1')) {
+                return this.createBossWithTexture('enemy1');
+              }
+            } catch(_) {}
+            return null;
+          }
         };
         this.despawnBoss = () => { try { if (this.boss) { this.boss.destroy(); this.boss = null; this.showMessage('Boss despawned.'); } } catch(_) {} };
         
@@ -1181,28 +1345,90 @@
             }
           }
         });
-        // Boss AI (Miller) – same simple chase/attack loop
+        // Boss AI (Miller) – completely rewritten for maximum stability
         if (this.boss && !this.boss._defeated) {
           const b = this.boss;
+          
+          // Fix potential issues with boss sprite visibility
+          if (b.alpha < 1) b.alpha = 1;
+          if (!b.visible) b.visible = true;
+          
+          // If the boss has a blank texture, try to fix it
+          if (!b.texture || b.texture.key === '__MISSING' || !this.textures.exists(b.texture.key)) {
+            console.log('Boss has invalid texture, attempting to fix');
+            if (this.textures.exists('boss_direct')) {
+              b.setTexture('boss_direct');
+            } else if (this.textures.exists('boss')) {
+              b.setTexture('boss');
+            } else if (this.textures.exists('enemy1')) {
+              b.setTexture('enemy1');
+            }
+          }
+          
           const dx = this.alex.x - b.x;
           const dy = (this.alexBaseY - b.y);
-          try { b.setFlipX && b.setFlipX(dx < 0); } catch(_) {}
+          
+          // Set the correct direction the boss is facing
+          b.setFlipX(dx < 0);
+          
           const alignedY = Math.abs(dy) <= 12;
           const distX = Math.abs(dx);
           const reach = b.attackReach || 28;
+          
           if (distX > reach + 2 || !alignedY) {
+            // Move boss toward player
             b.x += Math.sign(dx) * (b.speed || 0.8);
+            
+            // Keep boss within visible bounds
+            b.x = Phaser.Math.Clamp(b.x, 40, (this.bg.displayWidth || 800) - 40);
+            
+            // Vertical alignment (lane matching)
             if (!alignedY) b.y += Math.sign(this.alexBaseY - b.y) * 0.6;
-            try { if (b.anims?.currentAnim?.key !== `${b.type}-walk`) b.play && b.play(`${b.type}-walk`); } catch(_) {}
+            
+            // Fix: Use a simplified approach to animation
+            // Just update the frame directly if animation fails
+            try {
+              const walkAnim = `${b.type}-walk`;
+              if (this.anims.exists(walkAnim)) {
+                if (b.anims?.currentAnim?.key !== walkAnim) {
+                  b.play(walkAnim);
+                }
+              } else {
+                // Alternate between frames 0 and 1 manually for simple walking
+                if (Math.floor(time / 150) % 2 === 0) {
+                  b.setFrame(0);
+                } else {
+                  b.setFrame(Math.min(1, b.texture.frameTotal - 1));
+                }
+              }
+            } catch(e) {
+              // If animation fails, at least ensure the frame is valid
+              b.setFrame(0);
+            }
+            
           } else {
-            try { if (b.anims?.currentAnim?.key !== `${b.type}-idle`) b.play && b.play(`${b.type}-idle`); } catch(_) {}
-            if (time >= (b.attackCooldown||0)) {
+            // When idle, just use frame 0
+            try {
+              const idleAnim = `${b.type}-idle`;
+              if (this.anims.exists(idleAnim)) {
+                if (b.anims?.currentAnim?.key !== idleAnim) {
+                  b.play(idleAnim);
+                }
+              } else {
+                b.setFrame(0);
+              }
+            } catch(e) {
+              b.setFrame(0);
+            }
+            
+            // Attack logic
+            if (time >= (b.attackCooldown || 0)) {
               const w = b.attackWidth || 22, h = b.attackHeight || 20;
               const ox = b.flipX ? -reach : reach;
               const hitRect = new Phaser.Geom.Rectangle(b.x + ox - w/2, b.y - h - 6, w, h);
               const pb = this.alex.getBounds();
               if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
-                hurtPlayer(14, 12, b.flipX?-1:1);
+                hurtPlayer(14, 12, b.flipX ? -1 : 1);
               }
               b.attackCooldown = time + (b.attackCadence || 900);
             }
@@ -1298,7 +1524,64 @@
         btn.setAttribute('aria-expanded', 'false');
       });
       god && god.addEventListener('change', () => { const s = gs(); if (s && s.setGodMode) s.setGodMode(god.checked); });
-  boss && boss.addEventListener('change', () => { const s = gs(); if (!s) return; if (boss.checked) { s.spawnBossNearPlayer && s.spawnBossNearPlayer(); s.showMessage && s.showMessage('Spawn request sent.'); } else { s.despawnBoss && s.despawnBoss(); s.showMessage && s.showMessage('Despawn request sent.'); } });
+  boss && boss.addEventListener('change', () => { 
+        const s = gs(); 
+        if (!s) return; 
+        
+        if (boss.checked) { 
+          // Ensure boss spawn with robust error handling
+          try {
+            console.log('Boss checkbox checked, attempting to spawn');
+            
+            // First make sure the boss texture is preloaded
+            const ensureBossTexture = () => {
+              // Create an image element and load the sprite directly
+              const img = new Image();
+              img.src = `${window.location.origin}/assets/sprites/boss_sprite.png`;
+              img.onload = () => {
+                console.log('Boss image loaded successfully');
+                if (s.textures && !s.textures.exists('boss_direct')) {
+                  try {
+                    s.textures.addImage('boss_direct', img);
+                    console.log('Added boss_direct texture');
+                  } catch(e) {
+                    console.error('Failed to add texture:', e);
+                  }
+                }
+                
+                // Now try to spawn the boss
+                if (s.spawnBossNearPlayer) {
+                  const result = s.spawnBossNearPlayer();
+                  if (!result) {
+                    console.error('Initial boss spawn failed, retrying...');
+                    setTimeout(() => {
+                      if (s.spawnBossNearPlayer) s.spawnBossNearPlayer();
+                    }, 500);
+                  }
+                }
+              };
+              img.onerror = () => {
+                console.error('Failed to load boss image');
+                // Try to spawn anyway with fallbacks
+                if (s.spawnBossNearPlayer) s.spawnBossNearPlayer();
+              };
+            };
+            
+            ensureBossTexture();
+            if (s.showMessage) s.showMessage('Spawning boss...');
+            
+          } catch(e) {
+            console.error('Error in boss spawn:', e);
+            // Try direct spawn as last resort
+            try {
+              if (s.spawnBossNearPlayer) s.spawnBossNearPlayer();
+            } catch(_) {}
+          }
+        } else { 
+          if (s.despawnBoss) s.despawnBoss(); 
+          if (s.showMessage) s.showMessage('Despawn request sent.'); 
+        } 
+      });
       // Initialize boss checkbox if spawned by default
       setTimeout(() => { const s = gs(); if (s && s.boss) { if (boss) boss.checked = true; } }, 200);
     })();
