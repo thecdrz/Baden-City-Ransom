@@ -197,17 +197,18 @@
           const ch = this.scale.height || this.scale.gameSize?.height || h;
           const iw = img.width || 1, ih = img.height || 1;
           const sx = cw/iw, sy = ch/ih;
-          const s = Math.min(sx, sy) * 0.93; // more padding so it never kisses the top
+          // Make the start image noticeably larger while keeping safe headroom
+          const s = Math.min(sx, sy) * 0.99; // previously 0.93
           img.setScale(s);
           img.setPosition(cw/2, ch * (0.5 + TITLE_Y_BIAS));
-          if (txt) txt.setPosition(cw/2, ch*0.94);
+          if (txt) txt.setPosition(cw/2, ch*0.975);
         };
         fit();
   this.scale.on('resize', () => fit());
   // Refit shortly after DOM height change
   try { this.time.delayedCall(60, () => fit()); } catch(_) {}
 
-  txt = this.add.text(w/2, h*0.94, 'Press Enter or Click to Start', {
+  txt = this.add.text(w/2, h*0.975, 'Press Enter or Click to Start', {
           fontFamily:'monospace', fontSize:'24px', color:'#ffff00', stroke:'#000', strokeThickness:4
         }).setOrigin(0.5,1).setDepth(10);
   // Slow blinking effect
