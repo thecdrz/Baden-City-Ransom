@@ -307,6 +307,25 @@
     this._roadTopFrac = 0.65;
   }
 
+  // Optionally tile the cropped background horizontally to create a long map
+  try {
+    if (this.textures.exists('downtown_play')) {
+      const src = this.textures.get('downtown_play').getSourceImage();
+      const tileW = this._bgNaturalW; // width of the original background
+      const tileH = this._bgCropH;    // cropped height
+      const TILES = 10; // make it long; adjust for 5-7 min target later
+      const longKey = 'downtown_long';
+      if (this.textures.exists(longKey)) this.textures.remove(longKey);
+      const longTex = this.textures.createCanvas(longKey, tileW * TILES, tileH);
+      const lctx = longTex.getContext(); lctx.imageSmoothingEnabled = false;
+      for (let i=0;i<TILES;i++) lctx.drawImage(src, 0, 0, tileW, tileH, i*tileW, 0, tileW, tileH);
+      longTex.refresh();
+      // swap to long map
+      useKey = longKey;
+      this._bgNaturalW = tileW * TILES;
+    }
+  } catch(e) { console.warn('Failed to build long background, using single tile', e); }
+
   // Use whichever background key we ended up with
   step(`bg add key=${useKey}`);
   if (!this.textures.exists(useKey)) { throw new Error(`Background texture missing: ${useKey}`); }
@@ -317,9 +336,13 @@
   const scale = (this._bgCropH && this._bgCropH > 0) ? (ch / this._bgCropH) : 1;
   this.bg.setScale(scale);
   const displayW = this._bgNaturalW * scale;
-  this.bg.x = Math.floor((cw - displayW) / 2);
+  this.bg.x = 0;
   this.bg.y = 0;
-  this._parallaxX = 0;
+
+  // Set up a side-scrolling camera that follows the player
+  const cam = this.cameras.main;
+  cam.setRoundPixels(true);
+  cam.setBounds(0, 0, displayW, ch);
         
   // console log for debugging is noisy on some hosts; keep quiet in prod
         
@@ -335,6 +358,8 @@
   if (!this.textures.exists(PLAYER_TEX)) throw new Error('Missing player texture: alex');
   this.alex = this.add.sprite(200, ch - 18, PLAYER_TEX, 0).setOrigin(0.5, 1);
     this.alex.setScale(playerScale);
+  // Camera follows the player for smooth scrolling
+  this.cameras.main.startFollow(this.alex, true, 0.12, 0.12);
         // If using Knight, normalize to ~32px pixel height so it matches NES scale
         try {
           if (haveKnight && this.textures.exists('kn_idle')) {
@@ -355,11 +380,14 @@
   step('spawn enemies');
   this.enemies = [];
         const enemyTypes = ['enemy1', 'enemy2', 'enemy3'];
-        for (let i = 0; i < 3; i++) {
-          const enemyType = enemyTypes[i];
+        const spawnEvery = 380; // world units between spawns
+        const totalSpawns = Math.min(24, Math.floor(displayW / spawnEvery));
+        for (let i = 0; i < totalSpawns; i++) {
+          const enemyType = enemyTypes[i % enemyTypes.length];
           if (this.textures.exists(enemyType)) {
-            const enemy = this.add.sprite(500 + i * 80, ch - 18, enemyType, 0).setOrigin(0.5, 1);
-            enemy.setScale(playerScale); // Match player scale
+            const ex = 500 + i * spawnEvery;
+            const enemy = this.add.sprite(ex, ch - 18, enemyType, 0).setOrigin(0.5, 1);
+            enemy.setScale(playerScale);
             enemy.health = 30;
             enemy.type = enemyType;
             enemy.aiTimer = 0;
@@ -369,7 +397,8 @@
   // Create Boss (Moose)
   step('spawn boss');
   if (!this.textures.exists('boss')) console.warn('Missing boss texture; skipping boss');
-  this.boss = this.textures.exists('boss') ? this.add.sprite(700, ch - 18, 'boss', 0).setOrigin(0.5, 1) : null;
+  const bossX = Math.max(800, displayW - 160);
+  this.boss = this.textures.exists('boss') ? this.add.sprite(bossX, ch - 18, 'boss', 0).setOrigin(0.5, 1) : null;
   if (this.boss) { this.boss.setScale(playerScale); this.boss.health = 120; this.boss.type = 'boss'; this.boss.aiTimer = 0; }
         
         // Create Alex animations - basic walk/idle using first few frames
@@ -432,7 +461,7 @@
         
   console.log('Baden City Ransom scene ready. Background cropped to road.');
   // Lightweight on-screen debug overlay (updates on resize)
-  const dbg = this.add.text(6, 6, '', { fontFamily: 'monospace', fontSize: '12px', color: '#0f0' }).setDepth(10000);
+  const dbg = this.add.text(6, 6, '', { fontFamily: 'monospace', fontSize: '12px', color: '#0f0' }).setDepth(10000).setScrollFactor(0);
   const updateDebug = () => {
     const s = [
       `cw:${this.scale.width} ch:${this.scale.height}`,
@@ -451,9 +480,9 @@
           const scale = h / this._bgCropH;
           this.bg.setScale(scale);
           const displayW = this._bgNaturalW * scale;
-          const centerX = Math.floor((w - displayW) / 2);
-          this.bg.x = centerX + this._parallaxX;
+          this.bg.x = 0;
           this.bg.y = 0;
+          cam.setBounds(0, 0, displayW, h);
 
           // Recompute scales to match pixel size and keep feet on ground
           const pixelScale = this.bg.scaleX;
@@ -507,12 +536,12 @@
           this.alex.x -= speed;
           this.alex.setFlipX(true);
           moving = true;
-          this._parallaxX += 0.4; // subtle parallax
+          
   } else if (!this.isAttacking && this.cursors.right.isDown) {
           this.alex.x += speed;
           this.alex.setFlipX(false);
           moving = true;
-          this._parallaxX -= 0.4;
+          
         }
         
         // Lane up/down movement along the road
@@ -534,7 +563,7 @@
         // Compose final render Y
         this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
         
-        // Animation handling
+  // Animation handling
         if (!onGround && !this.isAttacking) {
           if (this.alex.anims.currentAnim?.key !== 'alex-jump') {
             this.alex.play('alex-jump');
@@ -554,6 +583,9 @@
           if (this.isAttacking) return;
           this.isAttacking = true;
           this.alex.play(kind === 'kick' ? 'alex-kick' : 'alex-punch');
+          // tiny procedural motion to sell the strike
+          const tilt = kind === 'kick' ? 8 : 5;
+          this.tweens.add({ targets: this.alex, angle: (this.alex.flipX?-tilt:tilt), duration: 80, yoyo: true, onComplete:()=>{ this.alex.setAngle(0); } });
           // (temp) No SFX to avoid overlapping music; add a short SFX file later
           // Build a simple hitbox in front of Alex once per press
           const reach = (kind === 'kick') ? 26 : 22;
@@ -585,22 +617,15 @@
           this.enemies.forEach(e => applyHit(e, dmg, 5));
           if (this.boss) applyHit(this.boss, dmg, 8);
 
-          this.alex.once('animationcomplete', () => { this.isAttacking = false; });
+          this.alex.once('animationcomplete', () => { this.isAttacking = false; this.alex.setAngle(0); });
         };
 
         if (Phaser.Input.Keyboard.JustDown(this.keys.A)) { tryAttack('punch'); }
         if (Phaser.Input.Keyboard.JustDown(this.keys.S)) { tryAttack('kick'); }
         
-        // Keep Alex on screen (canvas-only area; road fills entire height)
-  this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, this.scale.width - 50);
-
-  // Clamp parallax so edges don't leave gaps
+    // Keep Alex inside world bounds
   const displayWNow = this._bgNaturalW * this.bg.scaleX;
-  const viewW = this.scale.width || this.scale.gameSize?.width || 800;
-  const maxOffset = Math.max(0, Math.floor((displayWNow - viewW) / 2));
-  this._parallaxX = Phaser.Math.Clamp(this._parallaxX, -maxOffset, maxOffset);
-  const centerX = Math.floor((viewW - displayWNow) / 2);
-  this.bg.x = centerX + this._parallaxX;
+  this.alex.x = Phaser.Math.Clamp(this.alex.x, 16, displayWNow - 16);
         
   // ... (resize listener moved to create())
         
