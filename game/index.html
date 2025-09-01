@@ -65,6 +65,13 @@
   /* HUD helpers */
   .hudRow { display: flex; justify-content: space-between; width: 100%; }
   .ml20 { margin-left: 20px; }
+  /* Dev UI */
+  #devBtn { position: fixed; right: 12px; bottom: 12px; z-index: 2000; background:#111; color:#fff; border:1px solid #444; border-radius:8px; padding:8px 10px; opacity:0.7; cursor:pointer; }
+  #devBtn:hover { opacity: 1; }
+  #devPanel { position: fixed; right: 12px; bottom: 56px; z-index: 2000; background:#111; color:#fff; border:1px solid #444; border-radius:10px; padding:12px; width:240px; display:none; box-shadow: 0 6px 16px rgba(0,0,0,0.35); }
+  #devPanel .row { margin-bottom:8px; }
+  #devPanel label { display:flex; align-items:center; gap:8px; }
+  #devClose { background:#222; color:#fff; border:1px solid #444; border-radius:6px; padding:4px 8px; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -87,6 +94,14 @@
   <!-- Bottom Dialogue Bar - Messages/Chat -->
   <div id="dialogue">
     <div id="dialogue-text">🎮 BADEN CITY RANSOM - Use Arrow Keys to Move, A to Punch, S to Kick</div>
+  </div>
+
+  <!-- Dev UI: Toggle panel for quick testing options -->
+  <button id="devBtn" aria-controls="devPanel" aria-expanded="false" title="Dev Tools">Dev</button>
+  <div id="devPanel" role="dialog" aria-label="Dev Panel">
+    <div class="row"><label><input type="checkbox" id="devGod"> Unlimited life</label></div>
+    <div class="row"><label><input type="checkbox" id="devBoss"> Spawn boss near player</label></div>
+    <div class="row"><button id="devClose">Close</button></div>
   </div>
 
   <script>
@@ -566,25 +581,11 @@
           enemy.attackHeight = 18;
           this.enemies.push(enemy);
         }
-  // Spawn early boss for testing (Miller)
-  step('boss spawn (test)');
+  // Boss is spawned manually via Dev tools or future triggers
+  step('boss (manual spawn)');
   this.bossName = 'Miller';
-  if (this.textures.exists('boss')) {
-    const bx = Math.max(240, Math.min(displayW - 140, (this.alex?.x || 200) + 80));
-    const boss = this.add.sprite(bx, ch - 18, 'boss', 0).setOrigin(0.5, 1);
-    boss.setScale(playerScale);
-    boss.health = 140;
-    boss.type = 'boss';
-    boss.speed = 0.8;
-    boss.attackCooldown = 0;
-    boss.attackCadence = 850;
-    boss.attackReach = 30;
-    boss.attackWidth = 24;
-    boss.attackHeight = 20;
-    this.boss = boss;
-  } else {
-    this.boss = null;
-  }
+  this.boss = null;
+  try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = false; } catch(_) {}
         
         // Create Alex animations using heuristic row/column ranges with URL override support
   step('anims');
@@ -770,6 +771,8 @@
   step('input');
   this.cursors = this.input.keyboard.createCursorKeys();
         this.keys = this.input.keyboard.addKeys('A,S,D,SPACE');
+  // Dev: quick spawn with B key
+  try { this.keys.B = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B); } catch(_) {}
         // Pause / Mute keys
         const KC = Phaser.Input.Keyboard.KeyCodes;
         this.pauseKeys = {
@@ -777,6 +780,36 @@
           p: this.input.keyboard.addKey(KC.P),
           m: this.input.keyboard.addKey(KC.M)
         };
+        // Dev flags and helpers
+        this.godMode = false;
+        this.setGodMode = (on) => { this.godMode = !!on; this.showMessage(this.godMode ? 'God Mode: ON' : 'God Mode: OFF'); };
+    this.spawnBossNearPlayer = () => {
+          try {
+            // If already present, keep it and inform
+            if (this.boss && this.boss.active && !this.boss._defeated) { this.showMessage('Boss already present.'); return this.boss; }
+            // Pick a sprite key that exists (fallback to enemy1 if boss sheet missing)
+      const spriteKey = this.textures.exists('boss') ? 'boss' : (this.textures.exists('enemy1') ? 'enemy1' : null);
+      if (!spriteKey) { this.showMessage('Boss/enemy sprite missing.'); return null; }
+            const bx = Math.max((this.alex?.x || 200) + 70, 60);
+            // Fallback ground if baseY not initialized yet
+            const groundY = Number.isFinite(this.baseYMax) ? this.baseYMax : ((this.scale.height || this.scale.gameSize?.height || 480) - 18);
+            const by = groundY;
+      const boss = this.add.sprite(bx, by, spriteKey, 0).setOrigin(0.5, 1).setDepth(10);
+            const enemyScale = this.bg?.scaleX || 1;
+            boss.setScale(enemyScale);
+      boss.health = 140; boss.type = spriteKey; boss.speed = 0.8; boss.attackCooldown = 0; boss.attackCadence = 850; boss.attackReach = 30; boss.attackWidth = 24; boss.attackHeight = 20;
+            this.bossName = this.bossName || 'Miller';
+            this.boss = boss;
+      const animKey = spriteKey === 'boss' ? 'boss-idle' : `${spriteKey}-idle`;
+            try { boss.play(animKey); } catch(_) {}
+      try { boss.setTintFill(0xff55ff); this.time.delayedCall(180, () => boss.clearTint()); } catch(_) {}
+            this.showMessage(`${this.bossName} spawned nearby.`);
+            // Reflect in Dev UI if present
+            try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = true; } catch(_) {}
+            return boss;
+          } catch(_) { return null; }
+        };
+        this.despawnBoss = () => { try { if (this.boss) { this.boss.destroy(); this.boss = null; this.showMessage('Boss despawned.'); } } catch(_) {} };
         
   // Game state
   this.isMoving = false;
@@ -928,6 +961,10 @@
         if (Phaser.Input.Keyboard.JustDown(this.pauseKeys.m)) {
           this.toggleMusicMute();
         }
+        // Dev: quick boss spawn
+        if (this.keys?.B && Phaser.Input.Keyboard.JustDown(this.keys.B)) {
+          this.spawnBossNearPlayer && this.spawnBossNearPlayer();
+        }
         // Alex movement with double-tap run
         let moving = false;
         const now = time;
@@ -1011,6 +1048,13 @@
           // tiny procedural motion to sell the strike
           const tilt = kind === 'kick' ? 8 : 5;
           this.tweens.add({ targets: this.alex, angle: (this.alex.flipX?-tilt:tilt), duration: 80, yoyo: true, onComplete:()=>{ this.alex.setAngle(0); } });
+          // small recoil on the player when attacking
+          try {
+            const recoil = (kind === 'kick') ? 3.5 : 2.5;
+            const worldW = (this._bgNaturalW||800) * (this.bg?.scaleX||1);
+            this.alex.x += this.alex.flipX ? recoil : -recoil;
+            this.alex.x = Phaser.Math.Clamp(this.alex.x, 16, worldW - 16);
+          } catch(_) {}
           // Play a short punch/kick SFX
           this.playSfx(['sfx_punch1','sfx_punch2'], 0.5, kind==='kick' ? 0.95 : 1.02);
           // Build a simple hitbox in front of Alex once per press
@@ -1060,6 +1104,7 @@
         
         // Single-enemy chase + attack AI
         const hurtPlayer = (dmg, knock=8, dir=1) => {
+          if (this.godMode) return; // ignore damage in God Mode
           const nowMs = time;
           if (nowMs < this.playerInvulUntil) return; // i-frames
           this.alex.health = Math.max(0, (this.alex.health||0) - dmg);
@@ -1071,8 +1116,27 @@
           this.cameras.main.shake(90, 0.004);
           this.synth.click(900, 0.04, 0.12);
           if (this.alex.health === 0) {
-            this.showMessage('You were knocked out!');
-            try { this.scene.launch('PauseOverlay'); this.scene.pause(); } catch(_) {}
+            // Auto-respawn with blinking invulnerability (classic style)
+            this.showMessage('You were knocked out! Respawning...');
+            try {
+              const respawn = () => {
+                // Restore position and health
+                const { height:ch } = this.scale;
+                const worldW = (this._bgNaturalW||800) * (this.bg?.scaleX||1);
+                this.alex.health = 100;
+                this.alexBaseY = this.baseYMax;
+                this.alexJumpZ = 0; this.alexVy = 0;
+                this.alex.x = Phaser.Math.Clamp((this.cameras.main.scrollX||0) + 120, 16, worldW - 16);
+                this.alex.y = Math.round(this.alexBaseY);
+                // Set longer i-frames and blink
+                const now2 = this.time.now || (nowMs+1);
+                const INV_MS = 2000;
+                this.playerInvulUntil = now2 + INV_MS;
+                try { this.tweens.add({ targets: this.alex, alpha: 0.25, yoyo: true, repeat: Math.floor(INV_MS/120), duration: 60 }); } catch(_) {}
+                this.showMessage('Back up! (invulnerable)');
+              };
+              this.time.delayedCall(450, respawn);
+            } catch(_) {}
           }
         };
         this.enemies.forEach(enemy => {
@@ -1198,10 +1262,35 @@
     
   console.log('Starting authentic Baden City Ransom...');
     const game = new Phaser.Game(config);
+  // Expose helpers for Dev UI
+  window._BCR = { game, gs: () => { try { return game.scene.getScene('BadenCityRansomGame'); } catch(_) { return null; } } };
     
     game.events.on('ready', () => {
       console.log('🎮 BADEN CITY RANSOM IS READY TO PLAY!');
     });
+    // Wire Dev UI controls
+    (function(){
+      const btn = document.getElementById('devBtn');
+      const panel = document.getElementById('devPanel');
+      const close = document.getElementById('devClose');
+      const god = document.getElementById('devGod');
+      const boss = document.getElementById('devBoss');
+      if (!btn || !panel) return;
+      const gs = () => (window._BCR && window._BCR.gs) ? window._BCR.gs() : null;
+      btn.addEventListener('click', () => {
+        const show = panel.style.display !== 'block';
+        panel.style.display = show ? 'block' : 'none';
+        btn.setAttribute('aria-expanded', String(show));
+      });
+      close && close.addEventListener('click', () => {
+        panel.style.display = 'none';
+        btn.setAttribute('aria-expanded', 'false');
+      });
+      god && god.addEventListener('change', () => { const s = gs(); if (s && s.setGodMode) s.setGodMode(god.checked); });
+  boss && boss.addEventListener('change', () => { const s = gs(); if (!s) return; if (boss.checked) { s.spawnBossNearPlayer && s.spawnBossNearPlayer(); s.showMessage && s.showMessage('Spawn request sent.'); } else { s.despawnBoss && s.despawnBoss(); s.showMessage && s.showMessage('Despawn request sent.'); } });
+      // Initialize boss checkbox if spawned by default
+      setTimeout(() => { const s = gs(); if (s && s.boss) { if (boss) boss.checked = true; } }, 200);
+    })();
   })();
   </script>
   <script>
