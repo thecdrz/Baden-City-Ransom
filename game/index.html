@@ -98,12 +98,7 @@
           spacing: 1
         });
         
-        this.load.spritesheet('ryan', '../assets/sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Ryan.png', {
-          frameWidth: 16,
-          frameHeight: 32,
-          margin: 1,
-          spacing: 1
-        });
+  // (Player 2 removed for now)
         
         // Load enemies with matching dimensions
         this.load.spritesheet('enemy1', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies %26 Bosses - Gang Member - Type 1.png', {
@@ -126,6 +121,13 @@
           margin: 1,
           spacing: 1
         });
+        // Boss spritesheet (Moose)
+        this.load.spritesheet('boss', '../assets/sprites/NES - River City Ransom _ Street Gangs - Enemies %26 Bosses - Moose.png', {
+          frameWidth: 16,
+          frameHeight: 32,
+          margin: 1,
+          spacing: 1
+        });
         
         // Load background
         this.load.image('downtown', '../assets/backgrounds/NES - River City Ransom _ Street Gangs - Backgrounds - Downtown.png');
@@ -139,36 +141,50 @@
       create() {
   console.log('Creating authentic Baden City Ransom...');
         
-  // Add background – we'll create a CROPPED canvas texture so it works in both Canvas and WebGL
-  const srcTex = this.textures.get('downtown');
-  const srcImg = srcTex.getSourceImage();
-  const bgWidth = srcTex.source[0].width;
-  const bgHeight = srcTex.source[0].height;
-        
-  // Crop to keep the actual play area: trim off the sky and bottom credits.
-  // This slice contains the buildings/grass/fence/road.
-  const CROP_TOP_PCT = 0.72;     // where the playfield starts
-  const CROP_BOTTOM_PCT = 0.982; // just before the purple credit strip
-  const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
-  const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
-  this._bgNaturalW = bgWidth;
-  this._bgCropH = cropH;
+  // Add background – create CROPPED canvas texture with a safe fallback
+  let useKey = 'downtown';
+  try {
+    const srcTex = this.textures.get('downtown');
+    const srcImg = srcTex?.getSourceImage();
+    const bgWidth = srcTex?.source?.[0]?.width;
+    const bgHeight = srcTex?.source?.[0]?.height;
+    if (srcImg && bgWidth && bgHeight) {
+      // Crop to keep the actual play area: trim off the sky and bottom credits.
+      const CROP_TOP_PCT = 0.72;     // where the playfield starts
+      const CROP_BOTTOM_PCT = 0.982; // just before the purple credit strip
+      const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
+      const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
+      this._bgNaturalW = bgWidth;
+      this._bgCropH = cropH > 0 ? cropH : bgHeight; // guard
 
-  // Create a canvas texture with only the cropped slice
-  const playKey = 'downtown_play';
-  if (this.textures.exists(playKey)) this.textures.remove(playKey);
-  const playTex = this.textures.createCanvas(playKey, bgWidth, cropH);
-  const ctx = playTex.getContext();
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(srcImg, 0, cropY, bgWidth, cropH, 0, 0, bgWidth, cropH);
-  playTex.refresh();
+      const playKey = 'downtown_play';
+      if (this.textures.exists(playKey)) this.textures.remove(playKey);
+      const playTex = this.textures.createCanvas(playKey, bgWidth, this._bgCropH);
+      const ctx = playTex.getContext();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(srcImg, 0, cropY, bgWidth, this._bgCropH, 0, 0, bgWidth, this._bgCropH);
+      playTex.refresh();
+      useKey = playKey;
+    } else {
+      // Fallback to raw image if something’s off
+      const raw = this.textures.get('downtown');
+      this._bgNaturalW = raw?.source?.[0]?.width || 800;
+      this._bgCropH = raw?.source?.[0]?.height || 480;
+    }
+  } catch (e) {
+    // Fallback to raw image on any unexpected error
+    const raw = this.textures.get('downtown');
+    this._bgNaturalW = raw?.source?.[0]?.width || 800;
+    this._bgCropH = raw?.source?.[0]?.height || 480;
+    useKey = 'downtown';
+  }
 
-  // Use the cropped canvas texture for the background
-  this.bg = this.add.image(0, 0, playKey).setOrigin(0, 0);
+  // Use whichever background key we ended up with
+  this.bg = this.add.image(0, 0, useKey).setOrigin(0, 0);
 
   // Scale to fill the canvas height (80vh) and center horizontally
-  const cw = this.scale.width;
-  const ch = this.scale.height;
+  const cw = this.scale.width || this.scale.gameSize?.width || this.sys.game.config.width || 800;
+  const ch = this.scale.height || this.scale.gameSize?.height || this.sys.game.config.height || 480;
   const scale = ch / this._bgCropH;
   this.bg.setScale(scale);
   const displayW = this._bgNaturalW * scale;
@@ -176,7 +192,7 @@
   this.bg.y = 0;
   this._parallaxX = 0;
         
-  console.log(`Background: ${bgWidth}x${bgHeight}, cropY=${cropY}, cropH=${cropH}`);
+  // console log for debugging is noisy on some hosts; keep quiet in prod
         
   // Player scale relative to background so pixels match
   const pixelScale = this.bg.scaleX;
@@ -188,10 +204,6 @@
     this.alex.setScale(playerScale);
         this.alex.health = 100;
         this.alex.money = 26.50; // Match reference format
-        
-        // Create Ryan (Player 2)
-  this.ryan = this.add.sprite(260, ch - 18, 'ryan', 0).setOrigin(0.5, 1);
-    this.ryan.setScale(playerScale);
         
         // Create enemy gang members
         this.enemies = [];
@@ -207,6 +219,12 @@
             this.enemies.push(enemy);
           }
         }
+  // Create Boss (Moose)
+  this.boss = this.add.sprite(700, ch - 18, 'boss', 0).setOrigin(0.5, 1);
+  this.boss.setScale(playerScale);
+  this.boss.health = 120;
+  this.boss.type = 'boss';
+  this.boss.aiTimer = 0;
         
         // Create Alex animations - basic walk/idle using first few frames
         this.anims.create({
@@ -219,7 +237,7 @@
         this.anims.create({
           key: 'alex-walk',
           frames: [{ key: 'alex', frame: 0 }, { key: 'alex', frame: 1 }],
-          frameRate: 8,
+          frameRate: 6, // a tad slower
           repeat: -1
         });
         
@@ -239,7 +257,7 @@
         
         // Create enemy animations for each type - simplified
     const enemyAnimTypes = ['enemy1', 'enemy2', 'enemy3'];
-        enemyAnimTypes.forEach(enemyType => {
+  enemyAnimTypes.forEach(enemyType => {
           if (this.textures.exists(enemyType)) {
             this.anims.create({
               key: `${enemyType}-idle`,
@@ -256,13 +274,16 @@
             });
           }
         });
+  // Boss animations
+  this.anims.create({ key: 'boss-idle', frames: [{ key: 'boss', frame: 0 }], frameRate: 1, repeat: 0 });
+  this.anims.create({ key: 'boss-walk', frames: [{ key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 6, repeat: -1 });
         
         // Start animations
-        this.alex.play('alex-idle');
-        this.ryan.play('alex-idle');
+  this.alex.play('alex-idle');
         this.enemies.forEach(enemy => {
           enemy.play(`${enemy.type}-idle`);
         });
+  this.boss.play('boss-idle');
         
         // Input setup
         this.cursors = this.input.keyboard.createCursorKeys();
@@ -277,15 +298,16 @@
   this.alexBaseY = this.baseYMax;
   this.alexJumpZ = 0; // negative while rising
   this.alexVy = 0;
-  this.GRAVITY = 0.55;
-  this.JUMP_VELOCITY = -9.5;
+  this.GRAVITY = 0.50; // slightly lower for longer airtime
+  this.JUMP_VELOCITY = -12.5; // higher jump
   this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
         
   console.log('Baden City Ransom scene ready. Background cropped to road.');
         
         // Ensure background continues to fit if the canvas size changes
         this.scale.on('resize', (gameSize) => {
-          const w = gameSize.width, h = gameSize.height;
+          const w = gameSize?.width || this.scale.width || this.scale.gameSize?.width || 800;
+          const h = gameSize?.height || this.scale.height || this.scale.gameSize?.height || 480;
           const scale = h / this._bgCropH;
           this.bg.setScale(scale);
           const displayW = this._bgNaturalW * scale;
@@ -303,8 +325,8 @@
           this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
           if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
           this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
-          this.ryan.setScale(playerScale); if (this.ryan.y > groundY) this.ryan.y = groundY;
           this.enemies.forEach(e=>{ e.setScale(playerScale); if (e.y > groundY) e.y = groundY; });
+          if (this.boss) { this.boss.setScale(playerScale); if (this.boss.y > groundY) this.boss.y = groundY; }
         });
         // Play authentic street music for this outdoor level
         this.sound.stopAll();
@@ -373,30 +395,53 @@
         }
         
         // Combat
-        if (Phaser.Input.Keyboard.JustDown(this.keys.A) && !this.isAttacking) {
+        const tryAttack = (kind) => {
+          if (this.isAttacking) return;
           this.isAttacking = true;
-          this.alex.play('alex-punch');
-          this.alex.once('animationcomplete', () => {
-            this.isAttacking = false;
-          });
-        }
-        
-        if (Phaser.Input.Keyboard.JustDown(this.keys.S) && !this.isAttacking) {
-          this.isAttacking = true;
-          this.alex.play('alex-kick');
-          this.alex.once('animationcomplete', () => {
-            this.isAttacking = false;
-          });
-        }
+          this.alex.play(kind === 'kick' ? 'alex-kick' : 'alex-punch');
+          // Build a simple hitbox in front of Alex once per press
+          const reach = 22;
+          const w = 16, h = 18;
+          const ox = this.alex.flipX ? -reach : reach;
+          const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h, w, h);
+
+          const applyHit = (target, dmg, knock=6) => {
+            if (!target || !target.active) return;
+            const tb = target.getBounds();
+            if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, tb)) {
+              target.health = Math.max(0, (target.health||1) - dmg);
+              target.setTintFill(0xff0000);
+              this.time.delayedCall(80, () => target.clearTint());
+              // simple knockback
+              target.x += this.alex.flipX ? -knock : knock;
+              if (target.health === 0 && !target._defeated) {
+                target._defeated = true; target.play(`${target.type||'boss'}-idle`);
+                this.tweens.add({ targets: target, alpha: 0, duration: 400, onComplete: () => target.destroy() });
+                if (target === this.boss) this.showMessage('Boss defeated!');
+              }
+            }
+          };
+
+          // Damage numbers
+          const dmg = kind === 'kick' ? 15 : 10;
+          this.enemies.forEach(e => applyHit(e, dmg, 5));
+          if (this.boss) applyHit(this.boss, dmg, 8);
+
+          this.alex.once('animationcomplete', () => { this.isAttacking = false; });
+        };
+
+        if (Phaser.Input.Keyboard.JustDown(this.keys.A)) { tryAttack('punch'); }
+        if (Phaser.Input.Keyboard.JustDown(this.keys.S)) { tryAttack('kick'); }
         
         // Keep Alex on screen (canvas-only area; road fills entire height)
   this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, this.scale.width - 50);
 
   // Clamp parallax so edges don't leave gaps
   const displayWNow = this._bgNaturalW * this.bg.scaleX;
-  const maxOffset = Math.max(0, Math.floor((displayWNow - this.scale.width) / 2));
+  const viewW = this.scale.width || this.scale.gameSize?.width || 800;
+  const maxOffset = Math.max(0, Math.floor((displayWNow - viewW) / 2));
   this._parallaxX = Phaser.Math.Clamp(this._parallaxX, -maxOffset, maxOffset);
-  const centerX = Math.floor((this.scale.width - displayWNow) / 2);
+  const centerX = Math.floor((viewW - displayWNow) / 2);
   this.bg.x = centerX + this._parallaxX;
         
   // ... (resize listener moved to create())
@@ -426,6 +471,18 @@
             enemy.aiTimer = time + 1000; // Update AI every second
           }
         });
+        // Boss AI – steady chase
+        if (this.boss && !this.boss._defeated && time > this.boss.aiTimer) {
+          const speed = 1.2;
+          if (Math.abs(this.boss.x - this.alex.x) > 10) {
+            if (this.boss.x > this.alex.x) { this.boss.x -= speed; this.boss.setFlipX(true); }
+            else { this.boss.x += speed; this.boss.setFlipX(false); }
+            if (this.boss.anims.currentAnim?.key !== 'boss-walk') this.boss.play('boss-walk');
+          } else {
+            if (this.boss.anims.currentAnim?.key !== 'boss-idle') this.boss.play('boss-idle');
+          }
+          this.boss.aiTimer = time + 200; // more responsive
+        }
         
         // Update HUD elements
         document.getElementById('health').innerHTML = this.alex.health;
