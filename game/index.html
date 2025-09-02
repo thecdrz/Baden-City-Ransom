@@ -1217,7 +1217,8 @@
     fontFamily: 'monospace', fontSize: '12px', color: '#ffffff' 
   }).setDepth(10000).setScrollFactor(0);
   
-  const updateDebug = () => {
+  // Make debug updater available to other methods via the scene instance
+  this.updateDebug = () => {
     const s = [
       `cw:${this.scale.width} ch:${this.scale.height}`,
       `bgKey:${useKey} bgScale:${this.bg.scaleX.toFixed(2)}`,
@@ -1256,21 +1257,21 @@
     
     this.healthText.setText(`Health: ${Math.ceil(this.alex.health || 0)}`);
   };
-  updateDebug();
+  this.updateDebug();
         
         // Ensure background continues to fit if the canvas size changes
         this.scale.on('resize', (gameSize) => {
           const w = gameSize?.width || this.scale.width || this.scale.gameSize?.width || canvasWrap?.clientWidth || 800;
           const h = gameSize?.height || this.scale.height || this.scale.gameSize?.height || canvasWrap?.clientHeight || 480;
           applyResize(w, h);
-          updateDebug();
+          this.updateDebug();
         });
         // Apply a couple of staged resizes to settle layout after the Title height swap
         const s0 = getSize();
         applyResize(s0.cw, s0.ch);
         try {
-          this.time.delayedCall(16, () => { const s = getSize(); applyResize(s.cw, s.ch); updateDebug(); });
-          this.time.delayedCall(80, () => { const s = getSize(); applyResize(s.cw, s.ch); updateDebug(); });
+          this.time.delayedCall(16, () => { const s = getSize(); applyResize(s.cw, s.ch); this.updateDebug(); });
+          this.time.delayedCall(80, () => { const s = getSize(); applyResize(s.cw, s.ch); this.updateDebug(); });
         } catch(_) {}
   // Play authentic street music for this outdoor level
   step('music');
@@ -1852,8 +1853,8 @@
           this.boss.updateHealthBar();
         }
         
-        // Update HUD elements and debug display
-        updateDebug();
+  // Update HUD elements and debug display
+  if (this.updateDebug) this.updateDebug();
         document.getElementById('health').innerHTML = this.alex.health;
   document.getElementById('money').innerHTML = Number(this.alex.money||0).toFixed(2);
       }
