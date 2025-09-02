@@ -409,16 +409,22 @@
         }
         
         // Optional: GandalfHardcore layered character parts (compose into one sprite)
+        // Disabled by default to avoid 404s if the pack isn't present; enable with ?gh=1
         {
-          const base = `${ASSETS_BASE}/GandalfHardcore FREE Character Asset Pack/GandalfHardcore Character Asset Pack`;
-          const parts = [
-            ['gh_skin', `${base}/Character skin colors/Male Skin3.png`],
-            ['gh_pants', `${base}/Male Clothing/Blue Pants.png`],
-            ['gh_shirt', `${base}/Male Clothing/Shirt v2.png`],
-            ['gh_shoes', `${base}/Male Clothing/Shoes.png`],
-            ['gh_hair', `${base}/Male Hair/Male Hair3.png`]
-          ];
-          parts.forEach(([key, rel]) => { const src = url(rel); logAdd('image', key, src); this.load.image(key, src); });
+          const enableGH = new URLSearchParams(location.search).get('gh') === '1';
+          if (enableGH) {
+            const base = `${ASSETS_BASE}/GandalfHardcore FREE Character Asset Pack/GandalfHardcore Character Asset Pack`;
+            const parts = [
+              ['gh_skin', `${base}/Character skin colors/Male Skin3.png`],
+              ['gh_pants', `${base}/Male Clothing/Blue Pants.png`],
+              ['gh_shirt', `${base}/Male Clothing/Shirt v2.png`],
+              ['gh_shoes', `${base}/Male Clothing/Shoes.png`],
+              ['gh_hair', `${base}/Male Hair/Male Hair3.png`]
+            ];
+            parts.forEach(([key, rel]) => { const src = url(rel); logAdd('image', key, src); this.load.image(key, src); });
+          } else {
+            console.log('Skipping optional GH layered parts (add ?gh=1 to enable)');
+          }
         }
 
   // (Knight assets removed)
