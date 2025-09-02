@@ -902,16 +902,15 @@
     });
   } catch(e) { console.warn('Trimming frames failed', e); }
 
+  // Use only the base spritesheet frames for stability (avoid trimmed frame size jitter)
   const range = (k) => {
     const m = map[k]; if (!m) return [{ key: 'alex', frame: 0 }];
     const frames = [];
     for (let c=m.from; c<=m.to; c++) {
       const fIndex = idx(m.row, c);
-      const tKey = trimKeyOf(fIndex);
-      if (this.textures.exists(tKey)) frames.push({ key: tKey, frame: 0 });
-      else frames.push({ key: 'alex', frame: fIndex });
+      frames.push({ key: 'alex', frame: fIndex });
     }
-    return frames.length?frames:[{ key: 'alex', frame: 0 }];
+    return frames.length ? frames : [{ key: 'alex', frame: 0 }];
   };
   // Enhanced animation creation with smoother frame rates
   this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 2, repeat: -1 });
@@ -924,8 +923,7 @@
   // Enhanced jump animation with better transitions
   {
     const jIndex = idx(map.jump.row, map.jump.from);
-    const tKey = trimKeyOf(jIndex);
-    const jf = this.textures.exists(tKey) ? [{ key: tKey, frame: 0 }] : [{ key: 'alex', frame: jIndex }];
+    const jf = [{ key: 'alex', frame: jIndex }];
     this.anims.create({ key: 'alex-jump', frames: jf, frameRate: 8, repeat: -1 });
   }
   
