@@ -1094,11 +1094,11 @@
       }
     } catch (e) { console.warn('Boss color-key pass failed, using raw frames', e); }
 
-    const frame0 = ckFrames[0] || { key: 'boss', frame: 0 };
-    const frame1 = ckFrames[1] || frame0;
+  const frame0 = ckFrames[0] || { key: 'boss', frame: 0 };
 
-    this.anims.create({ key: 'boss-idle', frames: [frame0], frameRate: 1, repeat: -1 });
-    this.anims.create({ key: 'boss-walk', frames: [frame0, frame1], frameRate: 6, repeat: -1 });
+  this.anims.create({ key: 'boss-idle', frames: [frame0], frameRate: 1, repeat: -1 });
+  // Use a single stable frame for walk to prevent bad sheet slicing artifacts
+  this.anims.create({ key: 'boss-walk', frames: [frame0], frameRate: 1, repeat: -1 });
   } else {
     console.warn('Boss texture not loaded properly');
   }
@@ -1246,6 +1246,8 @@
               // Set proper scale to match the game world
               const enemyScale = this.bg?.scaleX || 1;
               boss.setScale(enemyScale);
+              // Snap to whole pixels to prevent tearing between rows/cols
+              boss.x = Math.round(boss.x); boss.y = Math.round(boss.y);
               
               // Make sure the boss sprite is fully visible
               boss.x = Phaser.Math.Clamp(boss.x, 40, (this.bg.displayWidth || 800) - 40);
@@ -1991,12 +1993,8 @@
               if (this.anims.exists(walkAnim)) {
                 if (b.anims?.currentAnim?.key !== walkAnim) b.play(walkAnim);
               } else {
-                // Alternate between frames 0 and 1 manually for simple walking
-                if (Math.floor(time / 150) % 2 === 0) {
-                  b.setFrame(0);
-                } else {
-                  b.setFrame(Math.min(1, b.texture.frameTotal - 1));
-                }
+                // Fallback: render a single stable frame to avoid slicing artifacts
+                b.setFrame(0);
               }
             } catch(e) {
               // If animation fails, at least ensure the frame is valid
