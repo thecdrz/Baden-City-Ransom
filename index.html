@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Baden City Ransom - AUTHENTIC</title>
+  <link rel="icon" href="data:,">
   <style>
   html, body { height: 100%; }
   body { 
@@ -103,11 +104,14 @@
     <div class="row"><label><input type="checkbox" id="devBoss"> Spawn boss near player</label></div>
   <div class="row"><label><input type="checkbox" id="devHit"> Show hitboxes</label></div>
   <div class="row"><label><input type="checkbox" id="devVerbose"> Verbose logs</label></div>
+  <div class="row"><label><input type="checkbox" id="devBossHP"> Show boss health bar</label></div>
     <div class="row"><button id="devClose">Close</button></div>
   </div>
 
   <script>
   (async function bootstrap() {
+  // Ignore benign 404 requests from devtools/.well-known probes on some hosts.
+  // No network interception here; this just documents and prevents any accidental UI surfacing.
     function loadScript(url) {
       return new Promise((resolve, reject) => {
         const s = document.createElement('script');
@@ -290,38 +294,21 @@
         
   // (Player 2 removed for now)
         
-        // Load enemies with matching dimensions
+        // Load enemies with simpler filenames to avoid 404s on special characters
         {
-          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 1.png');
+          const src = asset('sprites/enemy1_sprite.png');
           logAdd('sheet','enemy1', src);
-          this.load.spritesheet('enemy1', src, {
-          frameWidth: 16,
-          frameHeight: 32,
-          margin: 1,
-          spacing: 1
-          });
+          this.load.spritesheet('enemy1', src, { frameWidth: 16, frameHeight: 32, margin: 1, spacing: 1 });
         }
-        
         {
-          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 2.png');
+          const src = asset('sprites/enemy2_sprite.png');
           logAdd('sheet','enemy2', src);
-          this.load.spritesheet('enemy2', src, {
-          frameWidth: 16,
-          frameHeight: 32,
-          margin: 1,
-          spacing: 1
-          });
+          this.load.spritesheet('enemy2', src, { frameWidth: 16, frameHeight: 32, margin: 1, spacing: 1 });
         }
-        
         {
-          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 3.png');
+          const src = asset('sprites/enemy3_sprite.png');
           logAdd('sheet','enemy3', src);
-          this.load.spritesheet('enemy3', src, {
-          frameWidth: 16,
-          frameHeight: 32,
-          margin: 1,
-          spacing: 1
-          });
+          this.load.spritesheet('enemy3', src, { frameWidth: 16, frameHeight: 32, margin: 1, spacing: 1 });
         }
         // Boss spritesheet (use preprocessed local boss sprite to ensure availability)
         {
@@ -936,7 +923,7 @@
           p: this.input.keyboard.addKey(KC.P),
           m: this.input.keyboard.addKey(KC.M)
         };
-        // Dev flags and helpers
+  // Dev flags and helpers
         this.godMode = false;
         this.setGodMode = (on) => { this.godMode = !!on; this.showMessage(this.godMode ? 'God Mode: ON' : 'God Mode: OFF'); };
   // Hitbox debug drawing
@@ -950,6 +937,14 @@
   // Verbose logging toggle
   this.debugLogs = false;
   this.setVerboseLogs = (on) => { this.debugLogs = !!on; this.showMessage(this.debugLogs ? 'Verbose logs: ON' : 'Verbose logs: OFF'); };
+        // Boss health bar toggle and gfx
+        this.showBossHP = false;
+        this._bossHpGfx = this.add.graphics().setDepth(11000).setScrollFactor(0,0).setVisible(false);
+        this.setShowBossHP = (on) => {
+          this.showBossHP = !!on;
+          this._bossHpGfx.setVisible(this.showBossHP);
+          this.showMessage(this.showBossHP ? 'Boss HP: ON' : 'Boss HP: OFF');
+        };
     this.spawnBossNearPlayer = () => {
           try {
             // If already present, keep it and inform
@@ -1217,6 +1212,23 @@
         }
         // Compose final render Y
         this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
+        // Boss health bar render (screen-space)
+        if (this._bossHpGfx) {
+          try {
+            this._bossHpGfx.clear();
+            if (this.showBossHP && this.boss && this.boss.active && !this.boss._defeated) {
+              const w = this.scale.width || 800;
+              const x = 12, y = (this.scale.height || 480) - 28, bw = Math.max(180, Math.min(320, Math.floor(w*0.35))), bh = 12;
+              const hp = Math.max(0, Math.min(1, (this.boss.health||0) / 140));
+              this._bossHpGfx.fillStyle(0x000000, 0.6).fillRect(x-2, y-2, bw+4, bh+4);
+              this._bossHpGfx.fillStyle(0x552222, 1).fillRect(x, y, bw, bh);
+              const color = hp > 0.5 ? 0x00dd66 : (hp > 0.25 ? 0xffcc33 : 0xff3344);
+              this._bossHpGfx.fillStyle(color, 1).fillRect(x, y, Math.floor(bw*hp), bh);
+              // Label
+              this._bossHpGfx.lineStyle(1, 0xffffff, 0.9).strokeRect(x, y, bw, bh);
+            }
+          } catch(_) {}
+        }
         // Landing detect: transitioning from air to ground this frame
         const nowOnGround = (this.alexJumpZ === 0 && this.alexVy === 0);
         if (wasAir && nowOnGround) {
@@ -1615,6 +1627,7 @@
   const boss = document.getElementById('devBoss');
   const hitb = document.getElementById('devHit');
   const vrb = document.getElementById('devVerbose');
+  const bossHp = document.getElementById('devBossHP');
       if (!btn || !panel) return;
       const gs = () => (window._BCR && window._BCR.gs) ? window._BCR.gs() : null;
       btn.addEventListener('click', () => {
@@ -1629,6 +1642,7 @@
   god && god.addEventListener('change', () => { const s = gs(); if (s && s.setGodMode) s.setGodMode(god.checked); });
   hitb && hitb.addEventListener('change', () => { const s = gs(); if (s && s.setHitboxDebug) s.setHitboxDebug(hitb.checked); });
   vrb && vrb.addEventListener('change', () => { const s = gs(); if (s && s.setVerboseLogs) s.setVerboseLogs(vrb.checked); });
+  bossHp && bossHp.addEventListener('change', () => { const s = gs(); if (s && s.setShowBossHP) s.setShowBossHP(bossHp.checked); });
   boss && boss.addEventListener('change', () => { const s = gs(); if (!s) return; if (boss.checked) { s.spawnBossNearPlayer && s.spawnBossNearPlayer(); s.showMessage && s.showMessage('Spawn request sent.'); } else { s.despawnBoss && s.despawnBoss(); s.showMessage && s.showMessage('Despawn request sent.'); } });
       // Initialize boss checkbox if spawned by default
       setTimeout(() => { const s = gs(); if (s && s.boss) { if (boss) boss.checked = true; } }, 200);
