@@ -984,7 +984,24 @@
             return boss;
           } catch(_) { return null; }
         };
-        this.despawnBoss = () => { try { if (this.boss) { this.boss.destroy(); this.boss = null; this.showMessage('Boss despawned.'); } } catch(_) {} };
+        this.despawnBoss = () => {
+          try {
+            if (this.boss) {
+              this.boss.destroy();
+              this.boss = null;
+              // Auto-hide boss HP bar when boss is gone
+              try { this.setShowBossHP && this.setShowBossHP(false); } catch(_) {}
+              // Reflect in Dev UI if present
+              try {
+                const bossCb = document.getElementById('devBoss');
+                if (bossCb) bossCb.checked = false;
+                const hpCb = document.getElementById('devBossHP');
+                if (hpCb) hpCb.checked = false;
+              } catch(_) {}
+              this.showMessage('Boss despawned.');
+            }
+          } catch(_) {}
+        };
         
   // Game state
   this.isMoving = false;
@@ -1293,7 +1310,11 @@
                 if (target.health === 0 && !target._defeated) {
                   target._defeated = true; try { target.play(`${target.type||'boss'}-idle`); } catch(_) {}
                   try { this.tweens.add({ targets: target, alpha: 0, duration: 400, onComplete: () => target.destroy() }); } catch(_) {}
-                  if (target === this.boss) this.showMessage && this.showMessage((this.bossName||'Boss') + ' defeated!');
+                  if (target === this.boss) {
+                    try { this.setShowBossHP && this.setShowBossHP(false); } catch(_) {}
+                    try { const hpCb = document.getElementById('devBossHP'); if (hpCb) hpCb.checked = false; } catch(_) {}
+                    this.showMessage && this.showMessage((this.bossName||'Boss') + ' defeated!');
+                  }
                 }
                 aw.hit.add(target);
                 return true;
@@ -1363,9 +1384,13 @@
       // brief gate to let hits resolve without separation canceling them
       this._recentHitUntil = (this.time.now||0) + 140;
               if (target.health === 0 && !target._defeated) {
-                target._defeated = true; target.play(`${target.type||'boss'}-idle`);
-                this.tweens.add({ targets: target, alpha: 0, duration: 400, onComplete: () => target.destroy() });
-                  if (target === this.boss) this.showMessage((this.bossName||'Boss') + ' defeated!');
+                target._defeated = true; try { target.play(`${target.type||'boss'}-idle`); } catch(_) {}
+                try { this.tweens.add({ targets: target, alpha: 0, duration: 400, onComplete: () => target.destroy() }); } catch(_) {}
+                if (target === this.boss) {
+                  try { this.setShowBossHP && this.setShowBossHP(false); } catch(_) {}
+                  try { const hpCb = document.getElementById('devBossHP'); if (hpCb) hpCb.checked = false; } catch(_) {}
+                  this.showMessage && this.showMessage((this.bossName||'Boss') + ' defeated!');
+                }
               }
     } else {
   this.debugLogs && console.log(`Player hit MISSED: rect=${hitOk}, dx=${dx.toFixed(1)} > ${(reach + w*0.9).toFixed(1)} OR dy=${dy.toFixed(1)} > 28`);

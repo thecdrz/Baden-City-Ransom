@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Baden City Ransom — How to Play</title>
+  <style>
+    :root { --bg:#0b0d12; --fg:#e7f1ff; --accent:#ffd166; --muted:#9aa3ad; }
+    html, body { height: 100%; }
+    body { margin: 0; font-family: Consolas, Monaco, 'Courier New', monospace; background: var(--bg); color: var(--fg); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { padding: 28px 20px 8px; text-align: center; }
+    h1 { margin: 0; font-size: 28px; }
+    main { max-width: 880px; margin: 0 auto; padding: 10px 20px 40px; }
+    .kbd { display:inline-block; padding:0 6px; border:1px solid #3a465a; border-bottom-width:2px; border-radius:4px; background:#0f1420; color:#cfe0ff; font-size:12px; }
+    .card { background: #121722; border: 1px solid #1e2633; border-radius: 10px; overflow: hidden; margin: 14px 0; }
+    .card h2 { margin: 0; padding: 14px 16px; font-size: 18px; background:#0f1420; border-bottom:1px solid #1e2633; }
+    .card .body { padding: 12px 16px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>How to Play</h1>
+    <p>Quick guide to controls, tips, and dev tools.</p>
+  </header>
+  <main>
+    <div class="card">
+      <h2>Controls</h2>
+      <div class="body">
+        <ul>
+          <li>Move: Arrow Keys</li>
+          <li>Punch: <span class="kbd">A</span>, Kick: <span class="kbd">S</span>, Jump: <span class="kbd">D</span></li>
+          <li>Pause/Resume: <span class="kbd">ESC</span> / <span class="kbd">P</span>, Mute: <span class="kbd">M</span></li>
+          <li>Run: Double-tap Left/Right then hold the direction</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Boss Tips</h2>
+      <div class="body">
+        <ul>
+          <li>Line up lanes: keep your Y close to the boss (within a small vertical band).</li>
+          <li>Attack window stays active briefly—step into range during the swing to land hits.</li>
+          <li>Use kicks for more damage; punches are quicker.</li>
+          <li>Watch the HP bar (enabled automatically when the boss spawns).</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Dev Tools</h2>
+      <div class="body">
+        <ul>
+          <li>Dev button (bottom-right) toggles test options.</li>
+          <li>Hitboxes: visualize player/boss rectangles (yellow=player attack, magenta=boss body, purple=boss attack).</li>
+          <li>Spawn Boss: quickly start a fight near the player.</li>
+        </ul>
+      </div>
+    </div>
+
+    <p><a href="../game/">Play the Game</a> · <a href="../docs/">Site Home</a></p>
+  </main>
+</body>
+</html>
