@@ -391,6 +391,7 @@
           );
           
           // Process transparency on this frame
+          // Process transparency on this frame
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imageData.data;
           let transparentPixels = 0;
@@ -405,6 +406,11 @@
               }
               // Pure magenta: #FF00FF  
               else if (r > 240 && g < 20 && b > 240) {
+                data[i+3] = 0;
+                transparentPixels++;
+              }
+              // Vivid purple background (darker magenta variants)
+              else if (g < 40 && r > 120 && b > 120 && Math.abs(r - b) < 60) {
                 data[i+3] = 0;
                 transparentPixels++;
               }
@@ -765,18 +771,19 @@
       ctx.clearRect(0,0,tmp.width,tmp.height);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
-      // Convert magenta backgrounds to transparent (simplified and optimized)
+  // Convert magenta/purple backgrounds to transparent (simplified and optimized)
       const img = ctx.getImageData(0,0,tmp.width,tmp.height);
       const data = img.data;
       for (let p=0; p<data.length; p+=4) {
         const r=data[p], g=data[p+1], b=data[p+2], a=data[p+3];
         if (a > 0) {
-          // Magenta color key detection (most common in NES sprites)
-          if ((r>200 && g<110 && b>200) || (r>240 && g<20 && b>240)) {
+      // Magenta/purple color key detection (most common in NES sprites)
+      if ((r>200 && g<110 && b>200) || (r>240 && g<20 && b>240) || (g < 40 && r > 120 && b > 120 && Math.abs(r-b) < 60)) {
             data[p+3] = 0; // Make transparent
           }
         }
       }
+  const padBottom = 8; // more bottom padding to keep Alex's feet visible
       ctx.putImageData(img, 0, 0);
       let minX=tmp.width, minY=tmp.height, maxX=-1, maxY=-1;
       for (let y=0;y<tmp.height;y++) {
@@ -788,9 +795,8 @@
       if (maxX<minX || maxY<minY) { // fully empty? create tiny transparent
         minX=0; minY=0; maxX=1; maxY=1;
       }
-      const w = Math.max(1, maxX-minX+1);
-      const h = Math.max(1, maxY-minY+1);
-  const padBottom = 3; // keep feet safe
+  const w = Math.max(1, maxX-minX+1);
+  const h = Math.max(1, maxY-minY+1);
       // Create a canvas texture per frame
       const key = trimKeyOf(fIndex);
       if (this.textures.exists(key)) this.textures.remove(key);
@@ -888,8 +894,8 @@
       }
       if (maxX<minX || maxY<minY) { minX=0; minY=0; maxX=1; maxY=1; }
       const w = Math.max(1, maxX-minX+1), h = Math.max(1, maxY-minY+1);
-      // Add a little transparent padding at the bottom so feet never appear clipped
-  const padBottom = 3;
+    // Add a little transparent padding at the bottom so feet never appear clipped
+  const padBottom = 8; // keep boss feet visible
       const ct = this.textures.createCanvas(tKey, w, h + padBottom);
       const c2 = ct.getContext(); c2.imageSmoothingEnabled = false;
       c2.clearRect(0,0,w,h+padBottom);
@@ -1195,6 +1201,7 @@
         
         // Combat
   const tryAttack = (kind) => {
+  const tryAttack = (kind) => {
           if (this.isAttacking) return;
           this.isAttacking = true;
           this.alex.play(kind === 'kick' ? 'alex-kick' : 'alex-punch');
@@ -1211,20 +1218,26 @@
           // Play a short punch/kick SFX
           this.playSfx(['sfx_punch1','sfx_punch2'], 0.5, kind==='kick' ? 0.95 : 1.02);
           // Build a simple hitbox in front of Alex once per press
-          const reach = (kind === 'kick') ? 26 : 22;
-          const w = (kind === 'kick') ? 22 : 18;
-          const h = 20;
+          // Build a simple hitbox in front of Alex once per press (slightly larger for reliability)
+          const reach = (kind === 'kick') ? 32 : 26;
+          const w = (kind === 'kick') ? 24 : 20;
+          const h = 22;
           const ox = this.alex.flipX ? -reach : reach;
           // Place the hitbox around chest height (a bit above the feet)
           const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h - 6, w, h);
 
   const applyHit = (target, dmg, knock=10) => {
+  const applyHit = (target, dmg, knock=10) => {
             if (!target || !target.active) return;
-    // Distance/lane hit check - use actual sprite positions for consistency
+    // Primary: rectangle intersection against target bounds
+    const tb = (typeof target.getBounds === 'function') ? target.getBounds() : null;
+    const hitOk = tb ? Phaser.Geom.Intersects.RectangleToRectangle(hitRect, tb) : false;
+    // Fallback: distance/lane check using centers
     const dx = Math.abs((target.x||0) - (this.alex.x + (this.alex.flipX ? -reach : reach)));
     const dy = Math.abs((this.alex.y||0) - (target.y||0));
-    console.log(`Player hit check: dx=${dx.toFixed(1)}, dy=${dy.toFixed(1)}, reach+w*0.6=${(reach + w*0.6).toFixed(1)}`);
-    if (dx <= (reach + w*0.6) && dy <= 18) {
+    const nearOk = (dx <= (reach + w*0.6) && dy <= 20);
+    console.log(`Player hit check: rect=${hitOk}, dx=${dx.toFixed(1)}, dy=${dy.toFixed(1)}, thresh=${(reach + w*0.6).toFixed(1)}`);
+    if (hitOk || nearOk) {
       console.log(`PLAYER HIT APPLIED! Target health: ${target.health} -> ${Math.max(0, (target.health||1) - dmg)}`);
               target.health = Math.max(0, (target.health||1) - dmg);
               target.setTintFill(0xff0000);
@@ -1240,7 +1253,7 @@
                   if (target === this.boss) this.showMessage((this.bossName||'Boss') + ' defeated!');
               }
     } else {
-      console.log(`Player hit MISSED: dx=${dx.toFixed(1)} > ${(reach + w*0.6).toFixed(1)} OR dy=${dy.toFixed(1)} > 18`);
+      console.log(`Player hit MISSED: rect=${hitOk}, dx=${dx.toFixed(1)} > ${(reach + w*0.6).toFixed(1)} OR dy=${dy.toFixed(1)} > 20`);
     }
           };
 
