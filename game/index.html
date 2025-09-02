@@ -1260,32 +1260,16 @@
               boss.attackWidth = 24;
               boss.attackHeight = 20;
               
-              // Create and play animations
-              const idleKey = `${textureKey}-idle`;
-              const walkKey = `${textureKey}-walk`;
-              
-              if (!this.anims.exists(idleKey)) {
-                this.anims.create({
-                  key: idleKey,
-                  frames: [{ key: textureKey, frame: 0 }],
-                  frameRate: 1,
-                  repeat: -1
-                });
+              // Prefer global cleaned animations that use color-keyed frames
+              if (this.anims.exists('boss-idle')) {
+                boss.play('boss-idle');
+              } else {
+                const idleKey = `${textureKey}-idle`;
+                if (!this.anims.exists(idleKey)) {
+                  this.anims.create({ key: idleKey, frames: [{ key: textureKey, frame: 0 }], frameRate: 1, repeat: -1 });
+                }
+                boss.play(idleKey);
               }
-              
-              if (!this.anims.exists(walkKey)) {
-                this.anims.create({
-                  key: walkKey,
-                  frames: [
-                    { key: textureKey, frame: 0 },
-                    { key: textureKey, frame: 0 } // Use same frame as fallback
-                  ],
-                  frameRate: 6,
-                  repeat: -1
-                });
-              }
-              
-              boss.play(idleKey);
               
               this.bossName = this.bossName || 'Miller';
               this.boss = boss;
@@ -2001,11 +1985,11 @@
             // Fix: Use a simplified approach to animation
             // Just update the frame directly if animation fails
             try {
-              const walkAnim = `${b.type}-walk`;
+              // Prefer cleaned boss animation if present
+              const cleanedWalk = 'boss-walk';
+              const walkAnim = this.anims.exists(cleanedWalk) ? cleanedWalk : `${b.type}-walk`;
               if (this.anims.exists(walkAnim)) {
-                if (b.anims?.currentAnim?.key !== walkAnim) {
-                  b.play(walkAnim);
-                }
+                if (b.anims?.currentAnim?.key !== walkAnim) b.play(walkAnim);
               } else {
                 // Alternate between frames 0 and 1 manually for simple walking
                 if (Math.floor(time / 150) % 2 === 0) {
@@ -2022,11 +2006,10 @@
           } else {
             // When idle, just use frame 0
             try {
-              const idleAnim = `${b.type}-idle`;
+              const cleanedIdle = 'boss-idle';
+              const idleAnim = this.anims.exists(cleanedIdle) ? cleanedIdle : `${b.type}-idle`;
               if (this.anims.exists(idleAnim)) {
-                if (b.anims?.currentAnim?.key !== idleAnim) {
-                  b.play(idleAnim);
-                }
+                if (b.anims?.currentAnim?.key !== idleAnim) b.play(idleAnim);
               } else {
                 b.setFrame(0);
               }
