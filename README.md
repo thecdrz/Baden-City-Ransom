@@ -2,9 +2,31 @@
 
 A faithful recreation of the classic NES game River City Ransom using the original sprite assets and Phaser 3.
 
+**Latest Version: v2.1.0** - Major Combat System Overhaul & UI Improvements
+
 ## Disclaimer
 
 This is a personal, non-commercial fan project made for educational and nostalgic purposes. No copyright infringement is intended. All trademarks and copyrights are the property of their respective owners. If you are a rights holder and would like content removed, please open an issue or contact me.
+
+## 🎮 Recent Updates (v2.1.0)
+
+### Combat System Overhaul
+- **Fixed Hit Detection**: Complete rewrite of combat mechanics with reliable distance-based hit detection
+- **Debug Console**: Added comprehensive logging for troubleshooting combat issues  
+- **Separation Logic**: Characters no longer get stuck overlapping during fights
+- **Enhanced Knockback**: Improved invulnerability frames and knockback mechanics
+- **Boss Combat**: Fixed Miller boss interactions with proper hit zones
+
+### Visual & UI Improvements  
+- **Larger Title Screen**: Increased size by 15% for better visibility
+- **Sprite Enhancement**: Added magenta color-key transparency processing
+- **Better Boss Sprites**: Enhanced rendering with feet padding to prevent clipping
+- **Robust Fallbacks**: Improved handling of missing textures and assets
+
+### Developer Experience
+- **Enhanced Debugging**: Multiple test files for sprite and combat testing
+- **Better Error Handling**: Comprehensive error catching and reporting
+- **Improved Logging**: Detailed console output for development and troubleshooting
 
 ## 🎮 How to Play
 

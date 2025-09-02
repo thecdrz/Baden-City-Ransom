@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Release Notes - Baden City Ransom v2.1.0</title>
+  <style>
+    :root { --bg:#0b0d12; --fg:#e7f1ff; --accent:#ffd166; --muted:#9aa3ad; --success:#4caf50; --warning:#ff9800; }
+    html, body { height: 100%; }
+    body { margin: 0; font-family: Consolas, Monaco, 'Courier New', monospace; background: var(--bg); color: var(--fg); line-height: 1.6; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { padding: 28px 20px 8px; text-align: center; border-bottom: 2px solid #1e2633; }
+    h1 { margin: 0; font-size: 28px; }
+    h2 { color: var(--accent); margin-top: 32px; margin-bottom: 16px; }
+    h3 { color: var(--success); margin-top: 24px; margin-bottom: 12px; }
+    h4 { color: var(--warning); margin-top: 20px; margin-bottom: 8px; }
+    p { margin: 8px 0; color: var(--muted); }
+    main { max-width: 980px; margin: 0 auto; padding: 20px; }
+    ul { padding-left: 24px; }
+    li { margin: 6px 0; }
+    .version-badge { 
+      display: inline-block; 
+      padding: 4px 12px; 
+      background: var(--success); 
+      color: var(--bg); 
+      border-radius: 12px; 
+      font-size: 14px; 
+      font-weight: bold; 
+      margin-left: 12px;
+    }
+    .date { color: var(--muted); font-size: 14px; }
+    .highlight { background: #1a4b3f; padding: 16px; border-left: 4px solid var(--success); border-radius: 4px; margin: 16px 0; }
+    .warning { background: #4d3319; padding: 16px; border-left: 4px solid var(--warning); border-radius: 4px; margin: 16px 0; }
+    .code { background: #121722; padding: 2px 6px; border-radius: 3px; font-family: monospace; color: var(--accent); }
+    .btn { 
+      display: inline-block; 
+      padding: 10px 20px; 
+      background: #1e2633; 
+      color: var(--fg); 
+      border-radius: 8px; 
+      text-align: center;
+      margin: 8px 4px;
+    }
+    .btn:hover { background: #263041; }
+    .btn-primary { background: var(--accent); color: var(--bg); }
+    .btn-primary:hover { background: #e6c05f; }
+    .footer { text-align: center; padding: 40px 20px; border-top: 1px solid #1e2633; margin-top: 40px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Baden City Ransom</h1>
+    <span class="version-badge">v2.1.0</span>
+    <p class="date">Released September 1, 2025</p>
+    <p>Major Combat System Overhaul & UI Improvements</p>
+  </header>
+
+  <main>
+    <div class="highlight">
+      <h3>🎉 What's New</h3>
+      <p>This release represents a major overhaul of the combat system, fixing critical issues where players couldn't damage each other and implementing comprehensive debugging tools for ongoing development.</p>
+    </div>
+
+    <h2>🎮 Combat System Overhaul</h2>
+    
+    <h3>Major Fixes</h3>
+    <ul>
+      <li><strong>Fixed Hit Detection:</strong> Complete rewrite of combat mechanics using distance-based calculations instead of unreliable rectangle intersection</li>
+      <li><strong>Player vs Boss Combat:</strong> Miller boss now properly damages the player and takes damage from player attacks</li>
+      <li><strong>Character Separation:</strong> Added intelligent separation logic to prevent characters from getting stuck overlapping during fights</li>
+      <li><strong>Enhanced Knockback:</strong> Improved invulnerability frames (extended to 700ms) and knockback mechanics for smoother combat flow</li>
+    </ul>
+
+    <h3>Debug & Development</h3>
+    <ul>
+      <li><strong>Console Logging:</strong> Added comprehensive hit detection logging with distance calculations</li>
+      <li><strong>Hit Confirmation:</strong> Visual and audio feedback for successful hits</li>
+      <li><strong>Debug Infrastructure:</strong> Enhanced development tools for troubleshooting combat issues</li>
+    </ul>
+
+    <h2>🎨 Visual & UI Improvements</h2>
+
+    <h3>Enhanced Graphics</h3>
+    <ul>
+      <li><strong>Larger Title Screen:</strong> Increased size by 15% (scale factor 0.99x → 1.14x) for better visibility</li>
+      <li><strong>Sprite Processing:</strong> Added magenta color-key transparency conversion for cleaner sprite rendering</li>
+      <li><strong>Boss Sprite Enhancement:</strong> Added 3px bottom padding to prevent feet clipping and improve visual quality</li>
+      <li><strong>Better Fallbacks:</strong> Improved handling of missing textures with robust placeholder systems</li>
+    </ul>
+
+    <h2>🐛 Bug Fixes & Stability</h2>
+
+    <h3>Stability Improvements</h3>
+    <ul>
+      <li><strong>Defensive Coding:</strong> Added comprehensive null checks and error handling throughout the codebase</li>
+      <li><strong>Scene Initialization:</strong> Enhanced scene startup with proper verification and fallback systems</li>
+      <li><strong>Pause System:</strong> Fixed null reference errors in pause key handling</li>
+      <li><strong>Animation System:</strong> Improved resilience against missing animation frames</li>
+    </ul>
+
+    <h3>Error Handling</h3>
+    <ul>
+      <li><strong>Enhanced Error Reporting:</strong> Detailed error messages with stack traces for better debugging</li>
+      <li><strong>Graceful Degradation:</strong> Game continues functioning even when some assets fail to load</li>
+      <li><strong>Asset Loading:</strong> Better error handling for texture loading failures</li>
+    </ul>
+
+    <h2>🧪 Development & Testing</h2>
+
+    <h3>New Test Files</h3>
+    <ul>
+      <li><span class="code">test_simple.html</span> - Basic Phaser functionality test</li>
+      <li><span class="code">test_minimal.html</span> - Minimal script loading verification</li>
+      <li><span class="code">direct_sprites.html</span> - Direct sprite file loading test</li>
+      <li><span class="code">rcr_authentic_final.html</span> - Standalone authentic RCR test</li>
+    </ul>
+
+    <h3>Development Tools</h3>
+    <ul>
+      <li><strong>Debug Console:</strong> Enhanced logging system for troubleshooting</li>
+      <li><strong>Asset Verification:</strong> Improved asset loading with better error reporting</li>
+      <li><strong>Performance Monitoring:</strong> Optimized hit detection calculations for better frame rates</li>
+    </ul>
+
+    <div class="warning">
+      <h3>⚠️ Breaking Changes</h3>
+      <p>The combat system has been completely rewritten. If you have any custom modifications to hit detection, they may need to be updated to work with the new distance-based system.</p>
+    </div>
+
+    <h2>📝 Technical Details</h2>
+
+    <h3>Combat System Architecture</h3>
+    <ul>
+      <li><strong>Distance-Based Hit Detection:</strong> Uses precise distance calculations with configurable thresholds</li>
+      <li><strong>Hit Zones:</strong> <span class="code">dx <= (reach + w*0.6) && dy <= 18</span> for reliable hit registration</li>
+      <li><strong>Separation Algorithm:</strong> Single-step separation to avoid continuous pushing during combat</li>
+      <li><strong>Debug Logging:</strong> Real-time console output showing hit distance calculations and success/failure</li>
+    </ul>
+
+    <h3>Performance Improvements</h3>
+    <ul>
+      <li>Optimized hit detection calculations reduce per-frame processing overhead</li>
+      <li>Enhanced sprite processing with efficient transparency handling</li>
+      <li>Better memory management for visual effects and animations</li>
+    </ul>
+
+    <div class="highlight">
+      <h3>🚀 Play Now</h3>
+      <p>Experience the enhanced combat system and visual improvements!</p>
+      <div style="text-align: center; margin-top: 20px;">
+        <a class="btn btn-primary" href="/game/">Launch Game</a>
+        <a class="btn" href="/">Back to Home</a>
+      </div>
+    </div>
+
+    <h2>🔮 Coming Next</h2>
+    
+    <h3>Planned Features</h3>
+    <ul>
+      <li>Enhanced enemy AI with different attack patterns</li>
+      <li>Weapon system with pickups and special attacks</li>
+      <li>Sound effects and background music</li>
+      <li>Shop system for character progression</li>
+      <li>Multiple levels and boss battles</li>
+    </ul>
+
+  </main>
+
+  <footer class="footer">
+    <p>Baden City Ransom v2.1.0 - Built with ❤️ and modern web technology</p>
+    <p>
+      <a href="https://github.com/thecdrz/Baden-City-Ransom" target="_blank" rel="noopener">GitHub Repository</a> | 
+      <a href="https://github.com/thecdrz/Baden-City-Ransom/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Full Changelog</a>
+    </p>
+  </footer>
+</body>
+</html>
