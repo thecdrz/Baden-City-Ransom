@@ -247,7 +247,7 @@
 
   
 
-        const start = () => {
+  const start = () => {
           // Tiny confirm beep
           try {
             const ctx = this.sound.context; const t = ctx.currentTime;
@@ -271,18 +271,88 @@
           // Simple direct scene start
           try { 
             this.time.delayedCall(50, () => {
-              console.log('Starting game scene...');
-              this.scene.start('BadenCityRansomGame');
+              console.log('Starting story scene...');
+              this.scene.start('StoryScene');
             }); 
           }
           catch(_) { 
             console.warn('Fallback scene start');
-            this.scene.start('BadenCityRansomGame'); 
+            this.scene.start('StoryScene'); 
           }
         };
         this.input.once('pointerdown', start);
         this.input.keyboard.once('keydown-ENTER', start);
         this.input.keyboard.once('keydown-SPACE', start);
+      }
+    }
+
+    // Short story scene shown before the level
+    class StoryScene extends Phaser.Scene {
+      constructor(){ super({ key: 'StoryScene' }); }
+      preload(){
+        // Minimal UI tick/advance sounds
+        const ui = (p) => `${ASSETS_BASE}/audio/river_city_ransom_ost_mp3/HALFTONE SFX Pack LITE/UI/${p}`;
+        try {
+          this.load.audio('ui_click', ui('2. Clicks/Click_7.wav'));
+          this.load.audio('ui_advance', ui('4. Transitions/Transition_2.wav'));
+        } catch(_) {}
+      }
+      create(){
+        // Ensure bottom bar visible, HUD hidden
+        try {
+          const hud = document.getElementById('hud');
+          const dlg = document.getElementById('dialogue');
+          if (hud) hud.style.display = 'none';
+          if (dlg) dlg.style.display = 'block';
+        } catch(_) {}
+
+        const textEl = document.getElementById('dialogue-text');
+        const pages = [
+          'Baden City is slipping under Miller\'s control…',
+          'His gang rules the streets. And he\'s coming for TheGuyWho next.',
+          'Press Enter to start the fight.'
+        ];
+        let page = 0; let typing = false; let timer = null; let shown = '';
+
+        const play = (k, vol=0.5, rate=1) => {
+          try { const s = this.sound.add(k, { volume: vol, rate }); s.once('complete', ()=>s.destroy()); s.play(); } catch(_) {}
+        };
+        const typePage = () => {
+          if (!textEl) return; typing = true; shown = ''; const full = pages[page] || '';
+          const speed = 26; let i = 0; if (timer) timer.remove();
+          timer = this.time.addEvent({ delay: speed, loop: true, callback: () => {
+            if (i >= full.length) { typing = false; timer.remove(); timer = null; return; }
+            shown += full[i++]; textEl.textContent = shown;
+            if (i % 2 === 0) play('ui_click', 0.28, 1.0);
+          }});
+        };
+        const next = () => {
+          if (typing) { // finish instantly
+            const full = pages[page] || ''; typing = false; if (timer) { timer.remove(); timer=null; }
+            if (textEl) textEl.textContent = full; return;
+          }
+          page++;
+          if (page < pages.length) { play('ui_advance', 0.35, 1.0); typePage(); }
+          else {
+            // Start the actual game
+            play('ui_advance', 0.4, 1.0);
+            this.time.delayedCall(120, () => {
+              try { const dlg = document.getElementById('dialogue'); if (dlg) dlg.style.display = 'none'; } catch(_) {}
+              this.scene.start('BadenCityRansomGame');
+            });
+          }
+        };
+
+        // Input: Enter / Space / Click to advance
+        this.input.once('pointerdown', next);
+        try {
+          this.input.keyboard.on('keydown', (ev) => {
+            if (ev && (ev.code === 'Enter' || ev.code === 'Space')) next();
+          });
+        } catch(_) {}
+
+        // Kick off first page
+        typePage();
       }
     }
 
@@ -362,7 +432,7 @@
           spacing: 1
           });
         }
-        // Boss spritesheet (Moose) - Forcing inline loading to prevent issues
+  // Boss spritesheet (Miller)
         {
           // Use direct path to boss sprite
           const src = asset('sprites/boss_sprite.png');
@@ -760,20 +830,15 @@
             this.enemies.push(enemy);
           }
         });
-  // Enhanced boss spawning system with variety
+  // Enhanced boss spawning (Miller)
   step('boss (manual spawn)');
   
   // Array of available boss configurations
   this.bossConfigs = [
-    { key: 'boss', name: 'Miller', health: 140, speed: 0.8, cadence: 850, description: 'Street Boss' },
-    { sprite: 'NES - River City Ransom _ Street Gangs - Enemies & Bosses - Moose.png', key: 'moose', name: 'Moose', health: 160, speed: 0.7, cadence: 1200, description: 'Heavy Bruiser' },
-    { sprite: 'NES - River City Ransom _ Street Gangs - Enemies & Bosses - Ivan.png', key: 'ivan', name: 'Ivan', health: 120, speed: 1.0, cadence: 700, description: 'Quick Fighter' },
-    { sprite: 'NES - River City Ransom _ Street Gangs - Enemies & Bosses - Blade.png', key: 'blade', name: 'Blade', health: 100, speed: 1.2, cadence: 600, description: 'Swift Assassin' }
+    { key: 'boss', name: 'Miller', health: 140, speed: 0.8, cadence: 850, description: 'Street Boss' }
   ];
-  
-  // Select random boss configuration
-  this.currentBossConfig = this.bossConfigs[Math.floor(Math.random() * this.bossConfigs.length)];
-  this.bossName = this.currentBossConfig.name;
+  this.currentBossConfig = this.bossConfigs[0];
+  this.bossName = 'Miller';
   this.boss = null;
   try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = false; } catch(_) {}
         
@@ -2002,7 +2067,7 @@
       parent: 'canvasWrap',
       backgroundColor: '#000000',
   resolution: 1,
-  scene: [TitleScene, BadenCityRansomGame, PauseOverlay],
+  scene: [TitleScene, StoryScene, BadenCityRansomGame, PauseOverlay],
       render: {
         pixelArt: true,
         antialias: false,
