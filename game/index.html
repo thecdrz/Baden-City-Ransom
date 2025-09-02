@@ -196,6 +196,7 @@
       }
       create(){
   const { width:w, height:h } = this.scale.gameSize;
+  const ENABLE_TITLE_MASK = false; // disable rounded-corner geometry mask by default
         // Ensure HUD and dialogue are hidden on the title screen
         try {
           const hud = document.getElementById('hud');
@@ -225,6 +226,8 @@
         const img = chosen ? this.add.image(w/2, h/2, chosen) : this.add.rectangle(w/2, h/2, w*0.9, h*0.6, 0x101020).setStrokeStyle(4, 0xffffff);
         img.setOrigin(0.5,0.5);
   let txt; // declared before fit() to avoid reference errors
+        let imgMaskG = null; // graphics for rounded mask
+        let imgMask = null;  // geometry mask instance
         const fit = () => {
           const TITLE_Y_BIAS = 0.09; // push image below center by ~9% of viewport height
           const cw = this.scale.width || this.scale.gameSize?.width || w;
@@ -232,19 +235,51 @@
           const iw = img.width || 1, ih = img.height || 1;
           const sx = cw/iw, sy = ch/ih;
           // Make the start image noticeably larger while keeping safe headroom
-          const s = Math.min(sx, sy) * 0.99; // previously 0.93
+          const s = Math.min(sx, sy) * 0.95; // leave a little more room for prompt below
           img.setScale(s);
           img.setPosition(cw/2, ch * (0.5 + TITLE_Y_BIAS));
-          if (txt) txt.setPosition(cw/2, ch*0.85);
+          // Apply a rounded-rect mask so all four corners are consistently rounded
+          try {
+            // Clear old mask
+            if (imgMaskG) { try { img.clearMask(); } catch(_) {} imgMaskG.destroy(); imgMaskG = null; imgMask = null; }
+            const dw = Math.max(1, Math.round(img.displayWidth || 1));
+            const dh = Math.max(1, Math.round(img.displayHeight || 1));
+            const tlx = Math.round(img.x - dw/2);
+            const tly = Math.round(img.y - dh/2);
+            // Corner radius scales with size
+            const radius = Math.max(8, Math.min(42, Math.round(Math.min(dw, dh) * 0.06)));
+            // Only mask when an actual title image was chosen
+            if (ENABLE_TITLE_MASK && chosen) {
+              imgMaskG = this.add.graphics({ x: tlx, y: tly });
+              imgMaskG.fillStyle(0xffffff, 1);
+              // Draw the rounded rect for the geometry mask
+              // @ts-ignore - Phaser v3 supports fillRoundedRect
+              imgMaskG.fillRoundedRect(0, 0, dw, dh, radius);
+              // Hide the graphics so it doesn't render over the image
+              imgMaskG.setVisible(false);
+              imgMask = imgMaskG.createGeometryMask();
+              img.setMask(imgMask);
+            }
+          } catch(_) { /* non-fatal */ }
+
+          // Place prompt directly below the image with a small margin
+          if (txt) {
+            const margin = 26;
+            const below = img.y + (img.displayHeight||0)/2 + margin;
+            const y = Math.min(ch - 14, below);
+            txt.setPosition(cw/2, y);
+          }
         };
         fit();
   this.scale.on('resize', () => fit());
   // Refit shortly after DOM height change
   try { this.time.delayedCall(60, () => fit()); } catch(_) {}
 
-  txt = this.add.text(w/2, h*0.85, 'Press Enter or Click to Start', {
-          fontFamily:'monospace', fontSize:'24px', color:'#ffff00', stroke:'#000', strokeThickness:4
+  txt = this.add.text(w/2, h*0.94, 'Press Enter or Click to Start', {
+          fontFamily:'monospace', fontSize:'24px', color:'#ffff00', stroke:'#000', strokeThickness:6
         }).setOrigin(0.5,0.5).setDepth(10);
+  // Subtle drop shadow for readability without a backdrop bar
+  try { txt.setShadow(0, 2, '#000000', 4, true, true); } catch(_) {}
   // Slow blinking effect
   this.tweens.add({ targets: txt, alpha: 0.25, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
@@ -1490,6 +1525,18 @@
             }
           } catch(_) {}
         };
+
+        // Auto-pause on window blur or page hidden
+        try {
+          const onBlur = () => { try { this.enterPause && this.enterPause(); } catch(_) {} };
+          const onVis = () => { try { if (document.hidden) this.enterPause && this.enterPause(); } catch(_) {} };
+          window.addEventListener('blur', onBlur);
+          document.addEventListener('visibilitychange', onVis);
+          this.events.once('shutdown', () => {
+            try { window.removeEventListener('blur', onBlur); } catch(_) {}
+            try { document.removeEventListener('visibilitychange', onVis); } catch(_) {}
+          });
+        } catch(_) {}
         
   this.showMessage('Welcome to Baden City! Fight your way through the gangs!');
   step('ready');
@@ -2000,67 +2047,139 @@
     class PauseOverlay extends Phaser.Scene {
       constructor(){ super({ key: 'PauseOverlay' }); }
       create(){
-        const makeUi = () => {
+        // Build overlay UI
+        this._menu = { items: [], idx: 0 };
+        const buildUi = () => {
           const w = this.scale.width, h = this.scale.height;
-          if (this.maskRect) this.maskRect.destroy();
-          if (this.label) this.label.destroy();
+          // Clear previous
+          [this.maskRect, this.panel, this.titleText, this.highlight]?.forEach(o => { try { o && o.destroy(); } catch(_){} });
+          this._menu.items.forEach(o => { try { o && o.destroy(); } catch(_){} });
+          this._menu.items = [];
+
+          // Dim background
           this.maskRect = this.add.rectangle(0, 0, w, h, 0x000000, 0.55).setOrigin(0,0).setDepth(10000);
-          this.label = this.add.text(w/2, h/2, 'Paused\nESC or P: Resume\nM: Mute/Unmute Music', {
+          // Panel
+          const pw = Math.min(420, Math.max(280, Math.floor(w*0.45)));
+          const ph = 220;
+          const px = Math.floor((w-pw)/2), py = Math.floor((h-ph)/2);
+          this.panel = this.add.rectangle(px, py, pw, ph, 0x111133, 0.9)
+            .setStrokeStyle(3, 0xffffff, 0.6)
+            .setOrigin(0,0).setDepth(10001);
+          // Title
+          this.titleText = this.add.text(px + pw/2, py + 36, 'Paused', {
             fontFamily: 'monospace', fontSize: '28px', color: '#ffff00', align: 'center', stroke:'#000', strokeThickness: 6
-          }).setOrigin(0.5).setDepth(10001);
+          }).setOrigin(0.5).setDepth(10002);
+          // Menu items
+          const opts = [
+            { key: 'resume', label: 'Resume' },
+            { key: 'mute', label: 'Toggle Music (M)' },
+            { key: 'restart', label: 'Restart Level' },
+            { key: 'quit', label: 'Quit to Main Menu' }
+          ];
+          const startY = py + 80;
+          const lineH = 38;
+          opts.forEach((opt, i) => {
+            const t = this.add.text(px + pw/2, startY + i*lineH, opt.label, {
+              fontFamily: 'monospace', fontSize: '22px', color: '#ffffff', align: 'center', stroke:'#000', strokeThickness: 4
+            }).setOrigin(0.5).setDepth(10002).setInteractive({ useHandCursor: true });
+            t._optKey = opt.key;
+            t.on('pointerover', () => { this._menu.idx = i; this._updateHighlight(); });
+            t.on('pointerdown', () => this._activate());
+            this._menu.items.push(t);
+          });
+          // Highlight
+          const hiW = Math.floor(pw - 40);
+          this.highlight = this.add.rectangle(px + pw/2, startY, hiW, 30, 0xffffff, 0.12)
+            .setStrokeStyle(2, 0xffff00, 0.8)
+            .setOrigin(0.5).setDepth(10001);
+          this._menu.idx = Math.min(this._menu.idx, this._menu.items.length-1);
+          this._updateHighlight();
         };
-        makeUi();
-        this.scale.on('resize', makeUi, this);
-        // Initialize keys as an empty object by default
-        this.keys = {};
-        
-        // Define resume function before other logic
-        const resume = () => { 
-          try { 
-            if (this.scene) {
-              this.scene.stop(); 
-              this.scene.resume('BadenCityRansomGame'); 
+
+        this._updateHighlight = () => {
+          try {
+            const it = this._menu.items[this._menu.idx];
+            if (!it || !this.highlight) return;
+            this.highlight.x = it.x;
+            this.highlight.y = it.y + 2;
+          } catch(_) {}
+        };
+
+        this._resume = () => {
+          try {
+            this.scene.stop();
+            this.scene.resume('BadenCityRansomGame');
+          } catch(err) { console.warn('Error in resume:', err); }
+        };
+        this._restart = () => {
+          try {
+            // Stop overlay first
+            this.scene.stop('PauseOverlay');
+            // Restart game scene cleanly
+            const gs = this.scene.get('BadenCityRansomGame');
+            try { gs?.music?.stop(); } catch(_) {}
+            this.scene.stop('BadenCityRansomGame');
+            this.scene.start('BadenCityRansomGame');
+          } catch(err) { console.warn('Error in restart:', err); }
+        };
+        this._quit = () => {
+          try {
+            // Stop overlay and game, go to Title
+            this.scene.stop('PauseOverlay');
+            const gs = this.scene.get('BadenCityRansomGame');
+            try { gs?.music?.stop(); } catch(_) {}
+            this.sound?.stopAll?.();
+            this.scene.stop('BadenCityRansomGame');
+            this.scene.start('TitleScene');
+          } catch(err) { console.warn('Error in quit:', err); }
+        };
+
+        this._activate = () => {
+          const it = this._menu.items[this._menu.idx];
+          const k = it?._optKey;
+          if (k === 'resume') return this._resume();
+          if (k === 'mute') { try { const gs = this.scene.get('BadenCityRansomGame'); gs?.toggleMusicMute?.(); } catch(_) {} return; }
+          if (k === 'restart') return this._restart();
+          if (k === 'quit') return this._quit();
+        };
+
+        // Keyboard handlers
+        this._kbdHandler = (ev) => {
+          try {
+            if (!ev) return;
+            if (ev.code === 'Escape' || ev.code === 'KeyP') return this._resume();
+            if (ev.code === 'KeyM') {
+              try { const gs = this.scene.get('BadenCityRansomGame'); gs?.toggleMusicMute?.(); } catch(err) { console.warn('Mute toggle err:', err); }
+              return;
             }
-          } catch(err) { 
-            console.warn('Error in resume function:', err); 
-          } 
+            if (ev.code === 'ArrowUp') {
+              this._menu.idx = (this._menu.idx + this._menu.items.length - 1) % this._menu.items.length;
+              this._updateHighlight();
+              return;
+            }
+            if (ev.code === 'ArrowDown') {
+              this._menu.idx = (this._menu.idx + 1) % this._menu.items.length;
+              this._updateHighlight();
+              return;
+            }
+            if (ev.code === 'Enter' || ev.code === 'Space') {
+              return this._activate();
+            }
+          } catch(err) { console.warn('KB handler error:', err); }
         };
-        
-        // Add direct mouse click listener - most reliable approach
-        if (this.input) {
-          this.input.once('pointerdown', resume);
-        }
-        
-        // Try to add keyboard support if available
-        try {
-          if (this.input && this.input.keyboard) {
-            // Direct event listening is more reliable than key objects
-            this.input.keyboard.on('keydown', (ev) => {
-              if (ev && (ev.code === 'Escape' || ev.code === 'KeyP')) { 
-                resume(); 
-              }
-              else if (ev && ev.code === 'KeyM') {
-                try { 
-                  if (this.scene) {
-                    const gs = this.scene.get('BadenCityRansomGame');
-                    if (gs && typeof gs.toggleMusicMute === 'function') {
-                      gs.toggleMusicMute();
-                    } 
-                  }
-                } catch(err) { 
-                  console.warn('Error toggling music:', err); 
-                }
-              }
-            });
-          }
-        } catch(err) {
-          console.warn('Error setting up keyboard handlers:', err);
-        }
-        // Also allow pointer click to resume for convenience
-        this.input.once('pointerdown', resume);
+
+        buildUi();
+        this.scale.on('resize', buildUi, this);
+        try { this.input?.keyboard?.on('keydown', this._kbdHandler); } catch(_) {}
       }
-      shutdown(){ this.scale.off('resize', undefined, this); }
-      destroy(){ this.scale && this.scale.off('resize', undefined, this); }
+      shutdown(){
+        try { this.scale.off('resize', undefined, this); } catch(_) {}
+        try { this.input?.keyboard?.off('keydown', this._kbdHandler); } catch(_) {}
+      }
+      destroy(){
+        try { this.scale && this.scale.off('resize', undefined, this); } catch(_) {}
+        try { this.input?.keyboard?.off('keydown', this._kbdHandler); } catch(_) {}
+      }
     }
     
     // Game configuration with adjusted canvas for bigger UI bars
