@@ -101,6 +101,8 @@
   <div id="devPanel" role="dialog" aria-label="Dev Panel">
     <div class="row"><label><input type="checkbox" id="devGod"> Unlimited life</label></div>
     <div class="row"><label><input type="checkbox" id="devBoss"> Spawn boss near player</label></div>
+  <div class="row"><label><input type="checkbox" id="devHit"> Show hitboxes</label></div>
+  <div class="row"><label><input type="checkbox" id="devVerbose"> Verbose logs</label></div>
     <div class="row"><button id="devClose">Close</button></div>
   </div>
 
@@ -937,6 +939,17 @@
         // Dev flags and helpers
         this.godMode = false;
         this.setGodMode = (on) => { this.godMode = !!on; this.showMessage(this.godMode ? 'God Mode: ON' : 'God Mode: OFF'); };
+  // Hitbox debug drawing
+        this.debugHitboxes = false;
+        this.hitGfx = this.add.graphics().setDepth(12000).setScrollFactor(1,1).setVisible(false);
+        this.setHitboxDebug = (on) => {
+          this.debugHitboxes = !!on;
+          if (this.hitGfx) { this.hitGfx.clear(); this.hitGfx.setVisible(this.debugHitboxes); }
+          this.showMessage(this.debugHitboxes ? 'Hitbox debug: ON' : 'Hitbox debug: OFF');
+        };
+  // Verbose logging toggle
+  this.debugLogs = false;
+  this.setVerboseLogs = (on) => { this.debugLogs = !!on; this.showMessage(this.debugLogs ? 'Verbose logs: ON' : 'Verbose logs: OFF'); };
     this.spawnBossNearPlayer = () => {
           try {
             // If already present, keep it and inform
@@ -1111,6 +1124,29 @@
       }
       
       update(time) {
+        // Hitbox gfx maintenance
+        if (this.hitGfx && this.debugHitboxes) {
+          try {
+            this.hitGfx.clear();
+            // Player bounds in green
+            const pb = this.alex.getBounds();
+            this.hitGfx.lineStyle(1, 0x00ff00, 0.9);
+            this.hitGfx.strokeRect(pb.x, pb.y, pb.width, pb.height);
+            // Enemies in red
+            (this.enemies||[]).forEach(e => {
+              if (!e || !e.active) return;
+              const eb = e.getBounds();
+              this.hitGfx.lineStyle(1, 0xff4444, 0.9);
+              this.hitGfx.strokeRect(eb.x, eb.y, eb.width, eb.height);
+            });
+            // Boss in magenta
+            if (this.boss && this.boss.active) {
+              const bb = this.boss.getBounds();
+              this.hitGfx.lineStyle(1, 0xff00ff, 0.95);
+              this.hitGfx.strokeRect(bb.x, bb.y, bb.width, bb.height);
+            }
+          } catch(_) {}
+        }
         // Pause toggle
         if (Phaser.Input.Keyboard.JustDown(this.pauseKeys.esc) || Phaser.Input.Keyboard.JustDown(this.pauseKeys.p)) {
           this.enterPause();
@@ -1199,8 +1235,7 @@
           }
         }
         
-        // Combat
-  const tryAttack = (kind) => {
+    // Combat
   const tryAttack = (kind) => {
           if (this.isAttacking) return;
           this.isAttacking = true;
@@ -1217,7 +1252,6 @@
           } catch(_) {}
           // Play a short punch/kick SFX
           this.playSfx(['sfx_punch1','sfx_punch2'], 0.5, kind==='kick' ? 0.95 : 1.02);
-          // Build a simple hitbox in front of Alex once per press
           // Build a simple hitbox in front of Alex once per press (slightly larger for reliability)
           const reach = (kind === 'kick') ? 32 : 26;
           const w = (kind === 'kick') ? 24 : 20;
@@ -1225,8 +1259,17 @@
           const ox = this.alex.flipX ? -reach : reach;
           // Place the hitbox around chest height (a bit above the feet)
           const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h - 6, w, h);
+          // Debug draw player hitbox
+          if (this.debugHitboxes && this.hitGfx) {
+            try {
+              this.hitGfx.lineStyle(1, 0xffff00, 1);
+              this.hitGfx.strokeRect(hitRect.x, hitRect.y, hitRect.width, hitRect.height);
+              const pb = this.alex.getBounds();
+              this.hitGfx.lineStyle(1, 0x00ff00, 0.9);
+              this.hitGfx.strokeRect(pb.x, pb.y, pb.width, pb.height);
+            } catch(_) {}
+          }
 
-  const applyHit = (target, dmg, knock=10) => {
   const applyHit = (target, dmg, knock=10) => {
             if (!target || !target.active) return;
     // Primary: rectangle intersection against target bounds
@@ -1236,9 +1279,9 @@
     const dx = Math.abs((target.x||0) - (this.alex.x + (this.alex.flipX ? -reach : reach)));
     const dy = Math.abs((this.alex.y||0) - (target.y||0));
     const nearOk = (dx <= (reach + w*0.6) && dy <= 20);
-    console.log(`Player hit check: rect=${hitOk}, dx=${dx.toFixed(1)}, dy=${dy.toFixed(1)}, thresh=${(reach + w*0.6).toFixed(1)}`);
+    this.debugLogs && console.log(`Player hit check: rect=${hitOk}, dx=${dx.toFixed(1)}, dy=${dy.toFixed(1)}, thresh=${(reach + w*0.6).toFixed(1)}`);
     if (hitOk || nearOk) {
-      console.log(`PLAYER HIT APPLIED! Target health: ${target.health} -> ${Math.max(0, (target.health||1) - dmg)}`);
+      this.debugLogs && console.log(`PLAYER HIT APPLIED! Target health: ${target.health} -> ${Math.max(0, (target.health||1) - dmg)}`);
               target.health = Math.max(0, (target.health||1) - dmg);
               target.setTintFill(0xff0000);
               this.time.delayedCall(80, () => target.clearTint());
@@ -1253,7 +1296,7 @@
                   if (target === this.boss) this.showMessage((this.bossName||'Boss') + ' defeated!');
               }
     } else {
-      console.log(`Player hit MISSED: rect=${hitOk}, dx=${dx.toFixed(1)} > ${(reach + w*0.6).toFixed(1)} OR dy=${dy.toFixed(1)} > 20`);
+      this.debugLogs && console.log(`Player hit MISSED: rect=${hitOk}, dx=${dx.toFixed(1)} > ${(reach + w*0.6).toFixed(1)} OR dy=${dy.toFixed(1)} > 20`);
     }
           };
 
@@ -1277,9 +1320,9 @@
   // ... (resize listener moved to create())
         
         // Single-enemy chase + attack AI
-        console.log(`Update loop running. Enemies count: ${this.enemies.length}, Boss: ${this.boss ? 'exists' : 'null'}`);
+        this.debugLogs && console.log(`Update loop running. Enemies count: ${this.enemies.length}, Boss: ${this.boss ? 'exists' : 'null'}`);
         const hurtPlayer = (dmg, knock=8, dir=1) => {
-          console.log(`hurtPlayer called: dmg=${dmg}, godMode=${this.godMode}, invulUntil=${this.playerInvulUntil}, currentTime=${time}`);
+          this.debugLogs && console.log(`hurtPlayer called: dmg=${dmg}, godMode=${this.godMode}, invulUntil=${this.playerInvulUntil}, currentTime=${time}`);
           if (this.godMode) return; // ignore damage in God Mode
           const nowMs = time;
           if (nowMs < this.playerInvulUntil) return; // i-frames
@@ -1327,7 +1370,7 @@
           const alignedY = Math.abs(dy) <= 12; // lane alignment
           const distX = Math.abs(dx);
           const reach = enemy.attackReach;
-          console.log(`Enemy AI: dx=${dx.toFixed(1)}, distX=${distX.toFixed(1)}, dy=${dy.toFixed(1)}, alignedY=${alignedY}, reach=${reach}, attackCooldown=${enemy.attackCooldown}, time=${time}`);
+          this.debugLogs && console.log(`Enemy AI: dx=${dx.toFixed(1)}, distX=${distX.toFixed(1)}, dy=${dy.toFixed(1)}, alignedY=${alignedY}, reach=${reach}, attackCooldown=${enemy.attackCooldown}, time=${time}`);
           // move towards player until in range
           if (distX > reach + 2 || !alignedY) {
             enemy.x += Math.sign(dx) * enemy.speed;
@@ -1342,13 +1385,22 @@
               const w = enemy.attackWidth, h = enemy.attackHeight;
               const ox = enemy.flipX ? -reach : reach;
               const hitRect = new Phaser.Geom.Rectangle(enemy.x + ox - w/2, enemy.y - h - 6, w, h);
+              if (this.debugHitboxes && this.hitGfx) {
+                try {
+                  this.hitGfx.lineStyle(1, 0xff4444, 1);
+                  this.hitGfx.strokeRect(hitRect.x, hitRect.y, hitRect.width, hitRect.height);
+                  const pb2 = this.alex.getBounds();
+                  this.hitGfx.lineStyle(1, 0x00ff00, 0.8);
+                  this.hitGfx.strokeRect(pb2.x, pb2.y, pb2.width, pb2.height);
+                } catch(_) {}
+              }
               const pb = this.alex.getBounds();
-              console.log(`Enemy attack check: hitRect=${hitRect.x.toFixed(1)},${hitRect.y.toFixed(1)},${hitRect.width}x${hitRect.height} vs player=${pb.x.toFixed(1)},${pb.y.toFixed(1)},${pb.width}x${pb.height}`);
+              this.debugLogs && console.log(`Enemy attack check: hitRect=${hitRect.x.toFixed(1)},${hitRect.y.toFixed(1)},${hitRect.width}x${hitRect.height} vs player=${pb.x.toFixed(1)},${pb.y.toFixed(1)},${pb.width}x${pb.height}`);
               if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
-                console.log(`ENEMY HIT APPLIED! Player health: ${this.alex.health} -> ${Math.max(0, (this.alex.health||0) - 10)}`);
+                this.debugLogs && console.log(`ENEMY HIT APPLIED! Player health: ${this.alex.health} -> ${Math.max(0, (this.alex.health||0) - 10)}`);
                 hurtPlayer(10, 10, enemy.flipX?-1:1);
               } else {
-                console.log(`Enemy hit MISSED`);
+                this.debugLogs && console.log(`Enemy hit MISSED`);
               }
               enemy.attackCooldown = time + enemy.attackCadence;
             }
@@ -1362,33 +1414,43 @@
           const alignedY = Math.abs(dy) <= 12;
           const distX = Math.abs(dx);
           const reach = b.attackReach || 28;
-          console.log(`Boss AI: dx=${dx.toFixed(1)}, distX=${distX.toFixed(1)}, dy=${dy.toFixed(1)}, alignedY=${alignedY}, reach=${reach}, attackCooldown=${b.attackCooldown}, time=${time}`);
+          this.debugLogs && console.log(`Boss AI: dx=${dx.toFixed(1)}, distX=${distX.toFixed(1)}, dy=${dy.toFixed(1)}, alignedY=${alignedY}, reach=${reach}, attackCooldown=${b.attackCooldown}, time=${time}`);
           try { b.setFlipX && b.setFlipX(dx < 0); } catch(_) {}
           if (distX > reach + 2 || !alignedY) {
-            console.log(`Boss moving towards player: distX=${distX.toFixed(1)} > ${reach + 2} OR not aligned`);
+            this.debugLogs && console.log(`Boss moving towards player: distX=${distX.toFixed(1)} > ${reach + 2} OR not aligned`);
             b.x += Math.sign(dx) * (b.speed || 0.8);
             if (!alignedY) b.y += Math.sign(this.alexBaseY - b.y) * 0.6;
             try { if (b.anims?.currentAnim?.key !== `${b.type}-walk`) b.play && b.play(`${b.type}-walk`); } catch(_) {}
           } else {
-            console.log(`Boss in attack range! distX=${distX.toFixed(1)} <= ${reach + 2}, aligned=${alignedY}`);
+            this.debugLogs && console.log(`Boss in attack range! distX=${distX.toFixed(1)} <= ${reach + 2}, aligned=${alignedY}`);
             try { if (b.anims?.currentAnim?.key !== `${b.type}-idle`) b.play && b.play(`${b.type}-idle`); } catch(_) {}
             // Immediate attack check with cooldown (simple and reliable)
-            console.log(`Boss attack cooldown check: time=${time} >= attackCooldown=${b.attackCooldown}`);
+            this.debugLogs && console.log(`Boss attack cooldown check: time=${time} >= attackCooldown=${b.attackCooldown}`);
             if (time >= (b.attackCooldown||0)) {
-              console.log(`Boss attempting attack!`);
+              this.debugLogs && console.log(`Boss attempting attack!`);
               const w = b.attackWidth ? Math.max(22, b.attackWidth) : 60;
               const h = b.attackHeight ? Math.max(18, b.attackHeight) : 40;
               const ox = (b.flipX ? -1 : 1) * (reach * 0.9);
+              const bhit = new Phaser.Geom.Rectangle(b.x + ox - w/2, b.y - h - 6, w, h);
               const dx2 = Math.abs(this.alex.x - (b.x + (b.flipX ? -reach : reach)));
               const dy2 = Math.abs(this.alex.y - b.y);
-              console.log(`Boss hit check: dx2=${dx2.toFixed(1)}, dy2=${dy2.toFixed(1)}, reach+w*0.6=${(reach + w*0.6).toFixed(1)}`);
+              if (this.debugHitboxes && this.hitGfx) {
+                try {
+                  this.hitGfx.lineStyle(1, 0xff00ff, 1);
+                  this.hitGfx.strokeRect(bhit.x, bhit.y, bhit.width, bhit.height);
+                  const pb3 = this.alex.getBounds();
+                  this.hitGfx.lineStyle(1, 0x00ff00, 0.8);
+                  this.hitGfx.strokeRect(pb3.x, pb3.y, pb3.width, pb3.height);
+                } catch(_) {}
+              }
+              this.debugLogs && console.log(`Boss hit check: dx2=${dx2.toFixed(1)}, dy2=${dy2.toFixed(1)}, reach+w*0.6=${(reach + w*0.6).toFixed(1)}`);
               if (dx2 <= (reach + w*0.6) && dy2 <= 18) {
-                console.log(`BOSS HIT APPLIED! Player health: ${this.alex.health} -> ${Math.max(0, (this.alex.health||0) - 14)}`);
+                this.debugLogs && console.log(`BOSS HIT APPLIED! Player health: ${this.alex.health} -> ${Math.max(0, (this.alex.health||0) - 14)}`);
                 hurtPlayer(14, 16, b.flipX?-1:1);
                 b.attackCooldown = time + (b.attackCadence || 900);
                 this._recentHitUntil = (this.time.now||0) + 140;
               } else {
-                console.log(`Boss hit MISSED: dx2=${dx2.toFixed(1)} > ${(reach + w*0.6).toFixed(1)} OR dy2=${dy2.toFixed(1)} > 18`);
+                this.debugLogs && console.log(`Boss hit MISSED: dx2=${dx2.toFixed(1)} > ${(reach + w*0.6).toFixed(1)} OR dy2=${dy2.toFixed(1)} > 18`);
               }
             }
           }
@@ -1487,8 +1549,10 @@
       const btn = document.getElementById('devBtn');
       const panel = document.getElementById('devPanel');
       const close = document.getElementById('devClose');
-      const god = document.getElementById('devGod');
-      const boss = document.getElementById('devBoss');
+    const god = document.getElementById('devGod');
+  const boss = document.getElementById('devBoss');
+  const hitb = document.getElementById('devHit');
+  const vrb = document.getElementById('devVerbose');
       if (!btn || !panel) return;
       const gs = () => (window._BCR && window._BCR.gs) ? window._BCR.gs() : null;
       btn.addEventListener('click', () => {
@@ -1500,7 +1564,9 @@
         panel.style.display = 'none';
         btn.setAttribute('aria-expanded', 'false');
       });
-      god && god.addEventListener('change', () => { const s = gs(); if (s && s.setGodMode) s.setGodMode(god.checked); });
+  god && god.addEventListener('change', () => { const s = gs(); if (s && s.setGodMode) s.setGodMode(god.checked); });
+  hitb && hitb.addEventListener('change', () => { const s = gs(); if (s && s.setHitboxDebug) s.setHitboxDebug(hitb.checked); });
+  vrb && vrb.addEventListener('change', () => { const s = gs(); if (s && s.setVerboseLogs) s.setVerboseLogs(vrb.checked); });
   boss && boss.addEventListener('change', () => { const s = gs(); if (!s) return; if (boss.checked) { s.spawnBossNearPlayer && s.spawnBossNearPlayer(); s.showMessage && s.showMessage('Spawn request sent.'); } else { s.despawnBoss && s.despawnBoss(); s.showMessage && s.showMessage('Despawn request sent.'); } });
       // Initialize boss checkbox if spawned by default
       setTimeout(() => { const s = gs(); if (s && s.boss) { if (boss) boss.checked = true; } }, 200);
