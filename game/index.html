@@ -343,8 +343,8 @@
           }
         };
 
-        // Input: Enter / Space / Click to advance
-        this.input.once('pointerdown', next);
+  // Input: Enter / Space / Click to advance (allow multiple clicks)
+  this.input.on('pointerdown', next);
         try {
           this.input.keyboard.on('keydown', (ev) => {
             if (ev && (ev.code === 'Enter' || ev.code === 'Space')) next();
@@ -1267,8 +1267,9 @@
               
               // Briefly highlight boss for visibility
               boss.setTint(0xff55ff);
-              this.time.delayedCall(180, () => {
+              this.time.delayedCall(120, () => {
                 if (boss && boss.active) boss.clearTint();
+                try { this.input.off('pointerdown', next); } catch(_) {}
               });
               
               this.showMessage(`${this.bossName} spawned nearby.`);
