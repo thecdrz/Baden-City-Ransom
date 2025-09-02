@@ -412,6 +412,8 @@
           
           // Load the boss sprite
           this.load.spritesheet('boss', src, bossConfig);
+          // Also load raw boss image for robust auto-slicing
+          this.load.image('boss_raw', src);
           
           // Add more detailed error/success handling for boss sprite
           this.load.on('filecomplete-spritesheet-boss', (key, type, data) => {
@@ -1094,11 +1096,54 @@
       }
     } catch (e) { console.warn('Boss color-key pass failed, using raw frames', e); }
 
-  const frame0 = ckFrames[0] || { key: 'boss', frame: 0 };
+    // Optional: Auto-slice from raw image to get better frames if available
+    const buildAutoFrames = () => {
+      try {
+        if (!this.textures.exists('boss_raw')) return null;
+        const raw = this.textures.get('boss_raw').getSourceImage();
+        if (!raw || !raw.width || !raw.height) return null;
+        const W = raw.width, H = raw.height;
+        const cw = 16, ch = 32;
+        const canv = document.createElement('canvas'); canv.width=W; canv.height=H;
+        const c = canv.getContext('2d', { willReadFrequently: true });
+        c.imageSmoothingEnabled=false; c.clearRect(0,0,W,H); c.drawImage(raw,0,0);
+        const img = c.getImageData(0,0,W,H); const data = img.data;
+        // Detect key color from corners
+        const pickKey = () => {
+          const corners=[[0,0],[W-1,0],[0,H-1],[W-1,H-1]]; const cnt = new Map();
+          for (const [x,y] of corners) { const p=(y*W+x)*4; const k=`${data[p]},${data[p+1]},${data[p+2]}`; cnt.set(k,(cnt.get(k)||0)+1); }
+          let best=null,n=-1; for (const [k,v] of cnt){ if(v>n){best=k;n=v;} } if(!best) return null;
+          const [R,G,B]=best.split(',').map(n=>parseInt(n,10));
+          const mag = (R>170 && B>170 && G<140) || (R>150 && B>150 && (R+B) > G*2);
+          return mag ? {R,G,B} : null;
+        };
+        const KC = pickKey();
+        // Score a window by count of non-key, non-transparent pixels
+        const scoreAt = (x0,y0) => {
+          let cnt=0; for(let y=0;y<ch;y++){ for(let x=0;x<cw;x++){ const X=x0+x, Y=y0+y; if(X<0||Y<0||X>=W||Y>=H) continue; const p=(Y*W+X)*4; const r=data[p],g=data[p+1],b=data[p+2]; let a=data[p+3]; if (KC){ const d=Math.abs(r-KC.R)+Math.abs(g-KC.G)+Math.abs(b-KC.B); if(d<=34) a=0; } if (a>8) cnt++; }} return cnt; };
+        const cand=[]; const step=2; for(let y=0;y<=H-ch;y+=step){ for(let x=0;x<=W-cw;x+=step){ const s=scoreAt(x,y); cand.push({x,y,s}); }}
+        cand.sort((a,b)=>b.s-a.s);
+        const pick=[ ]; const minDist=8;
+        for(const cnd of cand){ if (pick.length>=2) break; if (cnd.s<50) break; // basic threshold
+          if (pick.every(p=>Math.hypot(p.x-cnd.x,p.y-cnd.y) > minDist)) pick.push(cnd);
+        }
+        if (!pick.length) return null;
+        const frames=[]; let idx=0;
+        for (const p of pick){ const texKey=`boss_auto_${idx++}`; if (this.textures.exists(texKey)) this.textures.remove(texKey);
+          const t=this.textures.createCanvas(texKey, cw, ch); const tc=t.getContext(); tc.imageSmoothingEnabled=false; tc.clearRect(0,0,cw,ch);
+          // Copy and apply color-key transparency
+          const sub=c.getImageData(p.x,p.y,cw,ch); const sd=sub.data; if (KC){ for(let i=0;i<sd.length;i+=4){ const r=sd[i],g=sd[i+1],b=sd[i+2]; if (Math.abs(r-KC.R)+Math.abs(g-KC.G)+Math.abs(b-KC.B) <= 34) sd[i+3]=0; }}
+          tc.putImageData(sub,0,0); t.refresh(); frames.push({ key: texKey, frame: 0 }); }
+        return frames;
+      } catch(e) { console.warn('Boss auto-slice failed', e); return null; }
+    };
 
-  this.anims.create({ key: 'boss-idle', frames: [frame0], frameRate: 1, repeat: -1 });
-  // Use a single stable frame for walk to prevent bad sheet slicing artifacts
-  this.anims.create({ key: 'boss-walk', frames: [frame0], frameRate: 1, repeat: -1 });
+    const autoFrames = buildAutoFrames();
+    const idleFrame = autoFrames?.[0] || ckFrames[0] || { key: 'boss', frame: 0 };
+    const walkFrames = (autoFrames && autoFrames.length>=2) ? autoFrames.slice(0,2) : [idleFrame];
+
+    this.anims.create({ key: 'boss-idle', frames: [idleFrame], frameRate: 1, repeat: -1 });
+    this.anims.create({ key: 'boss-walk', frames: walkFrames, frameRate: walkFrames.length>1?6:1, repeat: -1 });
   } else {
     console.warn('Boss texture not loaded properly');
   }
