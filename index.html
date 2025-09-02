@@ -884,7 +884,7 @@
       if (maxX<minX || maxY<minY) { minX=0; minY=0; maxX=1; maxY=1; }
       const w = Math.max(1, maxX-minX+1), h = Math.max(1, maxY-minY+1);
     // Add more transparent padding at the bottom so feet never appear clipped
-  const padBottom = 14; // increased bottom padding for boss
+  const padBottom = 22; // further increased bottom padding for boss
       const ct = this.textures.createCanvas(tKey, w, h + padBottom);
       const c2 = ct.getContext(); c2.imageSmoothingEnabled = false;
       c2.clearRect(0,0,w,h+padBottom);
@@ -965,7 +965,8 @@
               try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = false; } catch(_) {}
               return null;
             }
-            const boss = this.add.sprite(bx, by + 1, spriteKey, 0).setOrigin(0.5, 1).setDepth(10);
+            // Use exact groundY as bottom anchor to avoid sinking or clipping feet
+            const boss = this.add.sprite(bx, by, spriteKey, 0).setOrigin(0.5, 1).setDepth(10);
             const enemyScale = this.bg?.scaleX || 1;
             boss.setScale(enemyScale);
             boss.health = 140; boss.type = spriteKey; boss.speed = 0.8; boss.attackCooldown = 0; boss.attackCadence = 850; boss.attackReach = 150; boss.attackWidth = 60; boss.attackHeight = 40;

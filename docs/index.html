@@ -21,7 +21,8 @@
     .card .footer { padding: 12px 16px; border-top:1px solid #1e2633; background:#0f1420; }
     .btn { display:inline-block; padding:10px 14px; background:#1e2633; color:var(--fg); border-radius:8px; }
     .btn:hover { background:#263041; }
-    .note { font-size: 12px; color: var(--muted); }
+  .note { font-size: 12px; color: var(--muted); }
+  .banner { color: var(--accent); font-size: 14px; margin-top: 10px; }
     .kbd { display:inline-block; padding:0 6px; border:1px solid #3a465a; border-bottom-width:2px; border-radius:4px; background:#0f1420; color:#cfe0ff; font-size:12px; }
   </style>
 </head>
@@ -29,35 +30,35 @@
   <header>
     <h1>Baden City Ransom</h1>
     <p>Retro beat 'em up in Phaser. Best in Chrome/Edge desktop.</p>
-    <p style="color: var(--accent); font-size: 14px; margin-top: 10px;">🎉 NEW: v2.1.0 - Combat System Overhaul & UI Improvements!</p>
+  <p class="banner">🎉 First working combat build — boss fight enabled, hitboxes improved.</p>
   </header>
   <main>
     <div class="grid">
       <div class="card">
         <h3>🎮 Play the Game</h3>
         <div class="body">
-          <p>Experience the enhanced combat system with improved hit detection and visual improvements!</p>
-          <p><strong>Latest updates:</strong> Fixed combat system, larger title screen, enhanced sprites, better debugging.</p>
+    <p>Experience the improved combat with reliable hit detection, better separation, and clearer debug tools.</p>
+    <p><strong>Latest updates:</strong> Fixed drift, tuned attack windows, added boss HP bar, clarified hitboxes.</p>
           <p class="note">Controls: Arrows move; <span class="kbd">A</span> punch; <span class="kbd">S</span> kick; <span class="kbd">D</span> jump; <span class="kbd">ESC</span>/<span class="kbd">P</span> pause; <span class="kbd">M</span> mute.</p>
         </div>
-  <div class="footer"><a class="btn" href="/game/">Launch</a> · <a class="btn" href="/">Home</a></div>
+  <div class="footer"><a class="btn" href="../game/">Launch</a></div>
       </div>
       
       <div class="card">
-        <h3>🆕 What's New in v2.1.0</h3>
+        <h3>🆕 What’s New</h3>
         <div class="body">
-          <p><strong>Combat System Overhaul:</strong></p>
+          <p><strong>Combat System:</strong></p>
           <ul>
-            <li>Fixed hit detection - combat actually works now!</li>
-            <li>Added debug console logging for troubleshooting</li>
-            <li>Enhanced separation logic to prevent character overlap</li>
-            <li>Improved boss combat mechanics</li>
+            <li>Reliable player vs boss hits (larger reach/boxes and timing windows)</li>
+            <li>Separation fix so the player is never pushed backward</li>
+            <li>Boss HP bar toggle in Dev panel (auto-on when boss spawns)</li>
+            <li>Debug hitbox colors: yellow=player, magenta=boss body, purple=boss attack</li>
           </ul>
-          <p><strong>Visual Improvements:</strong></p>
+          <p><strong>Visual/UX:</strong></p>
           <ul>
-            <li>Title screen 15% larger for better visibility</li>
-            <li>Enhanced sprite processing with transparency</li>
-            <li>Better error handling and fallbacks</li>
+            <li>Title screen scaled up ~15% with safe headroom</li>
+            <li>Per-frame sprite transparency cleanup for NES-style magenta</li>
+            <li>Fewer 404s via CDN-only engine and simplified asset names</li>
           </ul>
         </div>
         <div class="footer"><a class="btn" href="https://github.com/thecdrz/Baden-City-Ransom/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Full Changelog</a></div>
