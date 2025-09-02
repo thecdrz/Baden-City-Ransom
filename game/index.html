@@ -980,8 +980,8 @@
   // Run uses the same frames as walk but much faster
   this.anims.create({ key: 'alex-run', frames: range('walk'), frameRate: 18, repeat: -1 }); // Faster running
   this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 15, repeat: 0 }); // Faster punching
-  // Kick: use color-keyed (non-trimmed) frames to avoid opaque background box
-  this.anims.create({ key: 'alex-kick',  frames: colorKeyFrames(map.kick, 'alex_ck_k'),  frameRate: 12, repeat: 0 });
+  // Kick: use base spritesheet frames for stability
+  this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 12, repeat: 0 });
   
   // Enhanced jump animation with better transitions
   {
@@ -1580,7 +1580,7 @@
           this.alex.play(animKey);
           
           // Combo-based visual effects
-          const tilt = (kind === 'kick' ? 8 : 5) * Math.min(1.3, 1 + this.comboCount * 0.1);
+          const tilt = (kind === 'kick' ? 5.5 : 4) * Math.min(1.2, 1 + this.comboCount * 0.08);
           this.tweens.add({ 
             targets: this.alex, 
             angle: (this.alex.flipX ? -tilt : tilt), 
