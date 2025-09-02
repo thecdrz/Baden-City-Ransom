@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Game Test</title>
+  <style>
+    body { margin: 0; padding: 0; background: #000; color: #fff; font-family: monospace; }
+    #status { padding: 20px; font-size: 18px; }
+    #gameContainer { width: 100vw; height: 80vh; background: #111; }
+  </style>
+</head>
+<body>
+  <div id="status">Loading...</div>
+  <div id="gameContainer"></div>
+  
+  <script>
+    console.log('Script started');
+    document.getElementById('status').textContent = 'Script loaded, testing Phaser...';
+    
+    // Load Phaser
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js';
+    script.crossOrigin = 'anonymous';
+    
+    script.onload = () => {
+      console.log('Phaser loaded successfully');
+      document.getElementById('status').textContent = 'Phaser loaded! Creating game...';
+      
+      class TestScene extends Phaser.Scene {
+        constructor() { super({ key: 'TestScene' }); }
+        
+        create() {
+          console.log('Test scene created');
+          document.getElementById('status').textContent = 'Game running! You should see a red square and yellow text.';
+          
+          // Add visible elements
+          this.add.rectangle(100, 100, 50, 50, 0xff0000);
+          this.add.text(200, 100, 'GAME IS WORKING!', { fontSize: '24px', fill: '#ffff00' });
+          
+          // Test input
+          this.input.on('pointerdown', () => {
+            this.add.text(400, 200, 'Click detected!', { fontSize: '18px', fill: '#00ff00' });
+          });
+        }
+      }
+      
+      const config = {
+        type: Phaser.AUTO,
+        width: 800,
+        height: 600,
+        parent: 'gameContainer',
+        backgroundColor: '#222222',
+        scene: TestScene,
+        render: {
+          pixelArt: true,
+          antialias: false
+        }
+      };
+      
+      try {
+        const game = new Phaser.Game(config);
+        console.log('Game created successfully');
+      } catch (e) {
+        console.error('Game creation failed:', e);
+        document.getElementById('status').textContent = 'Game creation failed: ' + e.message;
+      }
+    };
+    
+    script.onerror = (e) => {
+      console.error('Failed to load Phaser:', e);
+      document.getElementById('status').textContent = 'Failed to load Phaser library';
+    };
+    
+    document.head.appendChild(script);
+  </script>
+</body>
+</html>

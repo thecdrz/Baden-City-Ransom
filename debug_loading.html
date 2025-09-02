@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Debug Game Loading</title>
+  <style>
+    body { margin: 0; padding: 20px; background: #000; color: #fff; font-family: monospace; }
+    .step { margin: 10px 0; padding: 10px; background: #333; border-radius: 5px; }
+    .ok { background: #004400; }
+    .error { background: #440000; }
+    #console { background: #222; padding: 10px; max-height: 300px; overflow-y: scroll; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Game Loading Diagnostics</h1>
+  
+  <div class="step" id="step1">1. Loading script...</div>
+  <div class="step" id="step2">2. Waiting for Phaser...</div>
+  <div class="step" id="step3">3. Creating game...</div>
+  <div class="step" id="step4">4. Loading assets...</div>
+  <div class="step" id="step5">5. Game scene...</div>
+  
+  <div id="console"></div>
+  
+  <div id="gameContainer" style="border: 2px solid #555; margin-top: 20px; height: 400px;"></div>
+  
+  <script>
+    const log = (msg) => {
+      console.log(msg);
+      const consoleDiv = document.getElementById('console');
+      consoleDiv.innerHTML += msg + '<br>';
+      consoleDiv.scrollTop = consoleDiv.scrollHeight;
+    };
+    
+    const setStep = (stepId, status, msg) => {
+      const step = document.getElementById(stepId);
+      step.className = `step ${status}`;
+      step.textContent = msg;
+    };
+    
+    log('Starting diagnostics...');
+    setStep('step1', 'ok', '1. Script loaded successfully');
+    
+    // Load Phaser
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js';
+    script.crossOrigin = 'anonymous';
+    
+    script.onload = () => {
+      log('Phaser loaded: ' + (typeof Phaser !== 'undefined' ? 'SUCCESS' : 'FAILED'));
+      setStep('step2', typeof Phaser !== 'undefined' ? 'ok' : 'error', 
+              '2. Phaser: ' + (typeof Phaser !== 'undefined' ? 'Loaded' : 'Failed'));
+      
+      if (typeof Phaser === 'undefined') return;
+      
+      try {
+        class DebugScene extends Phaser.Scene {
+          constructor() { super({ key: 'DebugScene' }); }
+          
+          preload() {
+            log('Preload started');
+            setStep('step4', 'ok', '4. Assets loading...');
+            
+            // Try to load one simple asset
+            this.load.image('test', './assets/misc/BoxArt.png');
+            
+            this.load.on('complete', () => {
+              log('Assets loaded successfully');
+              setStep('step4', 'ok', '4. Assets loaded');
+            });
+            
+            this.load.on('loaderror', (file) => {
+              log('Asset load error: ' + file.key + ' -> ' + file.src);
+              setStep('step4', 'error', '4. Asset error: ' + file.key);
+            });
+          }
+          
+          create() {
+            log('Scene created successfully');
+            setStep('step5', 'ok', '5. Game scene running');
+            
+            // Add visible elements
+            this.add.rectangle(50, 50, 100, 100, 0xff0000);
+            this.add.text(200, 50, 'GAME WORKING!', { fontSize: '24px', fill: '#00ff00' });
+            
+            if (this.textures.exists('test')) {
+              this.add.image(100, 200, 'test').setScale(0.2);
+              log('Test image displayed');
+            }
+          }
+        }
+        
+        const config = {
+          type: Phaser.AUTO,
+          width: 800,
+          height: 400,
+          parent: 'gameContainer',
+          backgroundColor: '#111111',
+          scene: DebugScene,
+          render: { pixelArt: true }
+        };
+        
+        log('Creating Phaser game...');
+        const game = new Phaser.Game(config);
+        setStep('step3', 'ok', '3. Game created successfully');
+        
+      } catch (e) {
+        log('Game creation error: ' + e.message);
+        setStep('step3', 'error', '3. Game creation failed: ' + e.message);
+      }
+    };
+    
+    script.onerror = (e) => {
+      log('Script loading error: ' + e);
+      setStep('step2', 'error', '2. Phaser loading failed');
+    };
+    
+    document.head.appendChild(script);
+  </script>
+</body>
+</html>
