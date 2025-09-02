@@ -976,6 +976,8 @@
             // Remove spawn flash tint to avoid rare solid-rectangle artifacts on some renderers
             try { boss.clearTint(); boss.setBlendMode(Phaser.BlendModes.NORMAL); } catch(_) {}
             this.showMessage(`${this.bossName} spawned nearby.`);
+            // Auto-enable Boss HP bar for clarity during testing
+            try { this.setShowBossHP && this.setShowBossHP(true); } catch(_) {}
             // Reflect in Dev UI if present
             try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = true; } catch(_) {}
             return boss;
@@ -1280,7 +1282,7 @@
               const dy = Math.abs((this.alex.y||0) - (target.y||0));
               const nearOk = (dx <= (reach + w*0.9) && dy <= 28);
               if (hitOk || nearOk) {
-                const dmg = aw.kind === 'kick' ? 16 : 12;
+                const dmg = aw.kind === 'kick' ? 20 : 14;
                 const knock = aw.kind === 'kick' ? 8 : 6;
                 target.health = Math.max(0, (target.health||1) - dmg);
                 try { target.setTintFill(0xff0000); this.time.delayedCall(80, () => target.clearTint()); } catch(_) {}
@@ -1321,9 +1323,10 @@
           // Play a short punch/kick SFX
           this.playSfx(['sfx_punch1','sfx_punch2'], 0.5, kind==='kick' ? 0.95 : 1.02);
           // Build a simple hitbox in front of Alex (larger for reliability)
-          const reach = (kind === 'kick') ? 42 : 36;
-          const w = (kind === 'kick') ? 30 : 26;
-          const h = 26;
+          // Make hits more forgiving
+          const reach = (kind === 'kick') ? 50 : 42;
+          const w = (kind === 'kick') ? 34 : 30;
+          const h = 28;
           const ox = this.alex.flipX ? -reach : reach;
           // Place the hitbox around chest height (a bit above the feet)
           const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h - 6, w, h);
@@ -1346,8 +1349,8 @@
     // Fallback: distance/lane check using centers
     const dx = Math.abs((target.x||0) - (this.alex.x + (this.alex.flipX ? -reach : reach)));
     const dy = Math.abs((this.alex.y||0) - (target.y||0));
-    const nearOk = (dx <= (reach + w*0.6) && dy <= 20);
-    this.debugLogs && console.log(`Player hit check: rect=${hitOk}, dx=${dx.toFixed(1)}, dy=${dy.toFixed(1)}, thresh=${(reach + w*0.6).toFixed(1)}`);
+  const nearOk = (dx <= (reach + w*0.9) && dy <= 28);
+    this.debugLogs && console.log(`Player hit check: rect=${hitOk}, dx=${dx.toFixed(1)}, dy=${dy.toFixed(1)}, thresh=${(reach + w*0.9).toFixed(1)}`);
     if (hitOk || nearOk) {
       this.debugLogs && console.log(`PLAYER HIT APPLIED! Target health: ${target.health} -> ${Math.max(0, (target.health||1) - dmg)}`);
               target.health = Math.max(0, (target.health||1) - dmg);
@@ -1364,12 +1367,12 @@
                   if (target === this.boss) this.showMessage((this.bossName||'Boss') + ' defeated!');
               }
     } else {
-      this.debugLogs && console.log(`Player hit MISSED: rect=${hitOk}, dx=${dx.toFixed(1)} > ${(reach + w*0.6).toFixed(1)} OR dy=${dy.toFixed(1)} > 20`);
+  this.debugLogs && console.log(`Player hit MISSED: rect=${hitOk}, dx=${dx.toFixed(1)} > ${(reach + w*0.9).toFixed(1)} OR dy=${dy.toFixed(1)} > 28`);
     }
           };
 
           // Damage numbers
-          const dmg = kind === 'kick' ? 16 : 12;
+          const dmg = kind === 'kick' ? 20 : 14;
           this.enemies.forEach(e => applyHit(e, dmg, 5));
           if (this.boss) applyHit(this.boss, dmg, 8);
 
@@ -1379,8 +1382,8 @@
 
           // Open an active attack window to catch movement during the swing
           const nowTs = this.time.now || 0;
-          const windup = 30; // shorter windup so hit goes active quicker
-          const active = 260; // longer active window for easier timing
+          const windup = 24; // even shorter windup
+          const active = 320; // even longer active window for easier timing
           this._attackWindow = {
             kind, reach, w, h,
             startAt: nowTs + windup,
@@ -1516,7 +1519,8 @@
               const dy2 = Math.abs(this.alex.y - b.y);
               if (this.debugHitboxes && this.hitGfx) {
                 try {
-                  this.hitGfx.lineStyle(1, 0xff00ff, 1);
+                  // Boss attack box in purple to distinguish from boss body (magenta) and player attack (yellow)
+                  this.hitGfx.lineStyle(1, 0x9900ff, 1);
                   this.hitGfx.strokeRect(bhit.x, bhit.y, bhit.width, bhit.height);
                   const pb3 = this.alex.getBounds();
                   this.hitGfx.lineStyle(1, 0x00ff00, 0.8);
