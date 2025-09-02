@@ -268,12 +268,10 @@
               this.scale.refresh();
             }
           } catch(_) {}
-          // Enhanced scene start with proper preload handling
+          // Simple direct scene start
           try { 
-            this.time.delayedCall(100, () => {
+            this.time.delayedCall(50, () => {
               console.log('Starting game scene...');
-              // Use restart instead of start to ensure preload runs
-              this.scene.stop('BadenCityRansomGame');
               this.scene.start('BadenCityRansomGame');
             }); 
           }
@@ -436,19 +434,32 @@
       }
       
       create() {
-  console.log('Creating authentic Baden City Ransom...');
+  console.log('=== CREATING BADEN CITY RANSOM GAME ===');
+  console.log('Scene started, adding basic test elements...');
+  
+  // Add a simple test rectangle to verify scene is working
+  try {
+    const testRect = this.add.rectangle(400, 300, 100, 100, 0xff0000);
+    console.log('Test rectangle added successfully');
+  } catch(e) {
+    console.error('Failed to add test rectangle:', e);
+  }
+  
+  // Basic scene verification
+  console.log('Scene key:', this.scene.key);
+  console.log('Available textures:', this.textures.getTextureKeys());
   
   // Verify critical textures exist (but don't block creation)
-  const requiredTextures = ['alex', 'downtown_bg'];
+  const requiredTextures = ['alex', 'downtown'];
   const missing = requiredTextures.filter(tex => !this.textures.exists(tex));
   if (missing.length > 0) {
     console.warn('Some textures missing:', missing);
-    console.log('Available textures:', this.textures.getTextureKeys());
     // Continue anyway with fallbacks
   }
   
   // Ensure camera zoom is neutral (avoid accidental device zoom factors)
   try { this.cameras.main.setZoom(1); } catch(_) {}
+  console.log('Initial setup complete, proceeding with scene creation...');
         // Reveal HUD and dialogue now that gameplay begins
         try {
           const hud = document.getElementById('hud');
@@ -496,12 +507,17 @@
         
   // Add background – create CROPPED canvas texture with a safe fallback
   let useKey = 'downtown';
+  console.log('Starting background creation...');
   try {
     const srcTex = this.textures.get('downtown');
+    console.log('Got downtown texture:', !!srcTex);
     const srcImg = srcTex?.getSourceImage();
+    console.log('Got source image:', !!srcImg);
     const bgWidth = srcTex?.source?.[0]?.width;
     const bgHeight = srcTex?.source?.[0]?.height;
+    console.log('Background dimensions:', bgWidth, 'x', bgHeight);
     if (srcImg && bgWidth && bgHeight) {
+      console.log('Processing background crop...');
       // Crop to keep the actual play area: trim off the sky and bottom credits.
       const CROP_TOP_PCT = 0.72;     // where the playfield starts
       const CROP_BOTTOM_PCT = 0.982; // just before the purple credit strip
@@ -979,7 +995,12 @@
         } catch(e) {
           console.warn('Failed to initialize pause keys:', e);
           // Ensure pauseKeys is an object even if initialization fails
-          this.pauseKeys = {};
+          this.pauseKeys = { esc: null, p: null, m: null };
+        }
+        
+        // Guarantee pauseKeys exists (double safety)
+        if (!this.pauseKeys) {
+          this.pauseKeys = { esc: null, p: null, m: null };
         }
         // Dev flags and helpers
         this.godMode = false;
@@ -1304,11 +1325,28 @@
         
   this.showMessage('Welcome to Baden City! Fight your way through the gangs!');
   step('ready');
+  console.log('Game scene created successfully!');
         } catch (err) {
-          console.error(err);
-          diag(`Init error: ${err?.message || err}`);
-          // Do not rethrow to avoid opaque 'Script error.' from cross-origin contexts
-          return;
+          console.error('GAME CREATION ERROR:', err);
+          console.error('Error stack:', err.stack);
+          diag(`CRITICAL ERROR: ${err?.message || err}`);
+          
+          // Try to create a minimal fallback scene instead of black screen
+          try {
+            this.add.text(400, 240, 'Game Error - Check Console', { 
+              fontSize: '24px', 
+              color: '#ff0000',
+              fontFamily: 'monospace'
+            }).setOrigin(0.5);
+            
+            this.add.text(400, 280, `Error: ${err?.message || 'Unknown error'}`, { 
+              fontSize: '16px', 
+              color: '#ffff00',
+              fontFamily: 'monospace'
+            }).setOrigin(0.5);
+          } catch(_) {}
+          
+          // Do not return - let the scene exist even with errors
         }
       }
       
@@ -1317,9 +1355,9 @@
         try {
           // Safely check for undefined values with defensive coding
           const JustDown = Phaser.Input.Keyboard?.JustDown;
-          if (typeof JustDown === 'function') {
-            const escPressed = this.pauseKeys && this.pauseKeys.esc && JustDown(this.pauseKeys.esc);
-            const pPressed = this.pauseKeys && this.pauseKeys.p && JustDown(this.pauseKeys.p);
+          if (typeof JustDown === 'function' && this.pauseKeys) {
+            const escPressed = this.pauseKeys.esc && JustDown(this.pauseKeys.esc);
+            const pPressed = this.pauseKeys.p && JustDown(this.pauseKeys.p);
             
             if (escPressed || pPressed) {
               this.enterPause && this.enterPause();

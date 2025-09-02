@@ -221,7 +221,7 @@
           const iw = img.width || 1, ih = img.height || 1;
           const sx = cw/iw, sy = ch/ih;
           // Make the start image noticeably larger while keeping safe headroom
-          const s = Math.min(sx, sy) * 0.99; // previously 0.93
+          const s = Math.min(sx, sy) * 1.14; // make start image ~15% bigger
           img.setScale(s);
           img.setPosition(cw/2, ch * (0.5 + TITLE_Y_BIAS));
           if (txt) txt.setPosition(cw/2, ch*0.975);
@@ -295,15 +295,15 @@
         const url = (p) => encodeURI(p);
         const logAdd = (kind, key, src) => console.log(`load ${kind}: ${key} <- ${src}`);
         
-        // Load sprites with authentic NES frame size (16x24)
+        // Load player spritesheet (use preprocessed local sheet available in repo)
         {
-          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png');
+          const src = asset('sprites/alex_sprite.png');
           logAdd('sheet','alex', src);
           this.load.spritesheet('alex', src, {
-          frameWidth: 16,
-          frameHeight: 32,
-          margin: 1,
-          spacing: 1
+            frameWidth: 16,
+            frameHeight: 32,
+            margin: 1,
+            spacing: 1
           });
         }
         
@@ -342,9 +342,9 @@
           spacing: 1
           });
         }
-        // Boss spritesheet (Moose)
+        // Boss spritesheet (use preprocessed local boss sprite to ensure availability)
         {
-          const src = asset('sprites/NES - River City Ransom _ Street Gangs - Enemies & Bosses - Moose.png');
+          const src = asset('sprites/boss_sprite.png');
           logAdd('sheet','boss', src);
           this.load.spritesheet('boss', src, {
             frameWidth: 16,
@@ -356,34 +356,23 @@
         
         // Load background
         {
-          const src = asset('backgrounds/NES - River City Ransom _ Street Gangs - Backgrounds - Downtown.png');
+          const src = asset('backgrounds/downtown_bg.png');
           logAdd('image','downtown', src);
           this.load.image('downtown', src);
         }
         
-        // Optional: GandalfHardcore layered character parts (compose into one sprite)
-        {
-          const base = `${ASSETS_BASE}/GandalfHardcore FREE Character Asset Pack/GandalfHardcore Character Asset Pack`;
-          const parts = [
-            ['gh_skin', `${base}/Character skin colors/Male Skin3.png`],
-            ['gh_pants', `${base}/Male Clothing/Blue Pants.png`],
-            ['gh_shirt', `${base}/Male Clothing/Shirt v2.png`],
-            ['gh_shoes', `${base}/Male Clothing/Shoes.png`],
-            ['gh_hair', `${base}/Male Hair/Male Hair3.png`]
-          ];
-          parts.forEach(([key, rel]) => { const src = url(rel); logAdd('image', key, src); this.load.image(key, src); });
-        }
+  // (Removed optional GandalfHardcore layered parts to avoid 404 noise)
 
   // (Knight assets removed)
 
         // Load authentic River City Ransom music
-  this.load.audio('bgm', asset('audio/river_city_ransom_ost_mp3/River City Anthem.mp3'));
-  this.load.audio('street_music', asset('audio/river_city_ransom_ost_mp3/Street of No Escape.mp3'));
+  this.load.audio('bgm', asset('audio/river_city_ransom_ost_mp3/bgm_anthem.mp3'));
+  this.load.audio('street_music', asset('audio/river_city_ransom_ost_mp3/bgm_street.mp3'));
   // Short SFX
-  this.load.audio('sfx_punch1', asset('audio/river_city_ransom_ost_mp3/classic-punch.mp3'));
-  this.load.audio('sfx_punch2', asset('audio/river_city_ransom_ost_mp3/fist-fight.mp3'));
-  this.load.audio('sfx_jump1',  asset('audio/river_city_ransom_ost_mp3/jump-01.mp3'));
-  this.load.audio('sfx_jump2',  asset('audio/river_city_ransom_ost_mp3/jump-02.mp3'));
+  this.load.audio('sfx_punch1', asset('audio/river_city_ransom_ost_mp3/sfx_punch1.mp3'));
+  this.load.audio('sfx_punch2', asset('audio/river_city_ransom_ost_mp3/sfx_punch2.mp3'));
+  this.load.audio('sfx_jump1',  asset('audio/river_city_ransom_ost_mp3/sfx_jump1.mp3'));
+  this.load.audio('sfx_jump2',  asset('audio/river_city_ransom_ost_mp3/sfx_jump2.mp3'));
       }
       
       create() {
@@ -445,7 +434,7 @@
     if (srcImg && bgWidth && bgHeight) {
       // Crop to keep the actual play area: trim off the sky and bottom credits.
       const CROP_TOP_PCT = 0.72;     // where the playfield starts
-      const CROP_BOTTOM_PCT = 0.982; // just before the purple credit strip
+  const CROP_BOTTOM_PCT = 0.978; // crop a touch higher to fully remove the purple credit strip
       const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
       const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
       this._bgNaturalW = bgWidth;
@@ -549,10 +538,22 @@
 
   // Create Alex player positioned near road (feet-origin at y=ch-18 approx)
   step('spawn alex');
-  // Force the classic RCR Alex sheet (no GH composite)
+  // Prefer the 'alex' spritesheet; if missing, draw a small placeholder so scene still starts
   const PLAYER_TEX = 'alex';
-  if (!this.textures.exists(PLAYER_TEX)) throw new Error('Missing player texture: alex');
-  this.alex = this.add.sprite(200, ch - 18, PLAYER_TEX, 0).setOrigin(0.5, 1);
+  if (this.textures.exists(PLAYER_TEX)) {
+    this.alex = this.add.sprite(200, ch - 18, PLAYER_TEX, 0).setOrigin(0.5, 1);
+  } else {
+    // Minimal placeholder rectangle so we never crash on missing asset
+    const phKey = 'player_placeholder';
+    if (!this.textures.exists(phKey)) {
+      const t = this.textures.createCanvas(phKey, 16, 32);
+      const c = t.getContext();
+      c.fillStyle = '#ff6b6b'; c.fillRect(0,0,16,32);
+      c.strokeStyle = '#000'; c.lineWidth = 2; c.strokeRect(1,1,14,30);
+      t.refresh();
+    }
+    this.alex = this.add.image(200, ch - 18, phKey).setOrigin(0.5, 1);
+  }
     this.alex.setScale(playerScale);
   // Camera follows the player for smooth scrolling
   this.cameras.main.startFollow(this.alex, true, 0.12, 0.12);
@@ -590,7 +591,8 @@
         // Create Alex animations using heuristic row/column ranges with URL override support
   step('anims');
   const SHEET = { fw:16, fh:32, margin:1, spacing:1 };
-  const alexImg = this.textures.get('alex').source?.[0];
+  const baseTexKey = this.textures.exists('alex') ? 'alex' : null;
+  const alexImg = baseTexKey ? this.textures.get(baseTexKey).source?.[0] : null;
   const sheetW = alexImg?.width || 0;
   const sheetH = alexImg?.height || 0;
   // Derive frames-per-row/col exactly like Phaser's spritesheet parser: (size - 2*margin + spacing) / (frame + spacing)
@@ -627,7 +629,8 @@
     const hasOverride = new URLSearchParams(location.search).get('alexMap');
     if (hasOverride) return; // user-specified mapping wins
     try {
-      const tex = this.textures.get('alex');
+      if (!baseTexKey) return;
+      const tex = this.textures.get(baseTexKey);
       const src = tex.getSourceImage();
       if (!src) return;
       const tmp = document.createElement('canvas');
@@ -638,7 +641,7 @@
         let heights = [];
         for (let c = 0; c < Math.min(3, cols); c++) {
           const fIdx = idx(r, c);
-          const f = this.textures.getFrame('alex', fIdx);
+          const f = this.textures.getFrame(baseTexKey, fIdx);
           if (!f) continue;
           tmp.width = f.cutWidth; tmp.height = f.cutHeight;
           ctx.clearRect(0,0,tmp.width,tmp.height);
@@ -681,14 +684,21 @@
     const tmp = document.createElement('canvas');
     const ctx = tmp.getContext('2d', { willReadFrequently: true });
     usedIdx.forEach(fIndex => {
-      const f = this.textures.getFrame('alex', fIndex);
+      if (!baseTexKey) return;
+      const f = this.textures.getFrame(baseTexKey, fIndex);
       if (!f) return;
       tmp.width = f.cutWidth; tmp.height = f.cutHeight;
       ctx.clearRect(0,0,tmp.width,tmp.height);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
+      // Convert color-key magenta to transparent (tolerant threshold)
       const img = ctx.getImageData(0,0,tmp.width,tmp.height);
       const data = img.data;
+      for (let p=0; p<data.length; p+=4) {
+        const r=data[p], g=data[p+1], b=data[p+2], a=data[p+3];
+        if (a>0 && r>200 && g<110 && b>200) data[p+3]=0;
+      }
+      ctx.putImageData(img, 0, 0);
       let minX=tmp.width, minY=tmp.height, maxX=-1, maxY=-1;
       for (let y=0;y<tmp.height;y++) {
         for (let x=0;x<tmp.width;x++) {
@@ -701,12 +711,14 @@
       }
       const w = Math.max(1, maxX-minX+1);
       const h = Math.max(1, maxY-minY+1);
+  const padBottom = 3; // keep feet safe
       // Create a canvas texture per frame
       const key = trimKeyOf(fIndex);
       if (this.textures.exists(key)) this.textures.remove(key);
-      const ct = this.textures.createCanvas(key, w, h);
+      const ct = this.textures.createCanvas(key, w, h + padBottom);
       const c2 = ct.getContext();
       c2.imageSmoothingEnabled = false;
+      c2.clearRect(0,0,w,h+padBottom);
       c2.drawImage(tmp, minX, minY, w, h, 0, 0, w, h);
       ct.refresh();
     });
@@ -719,11 +731,16 @@
       const fIndex = idx(m.row, c);
       const tKey = trimKeyOf(fIndex);
       if (this.textures.exists(tKey)) frames.push({ key: tKey, frame: 0 });
-      else frames.push({ key: 'alex', frame: fIndex });
+      else frames.push({ key: baseTexKey || 'alex', frame: fIndex });
     }
-    return frames.length?frames:[{ key: 'alex', frame: 0 }];
+    return frames.length?frames:[{ key: baseTexKey || 'alex', frame: 0 }];
   };
-  this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 1, repeat: -1 });
+  if (baseTexKey) {
+    const idleIndex = idx(map.walk.row, map.walk.from);
+    const idleTrimKey = trimKeyOf(idleIndex);
+    const idleFrames = this.textures.exists(idleTrimKey) ? [{ key: idleTrimKey, frame: 0 }] : [{ key: baseTexKey, frame: idleIndex }];
+    this.anims.create({ key: 'alex-idle', frames: idleFrames, frameRate: 1, repeat: -1 });
+  }
   this.anims.create({ key: 'alex-walk', frames: range('walk'), frameRate: 8, repeat: -1 });
   // Run uses the same frames as walk but faster
   this.anims.create({ key: 'alex-run', frames: range('walk'), frameRate: 14, repeat: -1 });
@@ -733,8 +750,8 @@
   {
     const jIndex = idx(map.jump.row, map.jump.from);
     const tKey = trimKeyOf(jIndex);
-    const jf = this.textures.exists(tKey) ? [{ key: tKey, frame: 0 }] : [{ key: 'alex', frame: jIndex }];
-    this.anims.create({ key: 'alex-jump', frames: jf, frameRate: 1, repeat: -1 });
+    const jf = this.textures.exists(tKey) ? [{ key: tKey, frame: 0 }] : (baseTexKey ? [{ key: baseTexKey, frame: jIndex }] : [{ key: 'alex', frame: 0 }]);
+    if (baseTexKey) this.anims.create({ key: 'alex-jump', frames: jf, frameRate: 1, repeat: -1 });
   }
         
         // Create enemy animations for each type - simplified
@@ -756,9 +773,59 @@
             });
           }
         });
-  // Boss animations
-  this.anims.create({ key: 'boss-idle', frames: [{ key: 'boss', frame: 0 }], frameRate: 1, repeat: 0 });
-  this.anims.create({ key: 'boss-walk', frames: [{ key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 6, repeat: -1 });
+  // Boss animations (use trimmed frames for tighter bounds if possible)
+  try {
+    const trimBossKeyOf = (i) => `boss_t_${i}`;
+    const ensureTrim = (i) => {
+      const tKey = trimBossKeyOf(i);
+      if (this.textures.exists(tKey)) return tKey;
+      const f = this.textures.getFrame('boss', i);
+      if (!f || !f.source) return null;
+      const tmp = document.createElement('canvas');
+      const ctx = tmp.getContext('2d', { willReadFrequently: true });
+      tmp.width = f.cutWidth; tmp.height = f.cutHeight;
+      ctx.clearRect(0,0,tmp.width,tmp.height);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
+      // Convert color-key magenta to transparent if present (tolerant threshold)
+      const img = ctx.getImageData(0,0,tmp.width,tmp.height);
+      const data = img.data;
+      for (let p = 0; p < data.length; p += 4) {
+        const r = data[p], g = data[p+1], b = data[p+2], a = data[p+3];
+        // Treat magenta-like as transparent (looser than pure 255,0,255)
+        if (a > 0 && r > 200 && g < 110 && b > 200) {
+          data[p+3] = 0;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      let minX=tmp.width, minY=tmp.height, maxX=-1, maxY=-1;
+      for (let y=0;y<tmp.height;y++) {
+        for (let x=0;x<tmp.width;x++) {
+          const a = data[(y*tmp.width + x)*4 + 3];
+          if (a>8) { if (x<minX) minX=x; if (y<minY) minY=y; if (x>maxX) maxX=x; if (y>maxY) maxY=y; }
+        }
+      }
+      if (maxX<minX || maxY<minY) { minX=0; minY=0; maxX=1; maxY=1; }
+      const w = Math.max(1, maxX-minX+1), h = Math.max(1, maxY-minY+1);
+      // Add a little transparent padding at the bottom so feet never appear clipped
+  const padBottom = 3;
+      const ct = this.textures.createCanvas(tKey, w, h + padBottom);
+      const c2 = ct.getContext(); c2.imageSmoothingEnabled = false;
+      c2.clearRect(0,0,w,h+padBottom);
+      c2.drawImage(tmp, minX, minY, w, h, 0, 0, w, h);
+      ct.refresh();
+      return tKey;
+    };
+    const idleKey = ensureTrim(0) || 'boss';
+    const walk0 = ensureTrim(0) || 'boss';
+    const walk1 = ensureTrim(1) || 'boss';
+    this.anims.create({ key: 'boss-idle', frames: [{ key: idleKey, frame: 0 }], frameRate: 1, repeat: -1 });
+    this.anims.create({ key: 'boss-walk', frames: [{ key: walk0, frame: 0 }, { key: walk1, frame: 0 }], frameRate: 6, repeat: -1 });
+  } catch(_) {
+    // Fallback without trimming
+    this.anims.create({ key: 'boss-idle', frames: [{ key: 'boss', frame: 0 }], frameRate: 1, repeat: -1 });
+    this.anims.create({ key: 'boss-walk', frames: [{ key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 6, repeat: -1 });
+  }
         
         // Start animations
   this.alex.play('alex-idle');
@@ -798,7 +865,7 @@
               try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = false; } catch(_) {}
               return null;
             }
-            const boss = this.add.sprite(bx, by, spriteKey, 0).setOrigin(0.5, 1).setDepth(10);
+            const boss = this.add.sprite(bx, by + 1, spriteKey, 0).setOrigin(0.5, 1).setDepth(10);
             const enemyScale = this.bg?.scaleX || 1;
             boss.setScale(enemyScale);
             boss.health = 140; boss.type = spriteKey; boss.speed = 0.8; boss.attackCooldown = 0; boss.attackCadence = 850; boss.attackReach = 30; boss.attackWidth = 24; boss.attackHeight = 20;
@@ -806,7 +873,8 @@
             try { boss.play(animKey); } catch(_) {}
             this.bossName = this.bossName || 'Miller';
             this.boss = boss;
-      try { boss.setTintFill(0xff55ff); this.time.delayedCall(180, () => boss.clearTint()); } catch(_) {}
+            // Remove spawn flash tint to avoid rare solid-rectangle artifacts on some renderers
+            try { boss.clearTint(); boss.setBlendMode(Phaser.BlendModes.NORMAL); } catch(_) {}
             this.showMessage(`${this.bossName} spawned nearby.`);
             // Reflect in Dev UI if present
             try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = true; } catch(_) {}
@@ -1069,22 +1137,30 @@
           // Place the hitbox around chest height (a bit above the feet)
           const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h - 6, w, h);
 
-      const applyHit = (target, dmg, knock=6) => {
+  const applyHit = (target, dmg, knock=10) => {
             if (!target || !target.active) return;
-            const tb = target.getBounds();
-            if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, tb)) {
+    // Distance/lane hit check (ignore sprite bounds for reliability)
+    const dx = Math.abs((target.x||0) - (this.alex.x + (this.alex.flipX ? -reach : reach)));
+    const dy = Math.abs((this.alexBaseY||this.alex.y) - (target.y||0));
+    console.log(`Player hit check: dx=${dx.toFixed(1)}, dy=${dy.toFixed(1)}, reach+w*0.6=${(reach + w*0.6).toFixed(1)}`);
+    if (dx <= (reach + w*0.6) && dy <= 18) {
+      console.log(`PLAYER HIT APPLIED! Target health: ${target.health} -> ${Math.max(0, (target.health||1) - dmg)}`);
               target.health = Math.max(0, (target.health||1) - dmg);
               target.setTintFill(0xff0000);
               this.time.delayedCall(80, () => target.clearTint());
               // simple knockback
               target.x += this.alex.flipX ? -knock : knock;
               this.synth.click(1300, 0.03, 0.10);
+      // brief gate to let hits resolve without separation canceling them
+      this._recentHitUntil = (this.time.now||0) + 140;
               if (target.health === 0 && !target._defeated) {
                 target._defeated = true; target.play(`${target.type||'boss'}-idle`);
                 this.tweens.add({ targets: target, alpha: 0, duration: 400, onComplete: () => target.destroy() });
                   if (target === this.boss) this.showMessage((this.bossName||'Boss') + ' defeated!');
               }
-            }
+    } else {
+      console.log(`Player hit MISSED: dx=${dx.toFixed(1)} > ${(reach + w*0.6).toFixed(1)} OR dy=${dy.toFixed(1)} > 18`);
+    }
           };
 
           // Damage numbers
@@ -1112,11 +1188,14 @@
           const nowMs = time;
           if (nowMs < this.playerInvulUntil) return; // i-frames
           this.alex.health = Math.max(0, (this.alex.health||0) - dmg);
-          this.playerInvulUntil = nowMs + 600; // 600ms i-frames
+          const INV = 700; // slightly longer i-frames to reduce shake
+          this.playerInvulUntil = nowMs + INV;
           this.alex.setTintFill(0xffff77);
-          this.time.delayedCall(100, () => this.alex.clearTint());
+          this.time.delayedCall(120, () => this.alex.clearTint());
           // knockback along X and tiny vertical wobble
           this.alex.x += (dir<0?-1:1) * knock;
+          // tiny auto-step down the lane to avoid overlapping lock
+          this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY + 1, this.baseYMin, this.baseYMax);
           this.cameras.main.shake(90, 0.004);
           this.synth.click(900, 0.04, 0.12);
           if (this.alex.health === 0) {
@@ -1189,18 +1268,43 @@
             try { if (b.anims?.currentAnim?.key !== `${b.type}-walk`) b.play && b.play(`${b.type}-walk`); } catch(_) {}
           } else {
             try { if (b.anims?.currentAnim?.key !== `${b.type}-idle`) b.play && b.play(`${b.type}-idle`); } catch(_) {}
+            // Immediate attack check with cooldown (simple and reliable)
             if (time >= (b.attackCooldown||0)) {
-              const w = b.attackWidth || 22, h = b.attackHeight || 20;
-              const ox = b.flipX ? -reach : reach;
-              const hitRect = new Phaser.Geom.Rectangle(b.x + ox - w/2, b.y - h - 6, w, h);
-              const pb = this.alex.getBounds();
-              if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
-                hurtPlayer(14, 12, b.flipX?-1:1);
+              const w = b.attackWidth ? Math.max(22, b.attackWidth) : 26;
+              const h = b.attackHeight ? Math.max(18, b.attackHeight) : 22;
+              const ox = (b.flipX ? -1 : 1) * (reach * 0.9);
+              const dx2 = Math.abs(this.alex.x - (b.x + (b.flipX ? -reach : reach)));
+              const dy2 = Math.abs(this.alexBaseY - b.y);
+              console.log(`Boss hit check: dx2=${dx2.toFixed(1)}, dy2=${dy2.toFixed(1)}, reach+w*0.6=${(reach + w*0.6).toFixed(1)}`);
+              if (dx2 <= (reach + w*0.6) && dy2 <= 18) {
+                console.log(`BOSS HIT APPLIED! Player health: ${this.alex.health} -> ${Math.max(0, (this.alex.health||0) - 14)}`);
+                hurtPlayer(14, 16, b.flipX?-1:1);
+                b.attackCooldown = time + (b.attackCadence || 900);
+                this._recentHitUntil = (this.time.now||0) + 140;
+              } else {
+                console.log(`Boss hit MISSED: dx2=${dx2.toFixed(1)} > ${(reach + w*0.6).toFixed(1)} OR dy2=${dy2.toFixed(1)} > 18`);
               }
-              b.attackCooldown = time + (b.attackCadence || 900);
             }
           }
         }
+
+        // Soft separation to avoid Alex overlapping with enemies/boss
+        const separate = (a, b, minGap=6) => {
+          if (!a || !b || !a.active || !b.active) return;
+          // allow brief window after a hit where we don't separate (to avoid canceling hits)
+          if ((this.time.now||0) < (this._recentHitUntil||0)) return;
+          const ab = a.getBounds(); const bb = b.getBounds();
+          if (Phaser.Geom.Intersects.RectangleToRectangle(ab, bb)) {
+      // Compute overlap width and split the push; single-step separation to avoid continuous shove
+      const overlapX = Math.min(ab.right, bb.right) - Math.max(ab.left, bb.left);
+      const centerA = ab.centerX; const centerB = bb.centerX;
+      const dir = (centerA < centerB) ? -1 : 1;
+      const shift = Math.min(minGap, (overlapX/2) + 1);
+      a.x += dir * shift; b.x -= dir * shift;
+          }
+        };
+    this.enemies.forEach(e => separate(this.alex, e, 5));
+    if (this.boss) separate(this.alex, this.boss, 6);
         
         // Update HUD elements
         document.getElementById('health').innerHTML = this.alex.health;

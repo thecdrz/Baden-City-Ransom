@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baden City Ransom - DEBUG</title>
+  <style>
+  html, body { height: 100%; }
+  body { margin: 0; padding: 0; background: #000; color: #fff; font-family: monospace; overflow: hidden; }
+  #canvasWrap { width: 100%; height: 100%; position: relative; background: #000; }
+  #canvasWrap canvas { display:block; }
+  </style>
+</head>
+<body>
+  <div id="canvasWrap"></div>
+  
+  <script>
+  (async function bootstrap() {
+    function loadScript(url) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = url;
+        s.crossOrigin = 'anonymous';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    console.log('Loading Phaser...');
+    await loadScript('https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js');
+    console.log('Phaser loaded');
+
+    class TitleScene extends Phaser.Scene {
+      constructor(){ super({ key: 'TitleScene' }); }
+      
+      create() {
+        console.log('TitleScene created');
+        this.add.text(400, 200, 'Baden City Ransom', { fontSize: '32px', fill: '#ffffff' }).setOrigin(0.5);
+        this.add.text(400, 300, 'Click to Start', { fontSize: '24px', fill: '#ffffff' }).setOrigin(0.5);
+        
+        const start = () => {
+          console.log('Starting game scene');
+          this.scene.start('GameScene');
+        };
+        
+        this.input.once('pointerdown', start);
+      }
+    }
+
+    class GameScene extends Phaser.Scene {
+      constructor(){ super({ key: 'GameScene' }); }
+      
+      create() {
+        console.log('GameScene created');
+        this.add.text(400, 300, 'Game Scene Works!', { fontSize: '32px', fill: '#00ff00' }).setOrigin(0.5);
+        this.add.rectangle(100, 100, 50, 50, 0xff0000); // Red square
+      }
+    }
+
+    const config = {
+      type: Phaser.AUTO,
+      width: 800,
+      height: 600,
+      parent: 'canvasWrap',
+      backgroundColor: '#000000',
+      scene: [TitleScene, GameScene],
+      render: {
+        pixelArt: true,
+        antialias: false,
+        roundPixels: true
+      }
+    };
+
+    console.log('Starting game...');
+    const game = new Phaser.Game(config);
+    console.log('Game started');
+
+  })().catch(console.error);
+  </script>
+</body>
+</html>
