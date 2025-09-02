@@ -861,7 +861,7 @@
       ctx.clearRect(0,0,tmp.width,tmp.height);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
-      // Convert magenta backgrounds to transparent (simplified and optimized)
+  // Convert magenta backgrounds to transparent (simplified and optimized)
       const img = ctx.getImageData(0,0,tmp.width,tmp.height);
       const data = img.data;
       for (let p = 0; p < data.length; p += 4) {
@@ -883,8 +883,8 @@
       }
       if (maxX<minX || maxY<minY) { minX=0; minY=0; maxX=1; maxY=1; }
       const w = Math.max(1, maxX-minX+1), h = Math.max(1, maxY-minY+1);
-    // Add a little transparent padding at the bottom so feet never appear clipped
-  const padBottom = 8; // keep boss feet visible
+    // Add more transparent padding at the bottom so feet never appear clipped
+  const padBottom = 14; // increased bottom padding for boss
       const ct = this.textures.createCanvas(tKey, w, h + padBottom);
       const c2 = ct.getContext(); c2.imageSmoothingEnabled = false;
       c2.clearRect(0,0,w,h+padBottom);
@@ -895,12 +895,17 @@
     const idleKey = ensureTrim(0) || 'boss';
     const walk0 = ensureTrim(0) || 'boss';
     const walk1 = ensureTrim(1) || 'boss';
-    this.anims.create({ key: 'boss-idle', frames: [{ key: idleKey, frame: 0 }], frameRate: 1, repeat: -1 });
-    this.anims.create({ key: 'boss-walk', frames: [{ key: walk0, frame: 0 }, { key: walk1, frame: 0 }], frameRate: 6, repeat: -1 });
+  this.anims.create({ key: 'boss-idle', frames: [{ key: idleKey, frame: 0 }], frameRate: 1, repeat: -1 });
+  this.anims.create({ key: 'boss-walk', frames: [{ key: walk0, frame: 0 }, { key: walk1, frame: 0 }], frameRate: 6, repeat: -1 });
+  // Simple attack animation using the alternate frame
+  const atk1 = ensureTrim(1) || 'boss';
+  const atk0 = ensureTrim(0) || 'boss';
+  this.anims.create({ key: 'boss-attack', frames: [{ key: atk1, frame: 0 }, { key: atk0, frame: 0 }, { key: atk1, frame: 0 }], frameRate: 14, repeat: 0 });
   } catch(_) {
     // Fallback without trimming
     this.anims.create({ key: 'boss-idle', frames: [{ key: 'boss', frame: 0 }], frameRate: 1, repeat: -1 });
-    this.anims.create({ key: 'boss-walk', frames: [{ key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 6, repeat: -1 });
+  this.anims.create({ key: 'boss-walk', frames: [{ key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 6, repeat: -1 });
+  this.anims.create({ key: 'boss-attack', frames: [{ key: 'boss', frame: 1 }, { key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 14, repeat: 0 });
   }
         
         // Start animations
@@ -1273,7 +1278,7 @@
               const reach = aw.reach, w = aw.w;
               const dx = Math.abs((target.x||0) - (this.alex.x + (this.alex.flipX ? -reach : reach)));
               const dy = Math.abs((this.alex.y||0) - (target.y||0));
-              const nearOk = (dx <= (reach + w*0.7) && dy <= 24);
+              const nearOk = (dx <= (reach + w*0.9) && dy <= 28);
               if (hitOk || nearOk) {
                 const dmg = aw.kind === 'kick' ? 16 : 12;
                 const knock = aw.kind === 'kick' ? 8 : 6;
@@ -1375,7 +1380,7 @@
           // Open an active attack window to catch movement during the swing
           const nowTs = this.time.now || 0;
           const windup = 30; // shorter windup so hit goes active quicker
-          const active = 220; // longer active window for easier timing
+          const active = 260; // longer active window for easier timing
           this._attackWindow = {
             kind, reach, w, h,
             startAt: nowTs + windup,
@@ -1502,6 +1507,7 @@
             this.debugLogs && console.log(`Boss attack cooldown check: time=${time} >= attackCooldown=${b.attackCooldown}`);
             if (time >= (b.attackCooldown||0)) {
               this.debugLogs && console.log(`Boss attempting attack!`);
+              try { b.play && b.play(`${b.type}-attack`); } catch(_) {}
               const w = b.attackWidth ? Math.max(22, b.attackWidth) : 60;
               const h = b.attackHeight ? Math.max(18, b.attackHeight) : 40;
               const ox = (b.flipX ? -1 : 1) * (reach * 0.9);
@@ -1518,32 +1524,33 @@
                 } catch(_) {}
               }
               this.debugLogs && console.log(`Boss hit check: dx2=${dx2.toFixed(1)}, dy2=${dy2.toFixed(1)}, reach+w*0.6=${(reach + w*0.6).toFixed(1)}`);
-              if (dx2 <= (reach + w*0.6) && dy2 <= 18) {
+              if (dx2 <= (reach + w*0.75) && dy2 <= 24) {
                 this.debugLogs && console.log(`BOSS HIT APPLIED! Player health: ${this.alex.health} -> ${Math.max(0, (this.alex.health||0) - 14)}`);
                 hurtPlayer(14, 16, b.flipX?-1:1);
                 b.attackCooldown = time + (b.attackCadence || 900);
                 this._recentHitUntil = (this.time.now||0) + 140;
               } else {
-                this.debugLogs && console.log(`Boss hit MISSED: dx2=${dx2.toFixed(1)} > ${(reach + w*0.6).toFixed(1)} OR dy2=${dy2.toFixed(1)} > 18`);
+                this.debugLogs && console.log(`Boss hit MISSED: dx2=${dx2.toFixed(1)} > ${(reach + w*0.75).toFixed(1)} OR dy2=${dy2.toFixed(1)} > 24`);
               }
             }
           }
         }
 
-        // Soft separation to avoid Alex overlapping with enemies/boss
+        // Soft separation: never push the player; only nudge NPCs away to resolve overlap
         const separate = (a, b, minGap=6) => {
           if (!a || !b || !a.active || !b.active) return;
           // allow brief window after a hit where we don't separate (to avoid canceling hits)
           if ((this.time.now||0) < (this._recentHitUntil||0)) return;
           const ab = a.getBounds(); const bb = b.getBounds();
-          if (Phaser.Geom.Intersects.RectangleToRectangle(ab, bb)) {
-      // Compute overlap width and split the push; single-step separation to avoid continuous shove
-      const overlapX = Math.min(ab.right, bb.right) - Math.max(ab.left, bb.left);
-      const centerA = ab.centerX; const centerB = bb.centerX;
-      const dir = (centerA < centerB) ? -1 : 1;
-      const shift = Math.min(minGap, (overlapX/2) + 1);
-      a.x += dir * shift; b.x -= dir * shift;
-          }
+          if (!Phaser.Geom.Intersects.RectangleToRectangle(ab, bb)) return;
+          const overlapX = Math.min(ab.right, bb.right) - Math.max(ab.left, bb.left);
+          if (overlapX <= 0) return;
+          const centerA = ab.centerX; const centerB = bb.centerX;
+          const dir = (centerA < centerB) ? -1 : 1; // enemy on right => dir = -1
+          const shift = Math.min(minGap, (overlapX/2) + 0.5);
+          // Only move the non-player entity away from Alex to avoid involuntary drift
+          // In our calls, 'a' is Alex and 'b' is the NPC (enemy or boss)
+          try { b.x -= dir * shift; } catch(_) {}
         };
     this.enemies.forEach(e => separate(this.alex, e, 5));
     if (this.boss) separate(this.alex, this.boss, 6);
