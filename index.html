@@ -224,16 +224,16 @@
           const s = Math.min(sx, sy) * 1.14; // make start image ~15% bigger
           img.setScale(s);
           img.setPosition(cw/2, ch * (0.5 + TITLE_Y_BIAS));
-          if (txt) txt.setPosition(cw/2, ch*0.975);
+          if (txt) txt.setPosition(cw/2, ch*0.85);
         };
         fit();
   this.scale.on('resize', () => fit());
   // Refit shortly after DOM height change
   try { this.time.delayedCall(60, () => fit()); } catch(_) {}
 
-  txt = this.add.text(w/2, h*0.975, 'Press Enter or Click to Start', {
+  txt = this.add.text(w/2, h*0.85, 'Press Enter or Click to Start', {
           fontFamily:'monospace', fontSize:'24px', color:'#ffff00', stroke:'#000', strokeThickness:4
-        }).setOrigin(0.5,1).setDepth(10);
+        }).setOrigin(0.5,0.5).setDepth(10);
   // Slow blinking effect
   this.tweens.add({ targets: txt, alpha: 0.25, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
@@ -377,6 +377,98 @@
       
       create() {
   console.log('Creating authentic Baden City Ransom...');
+  
+  // Process all loaded sprites to ensure transparent backgrounds
+  this.processSpritesForTransparency = () => {
+    const spriteKeys = ['alex', 'boss', 'enemy1', 'enemy2', 'enemy3'];
+    spriteKeys.forEach(key => {
+      if (!this.textures.exists(key)) return;
+      
+      console.log(`Processing transparency for ${key} sprite...`);
+      const texture = this.textures.get(key);
+      const source = texture.source[0];
+      if (!source || !source.image) return;
+      
+      // Create a new processed version of the texture
+      const processedKey = `${key}_transparent`;
+      if (this.textures.exists(processedKey)) return; // Already processed
+      
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      canvas.width = source.width;
+      canvas.height = source.height;
+      ctx.imageSmoothingEnabled = false;
+      
+      // Draw original image
+      ctx.drawImage(source.image, 0, 0);
+      
+      // Process transparency
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      let transparentPixels = 0;
+      
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+        if (a > 0) {
+          let shouldBeTransparent = false;
+          // Magenta backgrounds: #FF00FF and similar
+          if (r > 200 && g < 110 && b > 200) shouldBeTransparent = true;
+          // Pure magenta: #FF00FF  
+          else if (r > 240 && g < 20 && b > 240) shouldBeTransparent = true;
+          // Bright green: #00FF00 and similar
+          else if (r < 50 && g > 200 && b < 50) shouldBeTransparent = true;
+          // Pure green: #00FF00
+          else if (r < 20 && g > 240 && b < 20) shouldBeTransparent = true;
+          // Cyan: #00FFFF and similar
+          else if (r < 50 && g > 200 && b > 200) shouldBeTransparent = true;
+          // Pure cyan: #00FFFF
+          else if (r < 20 && g > 240 && b > 240) shouldBeTransparent = true;
+          // White: #FFFFFF
+          else if (r > 240 && g > 240 && b > 240) shouldBeTransparent = true;
+          // Light gray: #C0C0C0 and similar
+          else if (r > 180 && g > 180 && b > 180 && Math.abs(r-g) < 20 && Math.abs(g-b) < 20) shouldBeTransparent = true;
+          // Pure black: #000000
+          else if (r < 20 && g < 20 && b < 20) shouldBeTransparent = true;
+          
+          if (shouldBeTransparent) {
+            data[i+3] = 0; // Set alpha to 0
+            transparentPixels++;
+          }
+        }
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+      
+      // Create new texture with processed transparency
+      const newTexture = this.textures.createCanvas(processedKey, canvas.width, canvas.height);
+      const newCtx = newTexture.getContext();
+      newCtx.drawImage(canvas, 0, 0);
+      newTexture.refresh();
+      
+      console.log(`${key}: Processed ${transparentPixels} pixels to transparent`);
+      
+      // Replace original texture frames with transparent versions
+      if (transparentPixels > 0) {
+        try {
+          // Copy frame data structure but point to new transparent image
+          const originalFrames = texture.frames;
+          Object.keys(originalFrames).forEach(frameName => {
+            if (frameName === '__BASE') return;
+            const frame = originalFrames[frameName];
+            // Update the frame to use the new transparent texture
+            frame.source = newTexture.source[0];
+          });
+          console.log(`${key}: Updated ${Object.keys(originalFrames).length - 1} frames with transparency`);
+        } catch (e) {
+          console.warn(`Failed to update frames for ${key}:`, e);
+        }
+      }
+    });
+  };
+  
+  // Apply transparency processing
+  this.processSpritesForTransparency();
+  
   // Ensure camera zoom is neutral (avoid accidental device zoom factors)
   try { this.cameras.main.setZoom(1); } catch(_) {}
         // Reveal HUD and dialogue now that gameplay begins
@@ -691,12 +783,31 @@
       ctx.clearRect(0,0,tmp.width,tmp.height);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
-      // Convert color-key magenta to transparent (tolerant threshold)
+      // Convert common sprite background colors to transparent
       const img = ctx.getImageData(0,0,tmp.width,tmp.height);
       const data = img.data;
       for (let p=0; p<data.length; p+=4) {
         const r=data[p], g=data[p+1], b=data[p+2], a=data[p+3];
-        if (a>0 && r>200 && g<110 && b>200) data[p+3]=0;
+        if (a > 0) {
+          // Magenta color key (common in NES sprites): #FF00FF and similar
+          if (r>200 && g<110 && b>200) data[p+3]=0;
+          // Pure magenta: #FF00FF
+          else if (r>240 && g<20 && b>240) data[p+3]=0;
+          // Bright green backgrounds (common in sprite sheets): #00FF00 and similar  
+          else if (r<50 && g>200 && b<50) data[p+3]=0;
+          // Pure green: #00FF00
+          else if (r<20 && g>240 && b<20) data[p+3]=0;
+          // Cyan backgrounds: #00FFFF and similar
+          else if (r<50 && g>200 && b>200) data[p+3]=0;
+          // Pure cyan: #00FFFF  
+          else if (r<20 && g>240 && b>240) data[p+3]=0;
+          // White backgrounds (sometimes used): #FFFFFF
+          else if (r>240 && g>240 && b>240) data[p+3]=0;
+          // Light gray backgrounds: #C0C0C0 and similar
+          else if (r>180 && g>180 && b>180 && Math.abs(r-g)<20 && Math.abs(g-b)<20) data[p+3]=0;
+          // Pure black backgrounds (less common but possible): #000000
+          else if (r<20 && g<20 && b<20) data[p+3]=0;
+        }
       }
       ctx.putImageData(img, 0, 0);
       let minX=tmp.width, minY=tmp.height, maxX=-1, maxY=-1;
@@ -787,14 +898,30 @@
       ctx.clearRect(0,0,tmp.width,tmp.height);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
-      // Convert color-key magenta to transparent if present (tolerant threshold)
+      // Convert common sprite background colors to transparent  
       const img = ctx.getImageData(0,0,tmp.width,tmp.height);
       const data = img.data;
       for (let p = 0; p < data.length; p += 4) {
         const r = data[p], g = data[p+1], b = data[p+2], a = data[p+3];
-        // Treat magenta-like as transparent (looser than pure 255,0,255)
-        if (a > 0 && r > 200 && g < 110 && b > 200) {
-          data[p+3] = 0;
+        if (a > 0) {
+          // Magenta color key (common in NES sprites): #FF00FF and similar
+          if (r>200 && g<110 && b>200) data[p+3]=0;
+          // Pure magenta: #FF00FF
+          else if (r>240 && g<20 && b>240) data[p+3]=0;
+          // Bright green backgrounds (common in sprite sheets): #00FF00 and similar
+          else if (r<50 && g>200 && b<50) data[p+3]=0;
+          // Pure green: #00FF00
+          else if (r<20 && g>240 && b<20) data[p+3]=0;
+          // Cyan backgrounds: #00FFFF and similar
+          else if (r<50 && g>200 && b>200) data[p+3]=0;
+          // Pure cyan: #00FFFF
+          else if (r<20 && g>240 && b>240) data[p+3]=0;
+          // White backgrounds (sometimes used): #FFFFFF
+          else if (r>240 && g>240 && b>240) data[p+3]=0;
+          // Light gray backgrounds: #C0C0C0 and similar
+          else if (r>180 && g>180 && b>180 && Math.abs(r-g)<20 && Math.abs(g-b)<20) data[p+3]=0;
+          // Pure black backgrounds (less common but possible): #000000
+          else if (r<20 && g<20 && b<20) data[p+3]=0;
         }
       }
       ctx.putImageData(img, 0, 0);
@@ -1139,9 +1266,9 @@
 
   const applyHit = (target, dmg, knock=10) => {
             if (!target || !target.active) return;
-    // Distance/lane hit check (ignore sprite bounds for reliability)
+    // Distance/lane hit check - use actual sprite positions for consistency
     const dx = Math.abs((target.x||0) - (this.alex.x + (this.alex.flipX ? -reach : reach)));
-    const dy = Math.abs((this.alexBaseY||this.alex.y) - (target.y||0));
+    const dy = Math.abs((this.alex.y||0) - (target.y||0));
     console.log(`Player hit check: dx=${dx.toFixed(1)}, dy=${dy.toFixed(1)}, reach+w*0.6=${(reach + w*0.6).toFixed(1)}`);
     if (dx <= (reach + w*0.6) && dy <= 18) {
       console.log(`PLAYER HIT APPLIED! Target health: ${target.health} -> ${Math.max(0, (target.health||1) - dmg)}`);
@@ -1274,7 +1401,7 @@
               const h = b.attackHeight ? Math.max(18, b.attackHeight) : 22;
               const ox = (b.flipX ? -1 : 1) * (reach * 0.9);
               const dx2 = Math.abs(this.alex.x - (b.x + (b.flipX ? -reach : reach)));
-              const dy2 = Math.abs(this.alexBaseY - b.y);
+              const dy2 = Math.abs(this.alex.y - b.y);
               console.log(`Boss hit check: dx2=${dx2.toFixed(1)}, dy2=${dy2.toFixed(1)}, reach+w*0.6=${(reach + w*0.6).toFixed(1)}`);
               if (dx2 <= (reach + w*0.6) && dy2 <= 18) {
                 console.log(`BOSS HIT APPLIED! Player health: ${this.alex.health} -> ${Math.max(0, (this.alex.health||0) - 14)}`);

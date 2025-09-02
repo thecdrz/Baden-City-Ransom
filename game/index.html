@@ -232,16 +232,16 @@
           const s = Math.min(sx, sy) * 0.99; // previously 0.93
           img.setScale(s);
           img.setPosition(cw/2, ch * (0.5 + TITLE_Y_BIAS));
-          if (txt) txt.setPosition(cw/2, ch*0.975);
+          if (txt) txt.setPosition(cw/2, ch*0.85);
         };
         fit();
   this.scale.on('resize', () => fit());
   // Refit shortly after DOM height change
   try { this.time.delayedCall(60, () => fit()); } catch(_) {}
 
-  txt = this.add.text(w/2, h*0.975, 'Press Enter or Click to Start', {
+  txt = this.add.text(w/2, h*0.85, 'Press Enter or Click to Start', {
           fontFamily:'monospace', fontSize:'24px', color:'#ffff00', stroke:'#000', strokeThickness:4
-        }).setOrigin(0.5,1).setDepth(10);
+        }).setOrigin(0.5,0.5).setDepth(10);
   // Slow blinking effect
   this.tweens.add({ targets: txt, alpha: 0.25, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
