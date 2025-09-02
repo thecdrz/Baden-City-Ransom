@@ -479,8 +479,7 @@
   
   // Add a simple test rectangle to verify scene is working
   try {
-    const testRect = this.add.rectangle(400, 300, 100, 100, 0xff0000);
-    console.log('Test rectangle added successfully');
+  // (removed temporary red test rectangle)
   } catch(e) {
     console.error('Failed to add test rectangle:', e);
   }
@@ -1043,28 +1042,63 @@
             });
           }
         });
-  // Boss animations with properly defined frames
+  // Boss animations with magenta color-key cleanup (remove pink backgrounds)
   // First check if the boss texture exists and has frames
   if (this.textures.exists('boss')) {
     const frameCount = this.textures.get('boss').frameTotal;
     console.log('Boss sprite frame count:', frameCount);
-    
-    // Ensure we have valid frames for animations
-    const frame0 = { key: 'boss', frame: 0 };
-    const frame1 = frameCount > 1 ? { key: 'boss', frame: 1 } : frame0;
-    
-    this.anims.create({ 
-      key: 'boss-idle', 
-      frames: [frame0], 
-      frameRate: 1, 
-      repeat: -1 
-    });
-    this.anims.create({ 
-      key: 'boss-walk', 
-      frames: [frame0, frame1], 
-      frameRate: 6, 
-      repeat: -1 
-    });
+
+    // Create color-keyed canvas textures per boss frame (preserve original size to avoid jitter)
+    const ckFrames = [];
+    try {
+      const tmp = document.createElement('canvas');
+      const ctx = tmp.getContext('2d', { willReadFrequently: true });
+
+      // Helper to detect a likely magenta key from corners
+      const pickKeyColor = (imgData, w, h) => {
+        const corners = [0,0, (w-1),0, 0,(h-1), (w-1),(h-1)];
+        const scores = new Map();
+        for (let i=0;i<corners.length;i+=2) {
+          const x=corners[i], y=corners[i+1];
+          const p=((y*w)+x)*4; const r=imgData[p], g=imgData[p+1], b=imgData[p+2];
+          const k=`${r},${g},${b}`; scores.set(k,(scores.get(k)||0)+1);
+        }
+        let best=null, n=-1; for (const [k,v] of scores) { if (v>n) { best=k; n=v; } }
+        if (!best) return null; const [R,G,B]=best.split(',').map(x=>parseInt(x,10));
+        // Only treat as key if it’s strongly magenta/purple-ish
+        const isMagenta = (R>170 && B>170 && G<140) || (R>150 && B>150 && (R+ B) > G*2);
+        return isMagenta ? {R,G,B} : null;
+      };
+
+      for (let fi=0; fi<Math.max(1, frameCount); fi++) {
+        const f = this.textures.getFrame('boss', fi);
+        if (!f) { ckFrames.push({ key: 'boss', frame: Math.min(fi, frameCount-1) }); continue; }
+        const w=f.cutWidth, h=f.cutHeight; tmp.width=w; tmp.height=h; ctx.clearRect(0,0,w,h);
+        ctx.imageSmoothingEnabled=false;
+        ctx.drawImage(f.source.image, f.cutX, f.cutY, w, h, 0, 0, w, h);
+        const img=ctx.getImageData(0,0,w,h); const data=img.data;
+        const keyCol = pickKeyColor(data.data||data, w, h) || pickKeyColor(data.data||data, w, h);
+        const R = keyCol?.R, G = keyCol?.G, B = keyCol?.B;
+        if (R !== undefined) {
+          const thr=34;
+          for (let p=0;p<data.data.length;p+=4) {
+            const r=data.data[p], g=data.data[p+1], b=data.data[p+2];
+            if (Math.abs(r-R)+Math.abs(g-G)+Math.abs(b-B) <= thr) data.data[p+3]=0;
+          }
+          ctx.putImageData(img,0,0);
+        }
+        const texKey=`boss_ck_${fi}`; if (this.textures.exists(texKey)) this.textures.remove(texKey);
+        const canv=this.textures.createCanvas(texKey, w, h); const c2=canv.getContext();
+        c2.imageSmoothingEnabled=false; c2.clearRect(0,0,w,h); c2.drawImage(tmp,0,0); canv.refresh();
+        ckFrames.push({ key: texKey, frame: 0 });
+      }
+    } catch (e) { console.warn('Boss color-key pass failed, using raw frames', e); }
+
+    const frame0 = ckFrames[0] || { key: 'boss', frame: 0 };
+    const frame1 = ckFrames[1] || frame0;
+
+    this.anims.create({ key: 'boss-idle', frames: [frame0], frameRate: 1, repeat: -1 });
+    this.anims.create({ key: 'boss-walk', frames: [frame0, frame1], frameRate: 6, repeat: -1 });
   } else {
     console.warn('Boss texture not loaded properly');
   }
