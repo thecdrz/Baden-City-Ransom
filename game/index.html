@@ -1142,8 +1142,11 @@
   const idleFrame = ckFrames[0] || { key: 'boss', frame: 0 };
   const walkFrames = [idleFrame];
 
-    this.anims.create({ key: 'boss-idle', frames: [idleFrame], frameRate: 1, repeat: -1 });
-    this.anims.create({ key: 'boss-walk', frames: walkFrames, frameRate: walkFrames.length>1?6:1, repeat: -1 });
+  this.anims.create({ key: 'boss-idle', frames: [idleFrame], frameRate: 1, repeat: -1 });
+  this.anims.create({ key: 'boss-walk', frames: walkFrames, frameRate: walkFrames.length>1?6:1, repeat: -1 });
+  // Attack animation: prefer a distinct second cleaned frame if available, else reuse idle with a quick yoyo
+  const atkFrames = (ckFrames && ckFrames.length > 1) ? [ckFrames[1], idleFrame, ckFrames[1]] : [idleFrame];
+  this.anims.create({ key: 'boss-attack', frames: atkFrames, frameRate: (atkFrames.length>1?14:1), repeat: 0 });
   } else {
     console.warn('Boss texture not loaded properly');
   }
@@ -1990,7 +1993,7 @@
           }
         });
         // Boss AI (Miller) – completely rewritten for maximum stability
-        if (this.boss && !this.boss._defeated) {
+  if (this.boss && !this.boss._defeated) {
           const b = this.boss;
           
           // Fix potential issues with boss sprite visibility
@@ -2022,46 +2025,42 @@
           if (distX > reach + 2 || !alignedY) {
             // Move boss toward player
             b.x += Math.sign(dx) * (b.speed || 0.8);
-            
+
             // Keep boss within visible bounds
             b.x = Phaser.Math.Clamp(b.x, 40, (this.bg.displayWidth || 800) - 40);
-            
+
             // Vertical alignment (lane matching)
             if (!alignedY) b.y += Math.sign(this.alexBaseY - b.y) * 0.6;
-            
-            // Fix: Use a simplified approach to animation
-            // Just update the frame directly if animation fails
+
+            // Play walk only when not attacking
             try {
-              // Prefer cleaned boss animation if present
               const cleanedWalk = 'boss-walk';
               const walkAnim = this.anims.exists(cleanedWalk) ? cleanedWalk : `${b.type}-walk`;
-              if (this.anims.exists(walkAnim)) {
+              if (!b._attacking && this.anims.exists(walkAnim)) {
                 if (b.anims?.currentAnim?.key !== walkAnim) b.play(walkAnim);
-              } else {
-                // Fallback: render a single stable frame to avoid slicing artifacts
-                b.setFrame(0);
               }
-            } catch(e) {
-              // If animation fails, at least ensure the frame is valid
-              b.setFrame(0);
-            }
-            
+            } catch(_) {}
+
           } else {
-            // When idle, just use frame 0
+            // In range: idle/attack
             try {
               const cleanedIdle = 'boss-idle';
               const idleAnim = this.anims.exists(cleanedIdle) ? cleanedIdle : `${b.type}-idle`;
-              if (this.anims.exists(idleAnim)) {
+              if (!b._attacking && this.anims.exists(idleAnim)) {
                 if (b.anims?.currentAnim?.key !== idleAnim) b.play(idleAnim);
-              } else {
-                b.setFrame(0);
               }
-            } catch(e) {
-              b.setFrame(0);
-            }
-            
-            // Attack logic
-            if (time >= (b.attackCooldown || 0)) {
+            } catch(_) {}
+
+            // Attack when cooldown allows and not already attacking
+            if (!b._attacking && time >= (b.attackCooldown || 0)) {
+              try {
+                if (this.anims.exists('boss-attack')) {
+                  b._attacking = true;
+                  b.play('boss-attack');
+                  b.once('animationcomplete-boss-attack', () => { b._attacking = false; });
+                }
+              } catch(_) { /* ignore */ }
+
               const w = b.attackWidth || 22, h = b.attackHeight || 20;
               const ox = b.flipX ? -reach : reach;
               const hitRect = new Phaser.Geom.Rectangle(b.x + ox - w/2, b.y - h - 6, w, h);
