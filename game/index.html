@@ -912,13 +912,76 @@
     }
     return frames.length ? frames : [{ key: 'alex', frame: 0 }];
   };
+
+  // Build color-keyed frames (same size as original) by clearing a dominant border color.
+  // This avoids opaque background boxes during special moves without introducing trim jitter.
+  const colorKeyFrames = (m, prefix='alex_ck') => {
+    if (!m) return range('punch');
+    const frames = [];
+    const tmp = document.createElement('canvas');
+    const ctx = tmp.getContext('2d', { willReadFrequently: true });
+    const pickKeyColor = (imgData, w, h) => {
+      const corners = [
+        0, 0,
+        (w-1), 0,
+        0, (h-1),
+        (w-1), (h-1)
+      ];
+      const counts = new Map();
+      for (let i=0; i<corners.length; i+=2) {
+        const x = corners[i], y = corners[i+1];
+        const idxPx = (y*w + x) * 4;
+        const r = imgData[idxPx], g = imgData[idxPx+1], b = imgData[idxPx+2];
+        const key = `${r},${g},${b}`;
+        counts.set(key, (counts.get(key)||0)+1);
+      }
+      let best = null, bestN = -1;
+      for (const [k, n] of counts.entries()) { if (n > bestN) { best = k; bestN = n; } }
+      if (!best) return null;
+      const [R,G,B] = best.split(',').map(x=>parseInt(x,10));
+      return {R,G,B};
+    };
+    for (let c=m.from; c<=m.to; c++) {
+      const fIndex = idx(m.row, c);
+      const f = this.textures.getFrame('alex', fIndex);
+      if (!f) continue;
+      const w = f.cutWidth, h = f.cutHeight;
+      tmp.width = w; tmp.height = h;
+      ctx.clearRect(0,0,w,h);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(f.source.image, f.cutX, f.cutY, w, h, 0, 0, w, h);
+      const img = ctx.getImageData(0,0,w,h);
+      const data = img.data;
+      const keyCol = pickKeyColor(data, w, h);
+      if (keyCol) {
+        const {R,G,B} = keyCol;
+        const thr = 30; // small tolerance
+        for (let p=0; p<data.length; p+=4) {
+          const r=data[p], g=data[p+1], b=data[p+2];
+          if (Math.abs(r-R)+Math.abs(g-G)+Math.abs(b-B) <= thr) data[p+3] = 0;
+        }
+        ctx.putImageData(img, 0, 0);
+      }
+      const texKey = `${prefix}_${fIndex}`;
+      if (this.textures.exists(texKey)) this.textures.remove(texKey);
+      const t = this.textures.createCanvas(texKey, w, h);
+      const c2 = t.getContext();
+      c2.imageSmoothingEnabled = false;
+      c2.clearRect(0,0,w,h);
+      c2.drawImage(tmp, 0, 0);
+      t.refresh();
+      frames.push({ key: texKey, frame: 0 });
+    }
+    return frames.length ? frames : range('punch');
+  };
   // Enhanced animation creation with smoother frame rates
   this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 2, repeat: -1 });
   this.anims.create({ key: 'alex-walk', frames: range('walk'), frameRate: 12, repeat: -1 }); // Smoother walking
   // Run uses the same frames as walk but much faster
   this.anims.create({ key: 'alex-run', frames: range('walk'), frameRate: 18, repeat: -1 }); // Faster running
   this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 15, repeat: 0 }); // Faster punching
-  this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 12, repeat: 0 });
+  // Kick: use color-keyed (non-trimmed) frames to avoid opaque background box
+  this.anims.create({ key: 'alex-kick',  frames: colorKeyFrames(map.kick, 'alex_ck_k'),  frameRate: 12, repeat: 0 });
   
   // Enhanced jump animation with better transitions
   {
