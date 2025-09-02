@@ -469,13 +469,15 @@
           const pixelScale = this.bg?.scaleX || 1;
           const alexScale = pixelScale * (this._playerScaleAdjust || 1.0);
           const enemyScale = pixelScale * 1.0;
-          const groundY = h - 18;
+          const roadTop = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT));
+          const roadBot = Math.round(h * (this._roadBottomFrac || 0.96));
+          const groundY = Math.max(roadTop + 20, Math.min(h - 8, roadBot - 6));
           if (this.alex) {
             this.alex.setScale(alexScale);
           }
           this.baseYMax = groundY;
-          // Keep player constrained to the detected road band with a larger safety margin
-          this.baseYMin = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 12;
+          // Keep player constrained to the detected road band
+          this.baseYMin = roadTop + 10;
           this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
           if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
           if (this.alex) this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
@@ -525,15 +527,37 @@
         } catch (e) { console.warn('Road detection failed', e); }
         return null;
       };
-      const frac = analyzeRoadTop(ctx, bgWidth, this._bgCropH);
-      this._roadTopFrac = (frac != null ? frac : 0.65);
+      // Detect bottom boundary by scanning upward
+      const analyzeRoadBottom = (ctx, w, h) => {
+        try {
+          const sampleCols = 24;
+          const xs = Array.from({length: sampleCols}, (_, i) => Math.floor((i+0.5) * w / sampleCols));
+          const isBlueish = (r,g,b) => b > g + 20 && b > r + 20 && b > 80;
+          for (let y = h - 1; y >= 0; y -= 2) {
+            let blueHits = 0;
+            for (const x of xs) {
+              const d = ctx.getImageData(x, y, 1, 1).data;
+              if (isBlueish(d[0], d[1], d[2])) blueHits++;
+            }
+            if (blueHits >= Math.ceil(sampleCols * 0.6)) {
+              return y / h;
+            }
+          }
+        } catch (e) { console.warn('Road bottom detection failed', e); }
+        return null;
+      };
+      const fracTop = analyzeRoadTop(ctx, bgWidth, this._bgCropH);
+      const fracBot = analyzeRoadBottom(ctx, bgWidth, this._bgCropH);
+      this._roadTopFrac = (fracTop != null ? fracTop : 0.65);
+      this._roadBottomFrac = (fracBot != null ? fracBot : 0.96);
       useKey = playKey;
     } else {
       // Fallback to raw image if something’s off
       const raw = this.textures.get('downtown');
       this._bgNaturalW = raw?.source?.[0]?.width || 800;
       this._bgCropH = raw?.source?.[0]?.height || 480;
-      this._roadTopFrac = 0.65;
+  this._roadTopFrac = 0.65;
+  this._roadBottomFrac = 0.96;
     }
   } catch (e) {
     // Fallback to raw image on any unexpected error
@@ -541,7 +565,8 @@
     this._bgNaturalW = raw?.source?.[0]?.width || 800;
     this._bgCropH = raw?.source?.[0]?.height || 480;
     useKey = 'downtown';
-    this._roadTopFrac = 0.65;
+  this._roadTopFrac = 0.65;
+  this._roadBottomFrac = 0.96;
   }
 
   // Optionally tile the cropped background horizontally to create a long map sized to target minutes
@@ -915,6 +940,8 @@
             }
             // Use exact groundY as bottom anchor to avoid sinking or clipping feet
             const boss = this.add.sprite(bx, by, spriteKey, 0).setOrigin(0.5, 1).setDepth(10);
+            // Force visibility in case any prior alpha/visible flag leaked
+            try { boss.setVisible(true); boss.setAlpha(1); } catch(_) {}
             const enemyScale = this.bg?.scaleX || 1;
             boss.setScale(enemyScale);
             boss.health = 140; boss.type = spriteKey; boss.speed = 0.8; boss.attackCooldown = 0; boss.attackCadence = 850; boss.attackReach = 150; boss.attackWidth = 60; boss.attackHeight = 40;
@@ -959,9 +986,11 @@
   // Lane movement + jump physics (jump height separate from lane Y)
   // Constrain to detected road band; fallback to constant if detection unavailable
   this.ROAD_TOP_PCT = 0.65;
-  // Larger cushion so Alex cannot walk up onto the sidewalk/wall
-  this.baseYMin = Math.round(ch * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 12;
-  this.baseYMax = ch - 18;
+  // Constrain to detected road band at start as well
+  const roadTop0 = Math.round(ch * (this._roadTopFrac || this.ROAD_TOP_PCT));
+  const roadBot0 = Math.round(ch * (this._roadBottomFrac || 0.96));
+  this.baseYMin = roadTop0 + 10;
+  this.baseYMax = Math.max(roadTop0 + 20, Math.min(ch - 8, roadBot0 - 6));
   this.alexBaseY = this.baseYMax;
   this.alexJumpZ = 0; // negative while rising
   this.alexVy = 0;
