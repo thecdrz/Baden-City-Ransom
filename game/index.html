@@ -141,19 +141,19 @@
     };
     window._BCRSET = Settings;
 
-    if (!window.Phaser) {
+  if (!window.Phaser) {
       const statusEl = document.getElementById('dialogue-text');
       const candidates = [
-        // Prefer local copies if available
-        './phaser.min.js',
-        '../vendor/phaser/3.55.2/phaser.min.js',
-        '../vendor/phaser/phaser.min.js',
-        '/vendor/phaser/3.55.2/phaser.min.js',
-        '/vendor/phaser.min.js',
-        // CDNs as fallback
-        'https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js',
-        'https://unpkg.com/phaser@3.55.2/dist/phaser.min.js',
-        'https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js'
+    // Try CDNs first to avoid local 404 noise
+    'https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js',
+    'https://unpkg.com/phaser@3.55.2/dist/phaser.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js',
+    // Then local copies if available
+    './phaser.min.js',
+    '../vendor/phaser/3.55.2/phaser.min.js',
+    '../vendor/phaser/phaser.min.js',
+    '/vendor/phaser/3.55.2/phaser.min.js',
+    '/vendor/phaser.min.js'
       ];
       for (const url of candidates) {
         try {
@@ -173,37 +173,7 @@
     // Optional Title/Splash Scene
     class TitleScene extends Phaser.Scene {
       constructor(){ super({ key: 'TitleScene' }); }
-      preload(){
-  const url = (p) => p;
-  const asset = (p) => `${ASSETS_BASE}/${p}`;
-        // Try URL param override first, else attempt a series of likely filenames
-        const params = new URLSearchParams(location.search);
-        const custom = params.get('titleImg');
-        const candidates = [
-          custom,
-          // Prefer misc folder, then asset root fallbacks
-          asset('misc/BCR-StartScreen2.png'),
-          asset('BCR-StartScreen2.png'),
-          asset('misc/BCR-StartScreen.png'),
-          asset('BCR-StartScreen.png'),
-          asset('misc/Baden City Ransom Start.png'),
-          asset('misc/Baden City Ransom - Start.png'),
-          asset('misc/Start Screen.png'),
-          asset('misc/StartScreen.png'),
-          asset('misc/Title.png'),
-          asset('misc/Title Screen.png'),
-          asset('misc/splash.png'),
-          asset('Start Screen.png'),
-          asset('StartScreen.png'),
-          asset('title.png'),
-          asset('splash.png'),
-          asset('misc/BoxArt.png')
-        ].filter(Boolean);
-        // Load all candidates with unique keys; we’ll pick the first that exists
-        candidates.forEach((src, i) => this.load.image(`title_${i}`, url(src)));
-        // Keep quiet on missing ones
-        this.load.on('loaderror', () => {});
-      }
+      preload(){ /* no-op: we'll attach title art dynamically to avoid 404 spam */ }
       create(){
   const { width:w, height:h } = this.scale.gameSize;
   const ENABLE_TITLE_MASK = false; // disable rounded-corner geometry mask by default
@@ -237,27 +207,53 @@
           if (dlg) dlg.style.display = 'none';
           // Keep canvas at stable 80vh to avoid initial zoom drift
           const wrap = document.getElementById('canvasWrap');
-          // Title art and prompt
-          try {
-            const keys = Object.keys(this.textures.list || {}).filter(k => k.startsWith('title_'));
-            const chosen = keys[0] || null;
-            if (chosen) {
-              const img = this.add.image(this.scale.width/2, this.scale.height/2, chosen).setDepth(1).setOrigin(0.5);
-              const fit = () => {
-                const cw = this.scale.width, ch = this.scale.height;
-                const maxW = cw * 0.9, maxH = ch * 0.75; img.setScale(1);
-                const sx = maxW / img.width, sy = maxH / img.height; const s = Math.min(1, sx, sy);
-                img.setScale(s).setPosition(cw/2, ch/2);
-              };
-              fit(); this.scale.on('resize', fit, this);
-              this._titleImg = img;
-            }
-          } catch(_) {}
+          // Title art: pick the first existing image with minimal 404s
+          const assetP = (p) => `${ASSETS_BASE}/${p}`;
+          const params = new URLSearchParams(location.search);
+          const custom = params.get('titleImg');
+          // Prefer known existing root first to avoid 404s
+          const picks = [
+            custom,
+            assetP('BCR-StartScreen2.png'),
+            assetP('misc/BCR-StartScreen2.png'),
+            assetP('BCR-StartScreen.png'),
+            assetP('misc/BCR-StartScreen.png'),
+            assetP('misc/BoxArt.png')
+          ].filter(Boolean);
+          const attach = (imgEl) => {
+            const key = 'title_dynamic';
+            try { if (this.textures.exists(key)) this.textures.remove(key); } catch(_) {}
+            this.textures.addImage(key, imgEl);
+            const spr = this.add.image(this.scale.width/2, this.scale.height/2, key).setDepth(1).setOrigin(0.5);
+            const fit = () => {
+              const cw = this.scale.width, ch = this.scale.height;
+              const maxW = cw * 0.9, maxH = ch * 0.75; spr.setScale(1);
+              const sx = maxW / spr.width, sy = maxH / spr.height; const s = Math.min(1, sx, sy);
+              spr.setScale(s).setPosition(cw/2, ch/2);
+            };
+            fit(); this.scale.on('resize', fit, this);
+            this._titleImg = spr;
+          };
+          const tryNext = (i=0) => {
+            if (i >= picks.length) return; // give up silently
+            const url = picks[i];
+            const img = new Image();
+            img.onload = () => attach(img);
+            img.onerror = () => tryNext(i+1);
+            img.src = url;
+          };
+          tryNext(0);
           const prompt = this.add.text(this.scale.width/2, Math.floor(this.scale.height*0.92), 'Press Enter or Click to Start', { fontFamily:'monospace', fontSize:'22px', color:'#ffffff', stroke:'#000', strokeThickness:4 }).setOrigin(0.5).setDepth(4);
           this.tweens.add({ targets: prompt, alpha: 0.2, yoyo: true, duration: 700, repeat: -1 });
           const start = () => { try { this.scene.start('StoryScene'); } catch(_) { this.scene.start('BadenCityRansomGame'); } };
           this.input.on('pointerdown', start);
           try { this.input.keyboard.on('keydown', () => start()); } catch(_) {}
+          try {
+            // Start on gamepad A (0) or Start (9)
+            this.input.gamepad.on('down', (_pad, button, index) => {
+              if (index === 0 || index === 9) start();
+            });
+          } catch(_) {}
           makeOverlays();
         } catch(_) {}
       }
@@ -1588,15 +1584,36 @@
         if (Phaser.Input.Keyboard.JustDown(this.cursors.left)) tap('left');
         if (Phaser.Input.Keyboard.JustDown(this.cursors.right)) tap('right');
 
+        // Gamepad axes + d-pad to digital directions
+        let padLeft=false, padRight=false, padUp=false, padDown=false;
+        try {
+          const pads = this.input.gamepad?.gamepads || [];
+          const p = pads[0];
+          if (p) {
+            const axX = p.axes?.[0]?.getValue?.() ?? 0;
+            const axY = p.axes?.[1]?.getValue?.() ?? 0;
+            const dead = 0.25;
+            padLeft = axX < -dead || !!p.buttons?.[14]?.pressed;
+            padRight = axX > dead || !!p.buttons?.[15]?.pressed;
+            padUp = axY < -dead || !!p.buttons?.[12]?.pressed;
+            padDown = axY > dead || !!p.buttons?.[13]?.pressed;
+            // Optional: treat hard tilt as run intent
+            if (Math.abs(axX) > 0.9) {
+              this.runState.isRunning = true;
+              this.runState.dir = axX < 0 ? -1 : 1;
+            }
+          }
+        } catch(_) {}
+
   const baseSpeed = 2;
         const speed = (this.runState.isRunning ? 3.8 : baseSpeed);
 
-        if (!this.isAttacking && this.cursors.left.isDown) {
+    if (!this.isAttacking && (this.cursors.left.isDown || padLeft)) {
           this.alex.x -= speed;
           this.alex.setFlipX(true);
           moving = true;
           if (this.runState.isRunning && this.runState.dir !== -1) this.runState.isRunning = false;
-        } else if (!this.isAttacking && this.cursors.right.isDown) {
+    } else if (!this.isAttacking && (this.cursors.right.isDown || padRight)) {
           this.alex.x += speed;
           this.alex.setFlipX(false);
           moving = true;
@@ -1607,8 +1624,8 @@
         }
         
         // Lane up/down movement along the road
-  if (!this.isAttacking && this.cursors.up.isDown) { this.alexBaseY -= speed; moving = true; }
-  else if (!this.isAttacking && this.cursors.down.isDown) { this.alexBaseY += speed; moving = true; }
+  if (!this.isAttacking && (this.cursors.up.isDown || padUp)) { this.alexBaseY -= speed; moving = true; }
+  else if (!this.isAttacking && (this.cursors.down.isDown || padDown)) { this.alexBaseY += speed; moving = true; }
         this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
 
     // Gamepad poll
