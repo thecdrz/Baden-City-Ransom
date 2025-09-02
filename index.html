@@ -474,7 +474,8 @@
             this.alex.setScale(alexScale);
           }
           this.baseYMax = groundY;
-          this.baseYMin = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 2;
+          // Keep player constrained to the detected road band with a larger safety margin
+          this.baseYMin = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 12;
           this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
           if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
           if (this.alex) this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
@@ -848,65 +849,12 @@
           }
         });
   // Boss animations (use trimmed frames for tighter bounds if possible)
+  // Use the base 'boss' spritesheet frames directly to avoid any missing trimmed textures
   try {
-    const trimBossKeyOf = (i) => `boss_t_${i}`;
-    const ensureTrim = (i) => {
-      const tKey = trimBossKeyOf(i);
-      if (this.textures.exists(tKey)) return tKey;
-      const f = this.textures.getFrame('boss', i);
-      if (!f || !f.source) return null;
-      const tmp = document.createElement('canvas');
-      const ctx = tmp.getContext('2d', { willReadFrequently: true });
-      tmp.width = f.cutWidth; tmp.height = f.cutHeight;
-      ctx.clearRect(0,0,tmp.width,tmp.height);
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(f.source.image, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
-  // Convert magenta backgrounds to transparent (simplified and optimized)
-      const img = ctx.getImageData(0,0,tmp.width,tmp.height);
-      const data = img.data;
-      for (let p = 0; p < data.length; p += 4) {
-        const r = data[p], g = data[p+1], b = data[p+2], a = data[p+3];
-        if (a > 0) {
-          // Magenta color key detection (most common in NES sprites)
-          if ((r>200 && g<110 && b>200) || (r>240 && g<20 && b>240)) {
-            data[p+3] = 0; // Make transparent
-          }
-        }
-      }
-      ctx.putImageData(img, 0, 0);
-      let minX=tmp.width, minY=tmp.height, maxX=-1, maxY=-1;
-      for (let y=0;y<tmp.height;y++) {
-        for (let x=0;x<tmp.width;x++) {
-          const a = data[(y*tmp.width + x)*4 + 3];
-          if (a>8) { if (x<minX) minX=x; if (y<minY) minY=y; if (x>maxX) maxX=x; if (y>maxY) maxY=y; }
-        }
-      }
-      if (maxX<minX || maxY<minY) { minX=0; minY=0; maxX=1; maxY=1; }
-      const w = Math.max(1, maxX-minX+1), h = Math.max(1, maxY-minY+1);
-    // Add more transparent padding at the bottom so feet never appear clipped
-  const padBottom = 22; // further increased bottom padding for boss
-      const ct = this.textures.createCanvas(tKey, w, h + padBottom);
-      const c2 = ct.getContext(); c2.imageSmoothingEnabled = false;
-      c2.clearRect(0,0,w,h+padBottom);
-      c2.drawImage(tmp, minX, minY, w, h, 0, 0, w, h);
-      ct.refresh();
-      return tKey;
-    };
-    const idleKey = ensureTrim(0) || 'boss';
-    const walk0 = ensureTrim(0) || 'boss';
-    const walk1 = ensureTrim(1) || 'boss';
-  this.anims.create({ key: 'boss-idle', frames: [{ key: idleKey, frame: 0 }], frameRate: 1, repeat: -1 });
-  this.anims.create({ key: 'boss-walk', frames: [{ key: walk0, frame: 0 }, { key: walk1, frame: 0 }], frameRate: 6, repeat: -1 });
-  // Simple attack animation using the alternate frame
-  const atk1 = ensureTrim(1) || 'boss';
-  const atk0 = ensureTrim(0) || 'boss';
-  this.anims.create({ key: 'boss-attack', frames: [{ key: atk1, frame: 0 }, { key: atk0, frame: 0 }, { key: atk1, frame: 0 }], frameRate: 14, repeat: 0 });
-  } catch(_) {
-    // Fallback without trimming
     this.anims.create({ key: 'boss-idle', frames: [{ key: 'boss', frame: 0 }], frameRate: 1, repeat: -1 });
-  this.anims.create({ key: 'boss-walk', frames: [{ key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 6, repeat: -1 });
-  this.anims.create({ key: 'boss-attack', frames: [{ key: 'boss', frame: 1 }, { key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 14, repeat: 0 });
-  }
+    this.anims.create({ key: 'boss-walk', frames: [{ key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 6, repeat: -1 });
+    this.anims.create({ key: 'boss-attack', frames: [{ key: 'boss', frame: 1 }, { key: 'boss', frame: 0 }, { key: 'boss', frame: 1 }], frameRate: 14, repeat: 0 });
+  } catch(_) {}
         
         // Start animations
   this.alex.play('alex-idle');
@@ -1011,7 +959,8 @@
   // Lane movement + jump physics (jump height separate from lane Y)
   // Constrain to detected road band; fallback to constant if detection unavailable
   this.ROAD_TOP_PCT = 0.65;
-  this.baseYMin = Math.round(ch * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 2; // small cushion
+  // Larger cushion so Alex cannot walk up onto the sidewalk/wall
+  this.baseYMin = Math.round(ch * (this._roadTopFrac || this.ROAD_TOP_PCT)) + 12;
   this.baseYMax = ch - 18;
   this.alexBaseY = this.baseYMax;
   this.alexJumpZ = 0; // negative while rising
