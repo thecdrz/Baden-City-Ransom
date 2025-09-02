@@ -1001,6 +1001,8 @@
   this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
   // Player hurt / invulnerability window
   this.playerInvulUntil = 0; // timestamp in ms
+  // Active player attack window (keeps hitbox live briefly for reliable hits)
+  this._attackWindow = null; // { kind, reach, w, h, startAt, until, hit:Set<object> }
         
   console.log('Baden City Ransom scene ready. Background cropped to road.');
   // Lightweight on-screen debug overlay (updates on resize)
@@ -1235,6 +1237,55 @@
           }
         }
         
+        // Maintain an active attack window so hits can land during the swing
+        if (this._attackWindow) {
+          const aw = this._attackWindow;
+          const nowTs = this.time.now || time || 0;
+          if (nowTs > (aw.until || 0)) {
+            // Window expired
+            this._attackWindow = null;
+          } else if (nowTs >= (aw.startAt || 0)) {
+            // Dynamic hitbox based on current player pose
+            const ox = this.alex.flipX ? -aw.reach : aw.reach;
+            const rect = new Phaser.Geom.Rectangle(this.alex.x + ox - aw.w/2, this.alex.y - aw.h - 6, aw.w, aw.h);
+            // Optional debug draw of the live attack rect
+            if (this.debugHitboxes && this.hitGfx) {
+              try { this.hitGfx.lineStyle(1, 0xffff00, 0.9); this.hitGfx.strokeRect(rect.x, rect.y, rect.width, rect.height); } catch(_) {}
+            }
+            const tryApply = (target) => {
+              if (!target || !target.active) return false;
+              if (!aw.hit) aw.hit = new Set();
+              if (aw.hit.has(target)) return false; // already hit during this window
+              const tb = (typeof target.getBounds === 'function') ? target.getBounds() : null;
+              const hitOk = tb ? Phaser.Geom.Intersects.RectangleToRectangle(rect, tb) : false;
+              const reach = aw.reach, w = aw.w;
+              const dx = Math.abs((target.x||0) - (this.alex.x + (this.alex.flipX ? -reach : reach)));
+              const dy = Math.abs((this.alex.y||0) - (target.y||0));
+              const nearOk = (dx <= (reach + w*0.7) && dy <= 24);
+              if (hitOk || nearOk) {
+                const dmg = aw.kind === 'kick' ? 16 : 12;
+                const knock = aw.kind === 'kick' ? 8 : 6;
+                target.health = Math.max(0, (target.health||1) - dmg);
+                try { target.setTintFill(0xff0000); this.time.delayedCall(80, () => target.clearTint()); } catch(_) {}
+                target.x += this.alex.flipX ? -knock : knock;
+                this.synth && this.synth.click && this.synth.click(1300, 0.03, 0.10);
+                this._recentHitUntil = (this.time.now||0) + 140;
+                if (target.health === 0 && !target._defeated) {
+                  target._defeated = true; try { target.play(`${target.type||'boss'}-idle`); } catch(_) {}
+                  try { this.tweens.add({ targets: target, alpha: 0, duration: 400, onComplete: () => target.destroy() }); } catch(_) {}
+                  if (target === this.boss) this.showMessage && this.showMessage((this.bossName||'Boss') + ' defeated!');
+                }
+                aw.hit.add(target);
+                return true;
+              }
+              return false;
+            };
+            // Attempt hits on enemies and boss
+            (this.enemies||[]).forEach(e => tryApply(e));
+            if (this.boss) tryApply(this.boss);
+          }
+        }
+
     // Combat
   const tryAttack = (kind) => {
           if (this.isAttacking) return;
@@ -1252,10 +1303,10 @@
           } catch(_) {}
           // Play a short punch/kick SFX
           this.playSfx(['sfx_punch1','sfx_punch2'], 0.5, kind==='kick' ? 0.95 : 1.02);
-          // Build a simple hitbox in front of Alex once per press (slightly larger for reliability)
-          const reach = (kind === 'kick') ? 32 : 26;
-          const w = (kind === 'kick') ? 24 : 20;
-          const h = 22;
+          // Build a simple hitbox in front of Alex (larger for reliability)
+          const reach = (kind === 'kick') ? 42 : 36;
+          const w = (kind === 'kick') ? 30 : 26;
+          const h = 26;
           const ox = this.alex.flipX ? -reach : reach;
           // Place the hitbox around chest height (a bit above the feet)
           const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h - 6, w, h);
@@ -1308,6 +1359,17 @@
           // Only clear attacking when the specific attack animation completes
           const ev = `animationcomplete-${kind === 'kick' ? 'alex-kick' : 'alex-punch'}`;
           this.alex.once(ev, () => { this.isAttacking = false; this.alex.setAngle(0); });
+
+          // Open an active attack window to catch movement during the swing
+          const nowTs = this.time.now || 0;
+          const windup = 30; // shorter windup so hit goes active quicker
+          const active = 220; // longer active window for easier timing
+          this._attackWindow = {
+            kind, reach, w, h,
+            startAt: nowTs + windup,
+            until: nowTs + windup + active,
+            hit: new Set()
+          };
         };
 
   if (Phaser.Input.Keyboard.JustDown(this.keys.A)) { this.runState.isRunning=false; tryAttack('punch'); }
