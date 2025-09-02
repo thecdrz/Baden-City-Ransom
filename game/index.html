@@ -1077,13 +1077,13 @@
         ctx.imageSmoothingEnabled=false;
         ctx.drawImage(f.source.image, f.cutX, f.cutY, w, h, 0, 0, w, h);
         const img=ctx.getImageData(0,0,w,h); const data=img.data;
-        const keyCol = pickKeyColor(data.data||data, w, h) || pickKeyColor(data.data||data, w, h);
+        const keyCol = pickKeyColor(data, w, h);
         const R = keyCol?.R, G = keyCol?.G, B = keyCol?.B;
         if (R !== undefined) {
           const thr=34;
-          for (let p=0;p<data.data.length;p+=4) {
-            const r=data.data[p], g=data.data[p+1], b=data.data[p+2];
-            if (Math.abs(r-R)+Math.abs(g-G)+Math.abs(b-B) <= thr) data.data[p+3]=0;
+          for (let p=0;p<data.length;p+=4) {
+            const r=data[p], g=data[p+1], b=data[p+2];
+            if (Math.abs(r-R)+Math.abs(g-G)+Math.abs(b-B) <= thr) data[p+3]=0;
           }
           ctx.putImageData(img,0,0);
         }
