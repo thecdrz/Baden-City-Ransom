@@ -1138,9 +1138,9 @@
       } catch(e) { console.warn('Boss auto-slice failed', e); return null; }
     };
 
-    const autoFrames = buildAutoFrames();
-    const idleFrame = autoFrames?.[0] || ckFrames[0] || { key: 'boss', frame: 0 };
-    const walkFrames = (autoFrames && autoFrames.length>=2) ? autoFrames.slice(0,2) : [idleFrame];
+  // Revert to a single reliable cleaned frame; auto-sliced windows can look wrong on this asset
+  const idleFrame = ckFrames[0] || { key: 'boss', frame: 0 };
+  const walkFrames = [idleFrame];
 
     this.anims.create({ key: 'boss-idle', frames: [idleFrame], frameRate: 1, repeat: -1 });
     this.anims.create({ key: 'boss-walk', frames: walkFrames, frameRate: walkFrames.length>1?6:1, repeat: -1 });
