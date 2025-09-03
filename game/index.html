@@ -2372,11 +2372,17 @@
                         const coin = this.add.sprite(target.x + dx, baseY - 6, 'coin_spin_0').setOrigin(0.5, 1).setDepth(3000);
                         coin.play('coin-spin');
                         coin.value = 1; // Flat value per coin
-                        coin.setScale((this.bg?.scaleX||1));
+                        // Right-size coin relative to player: ~24% of player height in world pixels, clamped
+                        const pixelScale = (this.bg?.scaleX||1);
+                        const alexDispH = Math.max(1, this.alex?.displayHeight || 32);
+                        const playerWorldH = alexDispH / pixelScale; // convert to background (world) pixels
+                        const coinWorldPx = Phaser.Math.Clamp(Math.round(playerWorldH * 0.24), 7, 12);
+                        const coinScreenPx = coinWorldPx * pixelScale;
+                        try { coin.setDisplaySize(coinScreenPx, coinScreenPx); } catch(_) { coin.setScale(pixelScale * (coinWorldPx / 12)); }
                         // Simple physics for drop/bounce
                         coin._baseY = baseY - 6;
                         // Start with a tiny pop upward and outward
-                        const velScale = (this.bg?.scaleX||1);
+                        const velScale = pixelScale;
                         coin._vx = Phaser.Math.Between(-25, 25) * velScale;
                         coin._vy = -Phaser.Math.Between(70, 110) * velScale;
                         coin._g  = 380 * velScale; // gravity
@@ -2784,7 +2790,10 @@
             if (coin._despawnAt && now >= coin._despawnAt) { try { coin.destroy(); } catch(_) {} return false; }
             // Collect on overlap with player hurtbox
             try {
-              const cb = new Phaser.Geom.Rectangle(coin.x-6, coin.y-10, 12, 10);
+              // Use coin display size for pickup bounds (slightly forgiving height)
+              const cw = Math.max(6, Math.round(coin.displayWidth||12));
+              const ch = Math.max(6, Math.round((coin.displayHeight||12) * 0.85));
+              const cb = new Phaser.Geom.Rectangle(coin.x - cw/2, coin.y - ch, cw, ch);
               if (Phaser.Geom.Intersects.RectangleToRectangle(pb, cb)) {
                 const val = coin.value || 1;
                 this.alex.money = (this.alex.money||0) + val;
