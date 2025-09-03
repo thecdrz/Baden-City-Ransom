@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RCR - Sprite Debug Mode</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      background: #000; 
+      color: #fff; 
+      font-family: monospace; 
+    }
+    #gameContainer { 
+      width: 100vw; 
+      height: 100vh; 
+    }
+    #debug { 
+      position: absolute; 
+      top: 10px; 
+      left: 10px; 
+      z-index: 1000; 
+      background: rgba(0,0,0,0.8); 
+      padding: 10px; 
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="debug">
+    <div id="status">Loading sprites...</div>
+    <div id="dimensions"></div>
+  </div>
+  <div id="gameContainer"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  <script src="assets.js"></script>
+  
+  <script>
+    class DebugScene extends Phaser.Scene {
+      constructor() {
+        super({ key: 'DebugScene' });
+      }
+      
+      preload() {
+        // Load sprites as regular images first to see their actual size
+        this.load.image('alex_sheet', RCR_ASSETS['Playable_Characters___Alex']);
+        this.load.image('enemy1_sheet', RCR_ASSETS['Enemies_andamp;_Bosses___Gang_Member___Type_1']);
+        this.load.image('bg_downtown', RCR_ASSETS['Backgrounds___Downtown']);
+      }
+      
+      create() {
+        const status = document.getElementById('status');
+        const dimensions = document.getElementById('dimensions');
+        
+        status.textContent = 'Sprites loaded! Analyzing dimensions...';
+        
+        // Get actual sprite dimensions
+        const alexTexture = this.textures.get('alex_sheet');
+        const enemyTexture = this.textures.get('enemy1_sheet');
+        const bgTexture = this.textures.get('bg_downtown');
+        
+        const alexWidth = alexTexture.source[0].width;
+        const alexHeight = alexTexture.source[0].height;
+        const enemyWidth = enemyTexture.source[0].width;
+        const enemyHeight = enemyTexture.source[0].height;
+        
+        dimensions.innerHTML = `
+          Alex sprite sheet: ${alexWidth} x ${alexHeight}<br>
+          Enemy sprite sheet: ${enemyWidth} x ${enemyHeight}<br>
+          Background: ${bgTexture.source[0].width} x ${bgTexture.source[0].height}
+        `;
+        
+        // Add background
+        const bg = this.add.image(400, 300, 'bg_downtown');
+        bg.setScale(0.5);
+        
+        // Show the actual sprite sheets
+        const alexSheet = this.add.image(100, 100, 'alex_sheet');
+        alexSheet.setOrigin(0, 0);
+        alexSheet.setScale(4); // Zoom in to see details
+        
+        const enemySheet = this.add.image(100, 300, 'enemy1_sheet');
+        enemySheet.setOrigin(0, 0);
+        enemySheet.setScale(4);
+        
+        // Add labels
+        this.add.text(50, 80, 'Alex Sprite Sheet (zoomed 4x)', { fontSize: '14px', fill: '#fff' });
+        this.add.text(50, 280, 'Enemy Sprite Sheet (zoomed 4x)', { fontSize: '14px', fill: '#fff' });
+        
+        // Now try to load as spritesheets with different dimensions
+        // Based on typical NES games, try these common sizes:
+        const testSizes = [
+          { w: 16, h: 16, name: '16x16' },
+          { w: 16, h: 24, name: '16x24' },
+          { w: 24, h: 24, name: '24x24' },
+          { w: 32, h: 32, name: '32x32' },
+          { w: 24, h: 32, name: '24x32' }
+        ];
+        
+        let x = 500;
+        let y = 100;
+        
+        // Test each size and create a sprite
+        testSizes.forEach((size, index) => {
+          // Calculate how many frames this would create
+          const framesX = Math.floor(alexWidth / size.w);
+          const framesY = Math.floor(alexHeight / size.h);
+          const totalFrames = framesX * framesY;
+          
+          this.add.text(x, y + index * 60, 
+            `${size.name}: ${framesX}x${framesY} = ${totalFrames} frames`, 
+            { fontSize: '12px', fill: '#ffff00' }
+          );
+          
+          if (totalFrames > 0 && totalFrames < 50) { // Reasonable number of frames
+            // Try to create a spritesheet with this size
+            try {
+              this.load.spritesheet(`alex_${size.w}x${size.h}`, RCR_ASSETS['Playable_Characters___Alex'], {
+                frameWidth: size.w,
+                frameHeight: size.h
+              });
+              
+              this.load.start(); // Start loading
+              
+              this.load.once('complete', () => {
+                if (this.textures.exists(`alex_${size.w}x${size.h}`)) {
+                  const testSprite = this.add.sprite(x + 150, y + index * 60, `alex_${size.w}x${size.h}`, 0);
+                  testSprite.setScale(3);
+                  
+                  // Try animation
+                  try {
+                    this.anims.create({
+                      key: `test_${size.w}x${size.h}`,
+                      frames: this.anims.generateFrameNumbers(`alex_${size.w}x${size.h}`, { start: 0, end: Math.min(3, totalFrames-1) }),
+                      frameRate: 8,
+                      repeat: -1
+                    });
+                    testSprite.play(`test_${size.w}x${size.h}`);
+                  } catch (e) {
+                    console.log(`Animation failed for ${size.name}:`, e);
+                  }
+                }
+              });
+            } catch (e) {
+              console.log(`Failed to create spritesheet for ${size.name}:`, e);
+            }
+          }
+        });
+        
+        // Add instructions
+        this.add.text(400, 550, 'Look at the sprite sheets above to see the actual character layout', {
+          fontSize: '16px',
+          fill: '#00ff00',
+          align: 'center'
+        }).setOrigin(0.5);
+      }
+    }
+    
+    const config = {
+      type: Phaser.CANVAS,
+      width: 800,
+      height: 600,
+      parent: 'gameContainer',
+      backgroundColor: '#2c3e50',
+      scene: DebugScene,
+      render: {
+        pixelArt: true,
+        antialias: false
+      }
+    };
+    
+    const game = new Phaser.Game(config);
+  </script>
+</body>
+</html>

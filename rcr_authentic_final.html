@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baden City Ransom - AUTHENTIC</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      background: #000; 
+      color: #fff; 
+      font-family: monospace; 
+      overflow: hidden;
+    }
+    #gameContainer { 
+      width: 100vw; 
+      height: 100vh; 
+    }
+    #hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.8);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      z-index: 1000;
+      color: #ffff00;
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+  <div>🎮 BADEN CITY RANSOM</div>
+    <div>Arrow Keys: Move | A: Punch | S: Kick</div>
+    <div id="stats">Health: 100 | Money: $100</div>
+  </div>
+  
+  <div id="gameContainer"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  
+  <script>
+    class RiverCityRansomGame extends Phaser.Scene {
+      constructor() {
+        super({ key: 'RiverCityRansomGame' });
+      }
+      
+      preload() {
+        console.log('Loading authentic RCR sprites...');
+        
+        // Load sprites directly from PNG files with correct dimensions
+        // Try typical RCR sprite size - often 16x32 for characters
+        this.load.spritesheet('alex', 'NES - River City Ransom _ Street Gangs - Playable Characters - Alex.png', {
+          frameWidth: 16,
+          frameHeight: 32
+        });
+        
+        this.load.spritesheet('ryan', 'NES - River City Ransom _ Street Gangs - Playable Characters - Ryan.png', {
+          frameWidth: 16,
+          frameHeight: 32
+        });
+        
+        // Load enemies with correct dimensions (similar to player characters)
+        this.load.spritesheet('enemy1', 'NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 1.png', {
+          frameWidth: 16,
+          frameHeight: 32
+        });
+        
+        this.load.spritesheet('enemy2', 'NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 2.png', {
+          frameWidth: 16,
+          frameHeight: 32
+        });
+        
+        this.load.spritesheet('enemy3', 'NES - River City Ransom _ Street Gangs - Enemies & Bosses - Gang Member - Type 3.png', {
+          frameWidth: 16,
+          frameHeight: 32
+        });
+        
+        // Load just one background
+        this.load.image('downtown', 'NES - River City Ransom _ Street Gangs - Backgrounds - Downtown.png');
+      }
+      
+      create() {
+  console.log('Creating authentic Baden City Ransom...');
+        
+        // Add background - use just one section of the multi-area image
+        const bg = this.add.image(400, 300, 'downtown');
+        // Get the texture dimensions to crop properly
+        const texture = this.textures.get('downtown');
+        const bgWidth = texture.source[0].width;
+        const bgHeight = texture.source[0].height;
+        
+        // Crop to show just the middle section (street level)
+        bg.setCrop(0, bgHeight * 0.33, bgWidth, bgHeight * 0.33);
+        bg.setDisplaySize(800, 600);
+        
+        console.log(`Background: ${bgWidth}x${bgHeight}, showing middle third`);
+        
+        // Create Alex player
+        this.alex = this.add.sprite(200, 300, 'alex', 0);
+        this.alex.setScale(3); // Medium scale
+        this.alex.health = 100;
+        this.alex.money = 100;
+        
+        // Create Ryan (Player 2)
+        this.ryan = this.add.sprite(250, 300, 'ryan', 0);
+        this.ryan.setScale(3);
+        
+        // Create enemy gang members
+        this.enemies = [];
+        const enemyTypes = ['enemy1', 'enemy2', 'enemy3'];
+        for (let i = 0; i < 3; i++) {
+          const enemyType = enemyTypes[i];
+          if (this.textures.exists(enemyType)) {
+            const enemy = this.add.sprite(500 + i * 80, 300, enemyType, 0);
+            enemy.setScale(3);
+            enemy.health = 30;
+            enemy.type = enemyType;
+            enemy.aiTimer = 0;
+            this.enemies.push(enemy);
+          }
+        }
+        
+        // Create Alex animations
+        this.anims.create({
+          key: 'alex-idle',
+          frames: [{ key: 'alex', frame: 0 }],
+          frameRate: 1
+        });
+        
+        this.anims.create({
+          key: 'alex-walk',
+          frames: this.anims.generateFrameNumbers('alex', { start: 1, end: 3 }),
+          frameRate: 8,
+          repeat: -1
+        });
+        
+        this.anims.create({
+          key: 'alex-punch',
+          frames: this.anims.generateFrameNumbers('alex', { start: 4, end: 5 }),
+          frameRate: 12,
+          repeat: 0
+        });
+        
+        this.anims.create({
+          key: 'alex-kick',
+          frames: this.anims.generateFrameNumbers('alex', { start: 6, end: 7 }),
+          frameRate: 12,
+          repeat: 0
+        });
+        
+        // Create enemy animations for each type
+        const enemyAnimTypes = ['enemy1', 'enemy2', 'enemy3'];
+        enemyAnimTypes.forEach(enemyType => {
+          if (this.textures.exists(enemyType)) {
+            this.anims.create({
+              key: `${enemyType}-idle`,
+              frames: [{ key: enemyType, frame: 0 }],
+              frameRate: 1
+            });
+            
+            this.anims.create({
+              key: `${enemyType}-walk`,
+              frames: this.anims.generateFrameNumbers(enemyType, { start: 1, end: 2 }),
+              frameRate: 6,
+              repeat: -1
+            });
+          }
+        });
+        
+        // Start animations
+        this.alex.play('alex-idle');
+        this.ryan.play('alex-idle');
+        this.enemies.forEach(enemy => {
+          enemy.play(`${enemy.type}-idle`);
+        });
+        
+        // Input setup
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keys = this.input.keyboard.addKeys('A,S,D,SPACE');
+        
+        // Game state
+        this.isMoving = false;
+        this.isAttacking = false;
+        
+  console.log('Baden City Ransom ready to play!');
+      }
+      
+      update(time) {
+        // Alex movement
+        let moving = false;
+        const speed = 2;
+        
+        if (this.cursors.left.isDown) {
+          this.alex.x -= speed;
+          this.alex.setFlipX(true);
+          moving = true;
+        } else if (this.cursors.right.isDown) {
+          this.alex.x += speed;
+          this.alex.setFlipX(false);
+          moving = true;
+        }
+        
+        if (this.cursors.up.isDown) {
+          this.alex.y -= speed;
+          moving = true;
+        } else if (this.cursors.down.isDown) {
+          this.alex.y += speed;
+          moving = true;
+        }
+        
+        // Animation handling
+        if (moving && !this.isAttacking) {
+          if (this.alex.anims.currentAnim?.key !== 'alex-walk') {
+            this.alex.play('alex-walk');
+          }
+        } else if (!this.isAttacking) {
+          if (this.alex.anims.currentAnim?.key !== 'alex-idle') {
+            this.alex.play('alex-idle');
+          }
+        }
+        
+        // Combat
+        if (Phaser.Input.Keyboard.JustDown(this.keys.A) && !this.isAttacking) {
+          this.isAttacking = true;
+          this.alex.play('alex-punch');
+          this.alex.once('animationcomplete', () => {
+            this.isAttacking = false;
+          });
+        }
+        
+        if (Phaser.Input.Keyboard.JustDown(this.keys.S) && !this.isAttacking) {
+          this.isAttacking = true;
+          this.alex.play('alex-kick');
+          this.alex.once('animationcomplete', () => {
+            this.isAttacking = false;
+          });
+        }
+        
+        // Keep Alex on screen
+        this.alex.x = Phaser.Math.Clamp(this.alex.x, 50, 750);
+        this.alex.y = Phaser.Math.Clamp(this.alex.y, 100, 500);
+        
+        // Simple enemy AI
+        this.enemies.forEach(enemy => {
+          if (time > enemy.aiTimer) {
+            // Move towards Alex occasionally
+            if (Math.random() < 0.3) {
+              if (enemy.x > this.alex.x) {
+                enemy.x -= 0.5;
+                enemy.setFlipX(true);
+              } else {
+                enemy.x += 0.5;
+                enemy.setFlipX(false);
+              }
+              
+              if (enemy.anims.currentAnim?.key !== `${enemy.type}-walk`) {
+                enemy.play(`${enemy.type}-walk`);
+              }
+            } else {
+              if (enemy.anims.currentAnim?.key !== `${enemy.type}-idle`) {
+                enemy.play(`${enemy.type}-idle`);
+              }
+            }
+            
+            enemy.aiTimer = time + 1000; // Update AI every second
+          }
+        });
+        
+        // Update HUD
+        document.getElementById('stats').innerHTML = `Health: ${this.alex.health} | Money: $${this.alex.money}`;
+      }
+    }
+    
+    // Game configuration
+    const config = {
+      type: Phaser.CANVAS,
+      width: 800,
+      height: 600,
+      parent: 'gameContainer',
+      backgroundColor: '#2c3e50',
+      scene: RiverCityRansomGame,
+      render: {
+        pixelArt: true,
+        antialias: false,
+        roundPixels: true
+      },
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+      }
+    };
+    
+  console.log('Starting authentic Baden City Ransom...');
+    const game = new Phaser.Game(config);
+    
+    game.events.on('ready', () => {
+  console.log('🎮 BADEN CITY RANSOM IS READY TO PLAY!');
+    });
+  </script>
+</body>
+</html>

@@ -21,7 +21,7 @@
       position: relative;
       background: #000; /* canvas sits here */
     }
-    #canvasWrap canvas { display:block; }
+  #canvasWrap canvas { display:block; }
     #hud {
       position: absolute;
       top: 0;
@@ -72,6 +72,9 @@
   #devPanel .row { margin-bottom:8px; }
   #devPanel label { display:flex; align-items:center; gap:8px; }
   #devClose { background:#222; color:#fff; border:1px solid #444; border-radius:6px; padding:4px 8px; cursor:pointer; }
+  /* Dev UI small helpers */
+  .dev-justified { display:flex; justify-content: space-between; width:100%; }
+  .dev-grow { flex:1; margin-left:8px; }
   </style>
 </head>
 <body>
@@ -101,6 +104,15 @@
   <div id="devPanel" role="dialog" aria-label="Dev Panel">
     <div class="row"><label><input type="checkbox" id="devGod"> Unlimited life</label></div>
     <div class="row"><label><input type="checkbox" id="devBoss"> Spawn boss near player</label></div>
+    <div class="row">
+      <label class="dev-justified">
+        Boss type
+        <select id="devBossType" class="dev-grow">
+          <option value="boss">Miller (default)</option>
+          <option value="boss2">Necro (alt)</option>
+        </select>
+      </label>
+    </div>
   <div class="row"><label><input type="checkbox" id="devHit"> Show hitboxes</label></div>
   <div class="row"><label><input type="checkbox" id="devVerbose"> Verbose logs</label></div>
   <div class="row"><label><input type="checkbox" id="devBossHP"> Show Boss HP</label></div>
@@ -279,7 +291,23 @@
         let page = 0; let typing = false; let timer = null; let shown = '';
 
         const play = (k, vol=0.5, rate=1) => {
-          try { const s = this.sound.add(k, { volume: vol, rate }); s.once('complete', ()=>s.destroy()); s.play(); } catch(_) {}
+          try {
+            // Try playing loaded audio key
+            if (this.sound && this.sound.keys && this.sound.keys.includes && this.sound.keys.includes(k)) {
+              const s = this.sound.add(k, { volume: vol, rate }); s.once('complete', ()=>s.destroy()); s.play();
+              return;
+            }
+            // Fallback: quick oscillator click to mimic typewriter
+            const ctx = this.sound?.context;
+            if (ctx) {
+              const t = ctx.currentTime; const o = ctx.createOscillator(); const g = ctx.createGain();
+              o.type = 'square'; o.frequency.setValueAtTime(1400, t);
+              g.gain.setValueAtTime(0.0001, t);
+              g.gain.linearRampToValueAtTime(Math.min(0.12, vol), t + 0.004);
+              g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+              o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.04);
+            }
+          } catch(_) {}
         };
         const typePage = () => {
           if (!textEl) return; typing = true; shown = ''; const full = pages[page] || '';
@@ -349,15 +377,117 @@
         const url = (p) => encodeURI(p);
         const logAdd = (kind, key, src) => console.log(`load ${kind}: ${key} <- ${src}`);
         
-        // Load sprites with authentic NES frame size (16x24)
+        // Load player sprites with authentic NES frame size (16x32)
         {
-          const src = asset('sprites/alex_sprite.png');
+          // Optional: use authentic Ryan sheet if present via ?pc=ryan (keeps key 'alex')
+          const pc = new URLSearchParams(location.search).get('pc');
+          const useRyan = (pc && pc.toLowerCase() === 'ryan');
+          const src = useRyan
+            ? asset('sprites/NES - River City Ransom _ Street Gangs - Playable Characters - Ryan.png')
+            : asset('sprites/alex_sprite.png');
           logAdd('sheet','alex', src);
-          this.load.spritesheet('alex', src, {
+          this.load.spritesheet('alex', encodeURI(src), {
           frameWidth: 16,
           frameHeight: 32,
           margin: 1,
           spacing: 1
+          });
+          try { const d=document.getElementById('dialogue-text'); if (d) d.textContent = useRyan ? 'Loading player: Ryan sheet' : 'Loading player: Alex sheet'; } catch(_) {}
+        }
+
+        // New: Load Skeleton Crusader player (PNG sequences) as default player override
+        {
+          // Use ASSETS_BASE so this works when served from /game/
+          const base = `${ASSETS_BASE}/sprites/player-skeleton/Skeleton_Crusader_3/PNG/PNG Sequences`;
+          const loadSeq = (folder, count, prefix) => {
+            for (let i=0;i<count;i++) {
+              const p = `${base}/${folder}/0_Skeleton_Crusader_${folder}_${String(i).padStart(3,'0')}.png`;
+              const key = `skele_raw_${prefix}_${i}`;
+              if (!this.textures.exists(key)) this.load.image(key, encodeURI(p));
+            }
+          };
+          try {
+            loadSeq('Idle', 18, 'idle');
+            loadSeq('Walking', 24, 'walk');
+            loadSeq('Slashing', 12, 'slash');
+            loadSeq('Hurt', 12, 'hurt');
+          } catch(_) {}
+
+          // When skeleton frames load, pad to uniform canvas and build alex-* animations
+          this.load.once('complete', () => {
+            try {
+              // Collect loaded keys
+              const groups = {
+                idle: [], walk: [], slash: [], hurt: []
+              };
+              Object.keys(this.textures.list).forEach(k=>{
+                if (k.startsWith('skele_raw_idle_')) groups.idle.push(k);
+                else if (k.startsWith('skele_raw_walk_')) groups.walk.push(k);
+                else if (k.startsWith('skele_raw_slash_')) groups.slash.push(k);
+                else if (k.startsWith('skele_raw_hurt_')) groups.hurt.push(k);
+              });
+              // Determine max canvas size
+              let maxW=0, maxH=0;
+              const all = [...groups.idle, ...groups.walk, ...groups.slash, ...groups.hurt];
+              all.forEach(k=>{ try { const img=this.textures.get(k)?.getSourceImage(); if (img){ maxW=Math.max(maxW,img.width||0); maxH=Math.max(maxH,img.height||0);} } catch(_){} });
+              maxW = Math.max(maxW, 48); maxH = Math.max(maxH, 48);
+              const padKey = (raw) => {
+                const out = `${raw}_pad`;
+                if (this.textures.exists(out)) return out;
+                try {
+                  const src = this.textures.get(raw)?.getSourceImage();
+                  if (!src) return raw;
+                  const t = this.textures.createCanvas(out, maxW, maxH); const c=t.getContext();
+                  c.imageSmoothingEnabled=false; c.clearRect(0,0,maxW,maxH);
+                  const dx=Math.floor((maxW - src.width)/2), dy=Math.max(0, maxH - src.height);
+                  c.drawImage(src, dx, dy);
+                  t.refresh();
+                  return out;
+                } catch(_) { return raw; }
+              };
+              const buildFrames = (arr) => arr
+                .sort((a,b)=>parseInt(a.split('_').pop())-parseInt(b.split('_').pop()))
+                // For single-image textures, omit frame to use the base frame (__BASE)
+                .map(raw=>({ key: padKey(raw) }));
+              const idleF = buildFrames(groups.idle);
+              const walkF = buildFrames(groups.walk);
+              const slashF = buildFrames(groups.slash);
+              const hurtF = buildFrames(groups.hurt);
+              if (idleF.length) this._playerTextureKey = idleF[0].key;
+              // Remove any previous alex-* anims so we can override cleanly
+              ['idle','walk','punch','kick','hurt','jump'].forEach(n=>{ const k=`alex-${n}`; if (this.anims.exists(k)) this.anims.remove(k); });
+              // Create smooth, fluid animations mapped to expected keys
+              if (idleF.length) this.anims.create({ key:'alex-idle', frames: idleF, frameRate: 6, repeat:-1 });
+              // Make feet animate quicker for natural walking
+              if (walkF.length) this.anims.create({ key:'alex-walk', frames: walkF, frameRate: 18, repeat:-1 });
+              // Build punch/kick without the sword swing; keep sword only for special
+              // Punch: 3-frame jab with longer hold on peak pose, plus a small forward lunge handled in attack
+              try {
+                const p0 = idleF[0] || walkF[0] || slashF[0];
+                const p1 = walkF[Math.min(walkF.length-1, Math.max(1, Math.floor(walkF.length*0.55)))] || p0;
+                const p2 = walkF[Math.min(walkF.length-1, Math.max(1, Math.floor(walkF.length*0.7)))] || p1;
+                // Extra p2 hold for stronger emphasis and slightly slower rate
+                this.anims.create({ key:'alex-punch', frames: [p0, p1, p2, p2, p2, p1, p0], frameRate: 20, repeat: 0 });
+              } catch(_) {}
+              // Kick: later walk frames with longer hold at extension
+              try {
+                const k0 = walkF[Math.min(walkF.length-1, Math.max(1, Math.floor(walkF.length*0.6)))] || idleF[0] || walkF[0] || slashF[0];
+                const k1 = walkF[Math.min(walkF.length-1, Math.max(1, Math.floor(walkF.length*0.85)))] || k0;
+                // Extra k1 hold for stronger emphasis and slightly slower rate
+                this.anims.create({ key:'alex-kick', frames: [k0, k1, k1, k1, k0], frameRate: 18, repeat: 0 });
+              } catch(_) {}
+              // Special: actual sword slashing
+              if (slashF.length) {
+                this.anims.create({ key:'alex-special', frames: slashF, frameRate: 24, repeat:0 });
+              }
+              // Provide a faster run animation
+              if (walkF.length) this.anims.create({ key:'alex-run', frames: walkF, frameRate: 28, repeat:-1 });
+              if (hurtF.length) this.anims.create({ key:'alex-hurt', frames: hurtF, frameRate: 16, repeat:0 });
+              // No jump frames in pack; emulate with a few fast walk frames for now
+              const jumpF = walkF.slice(0, Math.max(1, Math.min(4, walkF.length)));
+              if (jumpF.length) this.anims.create({ key:'alex-jump', frames: jumpF, frameRate: 14, repeat:0 });
+              this._playerIsSkeleton = true;
+            } catch(e) { console.warn('Skeleton player setup failed', e); }
           });
         }
         
@@ -437,6 +567,43 @@
           });
         }
         
+        // Optional: Gold coin spritesheet (single PNG strip). We'll slice it into frames if present.
+        {
+          const src = asset('sprites/GoldCoinSpinning.png');
+          logAdd('image','coin_src', src);
+          this.load.image('coin_src', src);
+          this.load.once('complete', () => {
+            try {
+              if (!this.textures.exists('coin_src')) return;
+              const img = this.textures.get('coin_src')?.getSourceImage();
+              const iw = img?.width|0, ih = img?.height|0;
+              if (!iw || !ih) return;
+              let frames = 0, fw = 0, fh = 0, horiz = true;
+              if (iw >= ih && iw % ih === 0) { frames = iw/ih; fw = ih; fh = ih; horiz = true; }
+              else if (ih > iw && ih % iw === 0) { frames = ih/iw; fw = iw; fh = iw; horiz = false; }
+              if (frames >= 2 && frames <= 64) {
+                const keys = [];
+                for (let i=0; i<frames; i++) {
+                  const key = `coin_png_${i}`;
+                  if (!this.textures.exists(key)) {
+                    const t = this.textures.createCanvas(key, fw, fh);
+                    const c = t.getContext(); c.imageSmoothingEnabled=false; c.clearRect(0,0,fw,fh);
+                    const sx = horiz ? (i*fw) : 0;
+                    const sy = horiz ? 0 : (i*fh);
+                    c.drawImage(img, sx, sy, fw, fh, 0, 0, fw, fh);
+                    t.refresh();
+                  }
+                  keys.push(key);
+                }
+                // Prefer this animation over fallback; replace if exists
+                if (this.anims.exists('coin-spin')) this.anims.remove('coin-spin');
+                this.anims.create({ key: 'coin-spin', frames: keys.map(k=>({ key:k })), frameRate: 16, repeat: -1 });
+                this._coinAnimReady = true;
+              }
+            } catch(_) {}
+          });
+        }
+
         // Load background
         {
           const src = asset('backgrounds/downtown_bg.png');
@@ -535,18 +702,40 @@
           const enemyScale = pixelScale * 1.0;
           const roadTop = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT));
           const roadBot = Math.round(h * (this._roadBottomFrac || 0.96));
-          const groundY = Math.max(roadTop + 20, Math.min(h - 8, roadBot - 6));
+          // Allow a tiny safety margin so feet can touch the very last blue row
+          const groundY = Math.min(h - 1, roadBot + 2);
+          // Guarantee a minimum vertical lane size for up/down movement, anchored at ground line
+          const laneMax = groundY;
+          const minLane = Math.max(56, Math.floor(h * 0.12));
+          let laneMin = roadTop; // include the very first blue row
+          if ((laneMax - laneMin) < minLane) {
+            laneMin = Math.max(roadTop + 6, laneMax - minLane);
+          }
           if (this.alex) {
             this.alex.setScale(alexScale);
           }
-          this.baseYMax = groundY;
-          // Keep player constrained to the detected road band
-          this.baseYMin = roadTop + 10;
+          this.baseYMax = laneMax;
+          // Keep player constrained to the detected or widened road band
+          this.baseYMin = laneMin;
           this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
           if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
           if (this.alex) this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
           (this.enemies||[]).forEach(e=>{ e.setScale(enemyScale); if (e.y > groundY) e.y = groundY; });
-          if (this.boss) { this.boss.setScale(enemyScale); if (this.boss.y > groundY) this.boss.y = groundY; }
+          if (this.boss) {
+            const bossAdj = (this.bossAnimPrefix === 'boss2') ? (this._currentBossScaleAdj || 1.0) : 1.0;
+            this.boss.setScale(enemyScale * bossAdj);
+            // Recompute scaled foot padding (if Necro) and pin feet to road
+            try {
+              if (this.bossAnimPrefix === 'boss2') {
+                const raw = (this.boss._footPadRaw || this._necroFootPadPx || 0);
+                this.boss._footPadScaled = Math.round(raw * (this.boss.scaleY || 1));
+                const bias = this.feetBiasFor(this.boss,'boss');
+                this.boss.y = Math.round(this.alexBaseY + (this.boss._footPadScaled || 0) + bias);
+              } else {
+                if (this.boss.y > groundY) this.boss.y = groundY;
+              }
+            } catch(_) { if (this.boss.y > groundY) this.boss.y = groundY; }
+          }
         };
         
   // Add background – create CROPPED canvas texture with a safe fallback
@@ -601,14 +790,16 @@
         try {
           const sampleCols = 24;
           const xs = Array.from({length: sampleCols}, (_, i) => Math.floor((i+0.5) * w / sampleCols));
-          const isBlueish = (r,g,b) => b > g + 20 && b > r + 20 && b > 80;
+          // Bottom edge can be darker; be more permissive than the top detector
+          const isBlueish = (r,g,b) => b > g + 12 && b > r + 12 && b > 48;
           for (let y = h - 1; y >= 0; y -= 2) {
             let blueHits = 0;
             for (const x of xs) {
               const d = ctx.getImageData(x, y, 1, 1).data;
               if (isBlueish(d[0], d[1], d[2])) blueHits++;
             }
-            if (blueHits >= Math.ceil(sampleCols * 0.6)) {
+            // Require a moderate presence of blue so we catch mixed/shaded rows near the edge
+            if (blueHits >= Math.ceil(sampleCols * 0.35)) {
               return y / h;
             }
           }
@@ -689,16 +880,65 @@
   const PLAYER_SCALE_MULT = 1.0; // match background pixel size exactly
   const playerScale = pixelScale * PLAYER_SCALE_MULT;
 
-  // Create Alex player positioned near road (feet-origin at y=ch-18 approx)
+  // Build an animated coin (pixel-art) if not present
+  try {
+    const makeFrame = (key, w, h, variant) => {
+      const t = this.textures.createCanvas(key, w, h);
+      const ctx = t.getContext();
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0,0,w,h);
+      // Colors
+      const rim = '#7a5200';
+      const fill = '#ffcc00';
+      const hi = '#fff58a';
+      const mid = '#e6b300';
+      // Draw depending on variant (0: full, 1: mid, 2: thin, 3: mid)
+      if (variant === 0) {
+        // Full coin: 12x12 canvas footprint
+        // Outer rim
+        ctx.fillStyle = rim; ctx.fillRect(3,1,6,10);
+        // Inner body
+        ctx.fillStyle = fill; ctx.fillRect(4,2,4,8);
+        // Highlight
+        ctx.fillStyle = hi; ctx.fillRect(4,2,2,2);
+        // Subtle face mark
+        ctx.fillStyle = mid; ctx.fillRect(5,6,2,1);
+      } else if (variant === 1 || variant === 3) {
+        // Mid tilt (narrower width)
+        ctx.fillStyle = rim; ctx.fillRect(4,1,4,10);
+        ctx.fillStyle = fill; ctx.fillRect(5,2,2,8);
+        ctx.fillStyle = hi;  ctx.fillRect(5,2,1,2);
+        ctx.fillStyle = mid; ctx.fillRect(5,6,1,1);
+      } else if (variant === 2) {
+        // Edge-on thin glint
+        ctx.fillStyle = rim; ctx.fillRect(5,1,2,10);
+        ctx.fillStyle = fill; ctx.fillRect(6,2,1,8);
+        ctx.fillStyle = hi;  ctx.fillRect(6,2,1,2);
+      }
+      t.refresh();
+    };
+    const baseKey = 'coin_spin_';
+    const frameW = 12, frameH = 12;
+    const keys = [0,1,2,3].map(i => `${baseKey}${i}`);
+    if (!this.textures.exists(keys[0])) {
+      keys.forEach((k,i)=> makeFrame(k, frameW, frameH, i));
+    }
+    if (!this.anims.exists('coin-spin')) {
+      this.anims.create({ key: 'coin-spin', frames: keys.map(k=>({ key:k })), frameRate: 12, repeat: -1 });
+    }
+  } catch(_) {}
+
+  // Create Alex/Skeleton player positioned near road (feet-origin at y=ch-18 approx)
   step('spawn alex');
   // Force the classic RCR Alex sheet (no GH composite)
   // Enhanced player creation with texture verification
-  const PLAYER_TEX = 'alex';
+  const PLAYER_TEX = this._playerTextureKey || 'alex';
   
   // Create player sprite with better error handling
   try {
-    if (this.textures.exists(PLAYER_TEX)) {
-      this.alex = this.add.sprite(200, ch - 18, PLAYER_TEX, 0).setOrigin(0.5, 1);
+  if (this.textures.exists(PLAYER_TEX)) {
+      // For image-based textures (skeleton frames), don't pass a numeric frame
+      this.alex = this.add.sprite(200, ch - 18, PLAYER_TEX).setOrigin(0.5, 1);
       console.log('Alex sprite created successfully');
     } else {
       console.warn('Alex texture missing, creating simple fallback');
@@ -711,18 +951,34 @@
       
       this.alex = this.add.sprite(200, ch - 18, 'alex_fallback', 0).setOrigin(0.5, 1);
       console.log('Alex fallback sprite created');
+      try { const d=document.getElementById('dialogue-text'); if (d) d.textContent = 'Player spritesheet missing; blue placeholder in use.'; } catch(_) {}
     }
   } catch(e) {
     console.error('Failed to create Alex sprite:', e);
     // Last resort: create a simple rectangle shape
     this.alex = this.add.rectangle(200, ch - 18, 16, 32, 0x4444ff).setOrigin(0.5, 1);
     console.log('Created rectangle fallback for Alex');
+    try { const d=document.getElementById('dialogue-text'); if (d) d.textContent = 'Player failed to load; blue placeholder active.'; } catch(_) {}
   }
+  // Adjust scale: if using skeleton PNGs, compute a world-space scale adjust and apply pixelScale separately
+  if (this._playerIsSkeleton) {
+    try {
+      const f = this.textures.getFrame(PLAYER_TEX, 0) || { cutHeight: this.textures.get(PLAYER_TEX)?.getSourceImage()?.height };
+    const srcH = Math.max(1, f?.cutHeight || f?.height || 128);
+  const targetWorldH = 31; // desired height in background pixels (~10% larger)
+      const adj = Phaser.Math.Clamp(targetWorldH / srcH, 0.02, 1.0);
+      this._playerScaleAdjust = adj;
+      // Apply initial scale using current pixelScale; resize will maintain: alexScale = pixelScale * _playerScaleAdjust
+      this.alex.setScale(playerScale * adj);
+    } catch(_) { this.alex.setScale(playerScale); }
+  } else {
     this.alex.setScale(playerScale);
+  }
   // Camera follows the player for smooth scrolling
-  this.cameras.main.startFollow(this.alex, true, 0.12, 0.12);
-        // Normalize scale baseline
-        this._playerScaleAdjust = 1.0;
+  this.cameras.main.startFollow(this.alex, true, 1, 1);
+  // Ensure camera is centered on spawn so the player is on-screen
+  try { this.cameras.main.centerOn(this.alex.x, this.alex.y); } catch(_) {}
+  // Keep previously computed scale adjust (for skeleton image-based player)
         this.alex.health = 100;
   this.alex.money = 4.20; // New default
         
@@ -800,11 +1056,103 @@
   
   // Array of available boss configurations
   this.bossConfigs = [
-    { key: 'boss', name: 'Miller', health: 140, speed: 0.8, cadence: 850, description: 'Street Boss' }
+    // Default Miller (preloaded in preload())
+    { key: 'boss', name: 'Miller', health: 140, speed: 0.8, cadence: 850, description: 'Street Boss',
+      load: async () => true, // already preloaded in preload
+      prefix: 'boss' },
+    // Boss 2: Necromancer PNG sequence pack (Idle/Walking/Slashing). Files already transparent.
+    { key: 'boss2', name: 'Necromancer', health: 160, speed: 0.85, cadence: 800, description: 'Alt Boss (Necro)', prefix: 'boss2',
+      load: async () => {
+        try {
+          if (this._necroReady) return true;
+          const base = `${ASSETS_BASE}/sprites/necro/Necromancer_of_the_Shadow_3/PNG/PNG Sequences`;
+          // Frame counts taken from asset folder
+          const seqs = [
+            { key: 'idle',     dir: 'Idle',     count: 18 },
+            { key: 'walk',     dir: 'Walking',  count: 24 },
+            { key: 'attack',   dir: 'Slashing', count: 12 }
+          ];
+          const toKeys = [];
+          // Stage 1: load all images
+      await new Promise((resolve) => {
+            seqs.forEach(seq => {
+              for (let i=0; i<seq.count; i++) {
+                const idx = String(i).padStart(3,'0');
+                const file = `0_Necromancer_of_the_Shadow_${seq.dir.replace(/\s+/g,'_')}_${idx}.png`;
+        const url = encodeURI(`${base}/${seq.dir}/${file}`);
+                const frameKey = `necro_raw_${seq.key}_${i}`;
+                toKeys.push(frameKey);
+        this.load.image(frameKey, url);
+              }
+            });
+      this.load.on('loaderror', (file) => { try { const d=document.getElementById('dialogue-text'); if (d) d.textContent = `Necro load error: ${file?.src||''}`; } catch(_) {} });
+            this.load.once('complete', resolve);
+            this.load.start();
+          });
+          // Stage 2: pad to uniform canvas so feet align and width is stable
+          let maxW=0, maxH=0;
+          toKeys.forEach(k => {
+            try {
+              const img = this.textures.get(k)?.getSourceImage();
+              if (img) { maxW = Math.max(maxW, img.width||0); maxH = Math.max(maxH, img.height||0); }
+            } catch(_) {}
+          });
+          // Fallback sizes if something odd
+          maxW = Math.max(48, maxW|0);
+          maxH = Math.max(48, maxH|0);
+          const paddedOf = (rawKey) => {
+            const padKey = `${rawKey}_pad`;
+            if (this.textures.exists(padKey)) return padKey;
+            try {
+              const src = this.textures.get(rawKey)?.getSourceImage();
+              if (!src) return rawKey;
+              const w = src.width, h = src.height;
+              const t = this.textures.createCanvas(padKey, maxW, maxH);
+              const c = t.getContext();
+              c.imageSmoothingEnabled = false; c.clearRect(0,0,maxW,maxH);
+              // bottom-center align
+              const dx = Math.floor((maxW - w)/2);
+              const dy = Math.max(0, maxH - h);
+              c.drawImage(src, dx, dy);
+              t.refresh();
+              return padKey;
+            } catch(_) { return rawKey; }
+          };
+          const buildAnim = (name, count) => {
+            const frames = [];
+            for (let i=0; i<count; i++) {
+              const raw = `necro_raw_${name}_${i}`;
+              const key = paddedOf(raw);
+              frames.push({ key, frame: 0 });
+            }
+            return frames;
+          };
+          const pref = 'boss2';
+          const idleF = buildAnim('idle', 18);
+          const walkF = buildAnim('walk', 24);
+          const atkF  = buildAnim('attack', 12);
+          // Remove if already present
+          ['idle','walk','attack'].forEach(n => { if (this.anims.exists(`${pref}-${n}`)) this.anims.remove(`${pref}-${n}`); });
+          this.anims.create({ key: `${pref}-idle`,    frames: idleF, frameRate: 6,  repeat: -1 });
+          this.anims.create({ key: `${pref}-walk`,    frames: walkF, frameRate: 10, repeat: -1 });
+          this.anims.create({ key: `${pref}-attack`,  frames: atkF,  frameRate: 12, repeat: 0 });
+          // Expose a safe default texture key for spawning
+          try { this._necroFirstFrameKey = idleF?.[0]?.key || null; } catch(_) { this._necroFirstFrameKey = null; }
+          // If boss already exists and is Necro, force it to play the new idle
+          try { if (this.boss && this.bossAnimPrefix === pref) this.boss.play(`${pref}-idle`); } catch(_) {}
+          this._necroReady = true;
+          return true;
+        } catch(e) {
+          console.warn('Necro load failed', e);
+          return false;
+        }
+      }
+    }
   ];
   this.currentBossConfig = this.bossConfigs[0];
   this.bossName = 'Miller';
   this.boss = null;
+  this._bossSpawning = false;
   try { const cb = document.getElementById('devBoss'); if (cb) cb.checked = false; } catch(_) {}
         
         // Create Alex animations using heuristic row/column ranges with URL override support
@@ -945,6 +1293,14 @@
 
   // Build color-keyed frames (same size as original) by clearing a dominant border color.
   // This avoids opaque background boxes during special moves without introducing trim jitter.
+  // NOTE: To match the real game’s arm/leg motion for attacks, the player sheet needs distinct frames for:
+  //  - Walk cycle: 2+ frames
+  //  - Punch: at least wind-up and impact frames (2–3)
+  //  - Kick: at least lift and extension frames (2–3)
+  // The included 'Ryan' sheet (playable character) generally contains these. Use ?pc=ryan to try it.
+  // If not sufficient, provide a 16x32 spritesheet with rows/columns for walk/punch/kick. Ideal layout:
+  //    Row0: walk 0..3 | Row1: punch 0..3 | Row2: kick 0..3 | Row3: jump 0..1
+  //  Frame size: 16x32 (margin=1, spacing=1). Sources: Spriters Resource (RCR sheets), or paid packs from itch.io.
   const colorKeyFrames = (m, prefix='alex_ck') => {
     if (!m) return range('punch');
     const frames = [];
@@ -1005,24 +1361,27 @@
     return frames.length ? frames : range('punch');
   };
   // Enhanced animation creation with smoother frame rates
-  this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 2, repeat: -1 });
-  this.anims.create({ key: 'alex-walk', frames: range('walk'), frameRate: 12, repeat: -1 }); // Smoother walking
-  // Run uses the same frames as walk but much faster
-  this.anims.create({ key: 'alex-run', frames: range('walk'), frameRate: 18, repeat: -1 }); // Faster running
-  this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 15, repeat: 0 }); // Faster punching
-  // Kick: use base spritesheet frames for stability
-  this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 12, repeat: 0 });
-  
-  // Enhanced jump animation with better transitions
   {
-    const jIndex = idx(map.jump.row, map.jump.from);
-    const jf = [{ key: 'alex', frame: jIndex }];
-    this.anims.create({ key: 'alex-jump', frames: jf, frameRate: 8, repeat: -1 });
-  }
-  
-  // Add hurt animation if frames exist
-  if (map.hurt) {
-    this.anims.create({ key: 'alex-hurt', frames: range('hurt'), frameRate: 8, repeat: 0 });
+    const usingSkeleton = this._playerIsSkeleton === true;
+    if (!usingSkeleton) {
+      this.anims.create({ key: 'alex-idle', frames: [{ key: 'alex', frame: idx(map.walk.row, map.walk.from) }], frameRate: 2, repeat: -1 });
+      this.anims.create({ key: 'alex-walk', frames: range('walk'), frameRate: 12, repeat: -1 }); // Smoother walking
+      // Run uses the same frames as walk but much faster
+      this.anims.create({ key: 'alex-run', frames: range('walk'), frameRate: 18, repeat: -1 }); // Faster running
+      this.anims.create({ key: 'alex-punch', frames: range('punch'), frameRate: 15, repeat: 0 }); // Faster punching
+      // Kick: use base spritesheet frames for stability
+      this.anims.create({ key: 'alex-kick',  frames: range('kick'),  frameRate: 12, repeat: 0 });
+
+      // Enhanced jump animation with better transitions
+      const jIndex = idx(map.jump.row, map.jump.from);
+      const jf = [{ key: 'alex', frame: jIndex }];
+      this.anims.create({ key: 'alex-jump', frames: jf, frameRate: 8, repeat: -1 });
+
+      // Add hurt animation if frames exist
+      if (map.hurt) {
+        this.anims.create({ key: 'alex-hurt', frames: range('hurt'), frameRate: 8, repeat: 0 });
+      }
+    }
   }
         
         // Create enemy animations for each type - simplified
@@ -1044,19 +1403,14 @@
             });
           }
         });
-  // Boss animations with magenta color-key cleanup (remove pink backgrounds)
-  // First check if the boss texture exists and has frames
-  if (this.textures.exists('boss')) {
-    const frameCount = this.textures.get('boss').frameTotal;
-    console.log('Boss sprite frame count:', frameCount);
-
-    // Create color-keyed canvas textures per boss frame (preserve original size to avoid jitter)
-    const ckFrames = [];
+  // Boss animation builder (parameterized by texture key and prefix)
+  this.buildBossAnimations = (texKey, prefix) => {
     try {
+      if (!this.textures.exists(texKey)) return false;
+      const frameCount = this.textures.get(texKey).frameTotal;
+      const ckFrames = [];
       const tmp = document.createElement('canvas');
       const ctx = tmp.getContext('2d', { willReadFrequently: true });
-
-      // Helper to detect a likely magenta key from corners
       const pickKeyColor = (imgData, w, h) => {
         const corners = [0,0, (w-1),0, 0,(h-1), (w-1),(h-1)];
         const scores = new Map();
@@ -1067,14 +1421,14 @@
         }
         let best=null, n=-1; for (const [k,v] of scores) { if (v>n) { best=k; n=v; } }
         if (!best) return null; const [R,G,B]=best.split(',').map(x=>parseInt(x,10));
-        // Only treat as key if it’s strongly magenta/purple-ish
         const isMagenta = (R>170 && B>170 && G<140) || (R>150 && B>150 && (R+ B) > G*2);
-        return isMagenta ? {R,G,B} : null;
+        const isNearBlack = (R<8 && G<8 && B<8);
+        const isNearWhite = (R>248 && G>248 && B>248);
+        return (isMagenta || isNearBlack || isNearWhite) ? {R,G,B} : null;
       };
-
       for (let fi=0; fi<Math.max(1, frameCount); fi++) {
-        const f = this.textures.getFrame('boss', fi);
-        if (!f) { ckFrames.push({ key: 'boss', frame: Math.min(fi, frameCount-1) }); continue; }
+        const f = this.textures.getFrame(texKey, fi);
+        if (!f) { ckFrames.push({ key: texKey, frame: Math.min(fi, frameCount-1) }); continue; }
         const w=f.cutWidth, h=f.cutHeight; tmp.width=w; tmp.height=h; ctx.clearRect(0,0,w,h);
         ctx.imageSmoothingEnabled=false;
         ctx.drawImage(f.source.image, f.cutX, f.cutY, w, h, 0, 0, w, h);
@@ -1082,71 +1436,39 @@
         const keyCol = pickKeyColor(data, w, h);
         const R = keyCol?.R, G = keyCol?.G, B = keyCol?.B;
         if (R !== undefined) {
-          const thr=34;
+          // Use conservative threshold for black/white, wider for magenta
+          let thr = 34; // default for magenta-like
+          if (R<8 && G<8 && B<8) thr = 5;       // near black background
+          if (R>248 && G>248 && B>248) thr = 8; // near white background
           for (let p=0;p<data.length;p+=4) {
             const r=data[p], g=data[p+1], b=data[p+2];
             if (Math.abs(r-R)+Math.abs(g-G)+Math.abs(b-B) <= thr) data[p+3]=0;
           }
           ctx.putImageData(img,0,0);
         }
-        const texKey=`boss_ck_${fi}`; if (this.textures.exists(texKey)) this.textures.remove(texKey);
-        const canv=this.textures.createCanvas(texKey, w, h); const c2=canv.getContext();
+        const texKey2=`${prefix}_ck_${fi}`; if (this.textures.exists(texKey2)) this.textures.remove(texKey2);
+        const canv=this.textures.createCanvas(texKey2, w, h); const c2=canv.getContext();
         c2.imageSmoothingEnabled=false; c2.clearRect(0,0,w,h); c2.drawImage(tmp,0,0); canv.refresh();
-        ckFrames.push({ key: texKey, frame: 0 });
+        ckFrames.push({ key: texKey2, frame: 0 });
       }
-    } catch (e) { console.warn('Boss color-key pass failed, using raw frames', e); }
-
-    // Optional: Auto-slice from raw image to get better frames if available
-    const buildAutoFrames = () => {
-      try {
-        if (!this.textures.exists('boss_raw')) return null;
-        const raw = this.textures.get('boss_raw').getSourceImage();
-        if (!raw || !raw.width || !raw.height) return null;
-        const W = raw.width, H = raw.height;
-        const cw = 16, ch = 32;
-        const canv = document.createElement('canvas'); canv.width=W; canv.height=H;
-        const c = canv.getContext('2d', { willReadFrequently: true });
-        c.imageSmoothingEnabled=false; c.clearRect(0,0,W,H); c.drawImage(raw,0,0);
-        const img = c.getImageData(0,0,W,H); const data = img.data;
-        // Detect key color from corners
-        const pickKey = () => {
-          const corners=[[0,0],[W-1,0],[0,H-1],[W-1,H-1]]; const cnt = new Map();
-          for (const [x,y] of corners) { const p=(y*W+x)*4; const k=`${data[p]},${data[p+1]},${data[p+2]}`; cnt.set(k,(cnt.get(k)||0)+1); }
-          let best=null,n=-1; for (const [k,v] of cnt){ if(v>n){best=k;n=v;} } if(!best) return null;
-          const [R,G,B]=best.split(',').map(n=>parseInt(n,10));
-          const mag = (R>170 && B>170 && G<140) || (R>150 && B>150 && (R+B) > G*2);
-          return mag ? {R,G,B} : null;
-        };
-        const KC = pickKey();
-        // Score a window by count of non-key, non-transparent pixels
-        const scoreAt = (x0,y0) => {
-          let cnt=0; for(let y=0;y<ch;y++){ for(let x=0;x<cw;x++){ const X=x0+x, Y=y0+y; if(X<0||Y<0||X>=W||Y>=H) continue; const p=(Y*W+X)*4; const r=data[p],g=data[p+1],b=data[p+2]; let a=data[p+3]; if (KC){ const d=Math.abs(r-KC.R)+Math.abs(g-KC.G)+Math.abs(b-KC.B); if(d<=34) a=0; } if (a>8) cnt++; }} return cnt; };
-        const cand=[]; const step=2; for(let y=0;y<=H-ch;y+=step){ for(let x=0;x<=W-cw;x+=step){ const s=scoreAt(x,y); cand.push({x,y,s}); }}
-        cand.sort((a,b)=>b.s-a.s);
-        const pick=[ ]; const minDist=8;
-        for(const cnd of cand){ if (pick.length>=2) break; if (cnd.s<50) break; // basic threshold
-          if (pick.every(p=>Math.hypot(p.x-cnd.x,p.y-cnd.y) > minDist)) pick.push(cnd);
-        }
-        if (!pick.length) return null;
-        const frames=[]; let idx=0;
-        for (const p of pick){ const texKey=`boss_auto_${idx++}`; if (this.textures.exists(texKey)) this.textures.remove(texKey);
-          const t=this.textures.createCanvas(texKey, cw, ch); const tc=t.getContext(); tc.imageSmoothingEnabled=false; tc.clearRect(0,0,cw,ch);
-          // Copy and apply color-key transparency
-          const sub=c.getImageData(p.x,p.y,cw,ch); const sd=sub.data; if (KC){ for(let i=0;i<sd.length;i+=4){ const r=sd[i],g=sd[i+1],b=sd[i+2]; if (Math.abs(r-KC.R)+Math.abs(g-KC.G)+Math.abs(b-KC.B) <= 34) sd[i+3]=0; }}
-          tc.putImageData(sub,0,0); t.refresh(); frames.push({ key: texKey, frame: 0 }); }
-        return frames;
-      } catch(e) { console.warn('Boss auto-slice failed', e); return null; }
-    };
-
-  // Revert to a single reliable cleaned frame; auto-sliced windows can look wrong on this asset
-  const idleFrame = ckFrames[0] || { key: 'boss', frame: 0 };
-  const walkFrames = [idleFrame];
-
-  this.anims.create({ key: 'boss-idle', frames: [idleFrame], frameRate: 1, repeat: -1 });
-  this.anims.create({ key: 'boss-walk', frames: walkFrames, frameRate: walkFrames.length>1?6:1, repeat: -1 });
-  // Attack animation: prefer a distinct second cleaned frame if available, else reuse idle with a quick yoyo
-  const atkFrames = (ckFrames && ckFrames.length > 1) ? [ckFrames[1], idleFrame, ckFrames[1]] : [idleFrame];
-  this.anims.create({ key: 'boss-attack', frames: atkFrames, frameRate: (atkFrames.length>1?14:1), repeat: 0 });
+      const idleFrame = ckFrames[0] || { key: texKey, frame: 0 };
+      const walkFrames = [idleFrame];
+      const fIdle = `${prefix}-idle`;
+      const fWalk = `${prefix}-walk`;
+      const fAtk  = `${prefix}-attack`;
+      if (this.anims.exists(fIdle)) this.anims.remove(fIdle);
+      if (this.anims.exists(fWalk)) this.anims.remove(fWalk);
+      if (this.anims.exists(fAtk))  this.anims.remove(fAtk);
+      this.anims.create({ key: fIdle, frames: [idleFrame], frameRate: 1, repeat: -1 });
+      this.anims.create({ key: fWalk, frames: walkFrames, frameRate: walkFrames.length>1?6:1, repeat: -1 });
+      const atkFrames = (ckFrames && ckFrames.length > 1) ? [ckFrames[1], idleFrame, ckFrames[1]] : [idleFrame];
+      this.anims.create({ key: fAtk, frames: atkFrames, frameRate: (atkFrames.length>1?14:1), repeat: 0 });
+      return true;
+    } catch(e) { console.warn('buildBossAnimations failed', e); return false; }
+  };
+  // Build default Miller animations with prefix 'boss'
+  if (this.textures.exists('boss')) {
+    this.buildBossAnimations('boss', 'boss');
   } else {
     console.warn('Boss texture not loaded properly');
   }
@@ -1164,7 +1486,7 @@
     // Initialize input controls with safety checks
     if (this.input && this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys() || {};
-      this.keys = this.input.keyboard.addKeys('A,S,D,SPACE') || {};
+  this.keys = this.input.keyboard.addKeys('A,S,D,SPACE,Q') || {};
       // Gamepad mapping and on-screen hints
       try {
         const dlg = document.getElementById('dialogue');
@@ -1236,13 +1558,12 @@
         // Dev flags and helpers
         this.godMode = false;
         this.setGodMode = (on) => { this.godMode = !!on; this.showMessage(this.godMode ? 'God Mode: ON' : 'God Mode: OFF'); };
-    this.spawnBossNearPlayer = () => {
+  this.spawnBossNearPlayer = async () => {
           try {
-            // If already present, keep it and inform
-            if (this.boss && this.boss.active && !this.boss._defeated) { 
-              this.showMessage('Boss already present.'); 
-              return this.boss; 
-            }
+      // Replace any existing boss to avoid duplicates
+      if (this.boss) { try { this.boss.destroy(); } catch(_) {} this.boss = null; }
+      if (this._bossSpawning) { this.showMessage('Boss spawn in progress…'); return null; }
+      this._bossSpawning = true;
             
             // Create a brand new boss sprite
             const createNewBossSprite = () => {
@@ -1274,26 +1595,84 @@
             };
             
             // Helper function to create boss with a specific texture
-            this.createBossWithTexture = (textureKey) => {
-              // Position boss at a good distance to ensure complete visibility
-              const bx = Math.max((this.alex?.x || 200) + 120, 140);
+            this.createBossWithTexture = (textureKey, animPrefix='boss') => {
+              // Position boss beside the player (~±60px) to avoid overlapping on spawn
+              const px = (this.alex?.x || 200);
+              const bgW = (this.bg?.displayWidth || this.scale?.width || this.scale?.gameSize?.width || 800);
+              const margin = 40;
+              const preferred = px + ((this.alex && this.alex.flipX) ? -60 : 60);
+              let bx = Phaser.Math.Clamp(preferred, margin, bgW - margin);
+              // If too close due to bounds, try the opposite side
+              if (Math.abs(bx - px) < 40) {
+                const alt = px + ((this.alex && this.alex.flipX) ? 60 : -60);
+                bx = Phaser.Math.Clamp(alt, margin, bgW - margin);
+              }
               
               // Fallback ground if baseY not initialized yet
               const groundY = Number.isFinite(this.baseYMax) ? this.baseYMax : 
                 ((this.scale.height || this.scale.gameSize?.height || 480) - 18);
               
               // Create boss sprite
-              const boss = this.add.sprite(bx, groundY, textureKey, 0)
+              // Use base frame; some single-frame textures (like padded Necro images) don't have frame index 0
+              const boss = this.add.sprite(bx, groundY, textureKey)
                 .setOrigin(0.5, 1)
                 .setDepth(10);
               // Force visibility and normal alpha to avoid invisible spawns
               try { boss.setVisible(true); boss.setAlpha(1); boss.clearTint(); boss.setBlendMode(Phaser.BlendModes.NORMAL); } catch(_) {}
               
               console.log('Boss created with texture:', textureKey);
+              // Temporary marker to visualize spawn position while we debug visibility
+              try {
+                const m = this.add.rectangle(boss.x, boss.y - Math.max(6, boss.displayHeight*0.9), 6, 6, 0xffff00)
+                  .setOrigin(0.5).setDepth(10001);
+                this.time.delayedCall(1500, () => { try { m.destroy(); } catch(_) {} });
+              } catch(_) {}
+              try { const d=document.getElementById('dialogue-text'); if (d) d.textContent = `${this.bossName||'Boss'} spawned at (${Math.round(boss.x)}, ${Math.round(boss.y)}) key=${textureKey}`; } catch(_) {}
               
-              // Set proper scale to match the game world
+              // Decide animation prefix early so scale can use it
+              this.bossAnimPrefix = animPrefix || 'boss';
+        // Set proper scale to match the game world
               const enemyScale = this.bg?.scaleX || 1;
-              boss.setScale(enemyScale);
+        // Scale Necro to match player's displayed height; default to 1.0 for Miller
+              let scaleAdj = 1.0;
+        if (this.bossAnimPrefix === 'boss2') {
+                try {
+                  const f = this.textures.getFrame(textureKey, 0);
+                  const srcH = Math.max(1, (f?.cutHeight || f?.height || f?.source?.height || 128));
+          const playerH = Math.max(1, this.alex?.displayHeight || 32);
+    const desired = playerH; // same height as player
+      // Adjust so final applied scale (enemyScale * scaleAdj) yields desired height
+    scaleAdj = Phaser.Math.Clamp(desired / (srcH * enemyScale), 0.08, 0.6);
+    } catch(_) { scaleAdj = 0.5; }
+              }
+        boss.setScale(enemyScale * scaleAdj);
+        // Measure transparent padding below the visible feet to keep feet on the road
+        try {
+          if (this.bossAnimPrefix === 'boss2') {
+            const tex = this.textures.get(textureKey);
+            const img = tex?.getSourceImage ? tex.getSourceImage() : null;
+            if (img) {
+              const cv = document.createElement('canvas');
+              cv.width = img.width; cv.height = img.height;
+              const cx = cv.getContext('2d', { willReadFrequently: true });
+              cx.clearRect(0,0,cv.width,cv.height); cx.drawImage(img, 0, 0);
+              const data = cx.getImageData(0,0,cv.width,cv.height).data;
+              let bottomAlphaRow = -1;
+              outer: for (let y=cv.height-1; y>=0; y--) {
+                for (let x=0; x<cv.width; x++) {
+                  const a = data[(y*cv.width + x)*4 + 3];
+                  if (a > 8) { bottomAlphaRow = y; break outer; }
+                }
+              }
+              if (bottomAlphaRow >= 0) {
+                const padPx = (cv.height - 1) - bottomAlphaRow; // transparent rows under silhouette
+                boss._footPadRaw = padPx; // store raw pad for future resizes
+                boss._footPadScaled = Math.round(padPx * (boss.scaleY || 1));
+              }
+            }
+          }
+        } catch(_) { boss._footPadScaled = boss._footPadScaled || 0; }
+        this._currentBossScaleAdj = scaleAdj; // remember for resize
               // Snap to whole pixels to prevent tearing between rows/cols
               boss.x = Math.round(boss.x); boss.y = Math.round(boss.y);
               
@@ -1303,16 +1682,27 @@
               // Set boss properties
               boss.health = 140;
               boss.type = textureKey;
-              boss.speed = 0.8;
+              boss.speed = (this.bossAnimPrefix==='boss2') ? 0.95 : 0.8;
               boss.attackCooldown = 0;
-              boss.attackCadence = 850;
-              boss.attackReach = 30;
-              boss.attackWidth = 24;
-              boss.attackHeight = 20;
+              boss.attackCadence = 600; // swing more often
+              boss.attackReach = (this.bossAnimPrefix==='boss2') ? 32 : 30;
+              boss.attackWidth = (this.bossAnimPrefix==='boss2') ? 22 : 24;
+              boss.attackHeight = (this.bossAnimPrefix==='boss2') ? 18 : 20;
+
+              // Align feet to the same ground as the player (account for any invisible bottom padding)
+              try {
+                // Place so that feet baseline equals player lane Y
+                const pad = (boss._footPadScaled||0);
+                const bias = this.feetBiasFor(boss,'boss');
+                boss.y = Math.round(this.alexBaseY + pad + bias);
+              } catch(_) {}
               
-              // Prefer global cleaned animations that use color-keyed frames
-              if (this.anims.exists('boss-idle')) {
-                boss.play('boss-idle');
+              // Prefer animations by prefix; build if missing
+              if (!this.anims.exists(`${this.bossAnimPrefix}-idle`)) {
+                try { this.buildBossAnimations(textureKey, this.bossAnimPrefix); } catch(_) {}
+              }
+              if (this.anims.exists(`${this.bossAnimPrefix}-idle`)) {
+                boss.play(`${this.bossAnimPrefix}-idle`);
               } else {
                 const idleKey = `${textureKey}-idle`;
                 if (!this.anims.exists(idleKey)) {
@@ -1321,8 +1711,9 @@
                 boss.play(idleKey);
               }
               
-              this.bossName = this.bossName || 'Miller';
+              this.bossName = this.bossName || (animPrefix==='boss2' ? 'Test Boss' : 'Miller');
               this.boss = boss;
+              this._bossSpawning = false;
               
               // Briefly highlight boss for visibility
               boss.setTint(0xff55ff);
@@ -1343,23 +1734,49 @@
             };
             
             // Try creating boss with existing texture first
+            const useCfg = this.currentBossConfig || this.bossConfigs[0];
+            // Ensure texture present (dynamic load for alt)
+            const trySpawnWith = (key, prefix) => {
+              try { return this.createBossWithTexture(key, prefix); } catch(_) { return null; }
+            };
+            if (useCfg.key === 'boss2') {
+              try { const d=document.getElementById('dialogue-text'); if (d) d.textContent = 'Loading Necromancer…'; } catch(_) {}
+              try {
+                const ok = await useCfg.load();
+                if (ok) {
+                  if (this.boss && this.boss.active && !this.boss._defeated) { this._bossSpawning = false; return this.boss; }
+                  const firstKey = this._necroFirstFrameKey || 'necro_raw_idle_0_pad';
+                  if (this.textures.exists(firstKey)) { const r = trySpawnWith(firstKey, useCfg.prefix||'boss2'); this._bossSpawning = false; return r; }
+                  const blankKey = 'boss2_blank';
+                  if (!this.textures.exists(blankKey)) {
+                    const t = this.textures.createCanvas(blankKey, 2, 2); const c=t.getContext(); c.clearRect(0,0,2,2); t.refresh();
+                  }
+                  const r = trySpawnWith(blankKey, useCfg.prefix||'boss2'); this._bossSpawning = false; return r;
+                }
+                this.showMessage('Necro assets missing; check necro PNG sequence folders');
+                this._bossSpawning = false;
+                return null;
+              } catch(_) { /* fall through */ }
+            }
             if (this.textures.exists('boss')) {
-              return this.createBossWithTexture('boss');
+              const r = this.createBossWithTexture('boss', 'boss'); this._bossSpawning = false; return r;
             } else if (this.textures.exists('boss_direct')) {
-              return this.createBossWithTexture('boss_direct');
+              const r = this.createBossWithTexture('boss_direct', 'boss'); this._bossSpawning = false; return r;
             } else if (this.textures.exists('boss_backup')) {
-              return this.createBossWithTexture('boss_backup');
+              const r = this.createBossWithTexture('boss_backup', 'boss'); this._bossSpawning = false; return r;
             } else {
               // If no boss texture exists, create one
               createNewBossSprite();
               // For immediate feedback, try enemy1 as fallback
               if (this.textures.exists('enemy1')) {
-                return this.createBossWithTexture('enemy1');
+                const r = this.createBossWithTexture('enemy1', 'boss'); this._bossSpawning = false; return r;
               }
+              this._bossSpawning = false;
             }
             
           } catch(err) {
             console.error('Boss spawn error:', err);
+            this._bossSpawning = false;
             // Try with enemy1 if available
             try {
               if (this.textures.exists('enemy1')) {
@@ -1369,7 +1786,7 @@
             return null;
           }
         };
-        this.despawnBoss = () => { try { if (this.boss) { this.boss.destroy(); this.boss = null; this.showMessage('Boss despawned.'); } } catch(_) {} };
+        this.despawnBoss = () => { try { if (this.boss) { this.boss.destroy(); this.boss = null; this.showMessage('Boss despawned.'); } this._bossSpawning = false; } catch(_) {} };
         
   // Game state
   this.isMoving = false;
@@ -1382,8 +1799,9 @@
   // Constrain to detected road band at start as well
   const roadTop0 = Math.round(ch * (this._roadTopFrac || this.ROAD_TOP_PCT));
   const roadBot0 = Math.round(ch * (this._roadBottomFrac || 0.96));
-  this.baseYMin = roadTop0 + 10;
-  this.baseYMax = Math.max(roadTop0 + 20, Math.min(ch - 8, roadBot0 - 6));
+  // Full blue band playable (+2px slack at the bottom)
+  this.baseYMin = roadTop0;
+  this.baseYMax = Math.min(ch - 1, roadBot0 + 2);
   this.alexBaseY = this.baseYMax;
   this.alexJumpZ = 0; // negative while rising
   this.alexVy = 0;
@@ -1416,7 +1834,7 @@
       `bgKey:${useKey} bgScale:${this.bg.scaleX.toFixed(2)}`,
       `parallax:${Math.round(this._parallaxX)}`,
       `alex:${Math.round(this.alex.x)},${Math.round(this.alex.y)} run:${this.runState?.isRunning?'Y':'N'}`,
-      `sheet ${cols}x${rows}  map w:${map.walk.row}:${map.walk.from}-${map.walk.to} p:${map.punch.row}:${map.punch.from}-${map.punch.to} k:${map.kick.row}:${map.kick.from}-${map.kick.to} j:${map.jump.row}:${map.jump.from}-${map.jump.to}`
+      this._playerIsSkeleton ? 'player: skeleton' : `sheet ${cols}x${rows}  map w:${map.walk.row}:${map.walk.from}-${map.walk.to} p:${map.punch.row}:${map.punch.from}-${map.punch.to} k:${map.kick.row}:${map.kick.from}-${map.kick.to} j:${map.jump.row}:${map.jump.from}-${map.jump.to}`
     ].join('  ');
     dbg.setText(s);
     
@@ -1530,6 +1948,24 @@
               o.start(t); o.stop(t + dur + 0.02);
             } catch(_) {}
           }
+          ,
+          coin: () => {
+            try {
+              const ctx = this.sound.context; const t0 = ctx.currentTime;
+              const mk = (freq, start, dur, vol=0.18) => {
+                const o = ctx.createOscillator(); const g = ctx.createGain();
+                o.type = 'sine'; o.frequency.setValueAtTime(freq, start);
+                g.gain.setValueAtTime(0.0001, start);
+                g.gain.linearRampToValueAtTime(vol, start + 0.01);
+                g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+                o.connect(g).connect(ctx.destination);
+                o.start(start); o.stop(start + dur + 0.01);
+              };
+              // Two short, bright pings for a coin-like chime
+              mk(1800, t0, 0.10, 0.16);
+              mk(2400, t0 + 0.035, 0.09, 0.14);
+            } catch(_) {}
+          }
         };
         
         // Function to show messages in dialogue bar
@@ -1562,6 +1998,60 @@
               this.scene.pause();
             }
           } catch(_) {}
+        };
+
+        // Feet baseline helpers so boxes attach to bodies (not to image bottoms or shadows)
+        this.feetBiasFor = (spr, role='enemy') => {
+          try {
+            const h = Math.max(1, spr.displayHeight || spr.height || 32);
+            if (role === 'player') return Math.round(Math.max(2, h * 0.18));
+            if (role === 'boss') {
+              // For Necro, use zero extra bias; footPad handles transparency padding
+              return (this.bossAnimPrefix === 'boss2') ? 0 : 0;
+            }
+            return Math.round(Math.max(1, h * 0.10));
+          } catch(_) { return 4; }
+        };
+        this.feetYOf = (spr, role='enemy') => {
+          try {
+            const pad = spr?._footPadScaled || 0;
+            const bias = this.feetBiasFor(spr, role);
+            return (spr?.y || 0) - pad - bias;
+          } catch(_) { return (spr?.y||0); }
+        };
+
+        // True feet baseline (no bias) for placing boxes exactly relative to ground
+        this.baselineYOf = (spr) => {
+          try {
+            const pad = spr?._footPadScaled || 0;
+            return (spr?.y || 0) - pad;
+          } catch(_) { return (spr?.y||0); }
+        };
+
+        // Tighter hurtbox helper (feet-anchored, narrower than full sprite bounds)
+        this.hurtboxOf = (spr, role='enemy') => {
+          try {
+            const w = Math.max(1, spr.displayWidth || spr.width || 16);
+            const h = Math.max(1, spr.displayHeight || spr.height || 32);
+            const widthFrac = (role==='player') ? 0.38 : (role==='boss' ? 0.46 : 0.42);
+            const heightFrac = (role==='boss') ? 0.55 : 0.52;
+            const hbW = Math.max(2, w * widthFrac);
+            const hbH = Math.max(2, h * heightFrac);
+            const x = (spr.x || 0) - hbW/2;
+            // Player: anchor to true feet baseline and lift a few px for torso alignment
+            if (role === 'player') {
+              const base = this.baselineYOf(spr);
+              const bottomClear = Math.round(Math.max(4, h * 0.06)); // keep a few px above feet
+              const y = base - bottomClear - hbH;
+              return new Phaser.Geom.Rectangle(Math.round(x), Math.round(y), Math.round(hbW), Math.round(hbH));
+            }
+            // Others: use feet-biased anchor that centers on body mass
+            const feetY = this.feetYOf(spr, role);
+            const y = feetY - hbH - 1;
+            return new Phaser.Geom.Rectangle(Math.round(x), Math.round(y), Math.round(hbW), Math.round(hbH));
+          } catch(_) {
+            return new Phaser.Geom.Rectangle((spr?.x||0)-6, (spr?.y||0)-10, 12, 10);
+          }
         };
 
         // Auto-pause on window blur or page hidden
@@ -1694,7 +2184,8 @@
         // Lane up/down movement along the road
   if (!this.isAttacking && (this.cursors.up.isDown || padUp)) { this.alexBaseY -= speed; moving = true; }
   else if (!this.isAttacking && (this.cursors.down.isDown || padDown)) { this.alexBaseY += speed; moving = true; }
-        this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
+  // Clamp base Y to full lane; alex.y = alexBaseY + jumpZ so feet can reach exact bottom with slack
+  this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
 
     // Gamepad poll
     try { this._pollPad && this._pollPad(); } catch(_) {}
@@ -1730,6 +2221,23 @@
             this.alex.play('alex-idle');
           }
         }
+
+        // Quick footsteps while running (only when actually moving fast horizontally)
+        try {
+          const leftHeld = (this.cursors.left.isDown || padLeft);
+          const rightHeld = (this.cursors.right.isDown || padRight);
+          const horizSpeed = Math.abs((leftHeld?1:0) - (rightHeld?1:0)) * (this.runState.isRunning ? 3.8 : 2);
+          if (onGround && this.runState.isRunning && horizSpeed >= 3.5 && !this.isAttacking) {
+            const nowMs = this.time.now || 0;
+            if (nowMs >= (this._nextStepAt || 0)) {
+              // Subtle low thump as a footstep
+              this.synth.thump(125, 0.06, 0.10);
+              this._nextStepAt = nowMs + 120;
+            }
+          } else {
+            this._nextStepAt = (this.time.now || 0);
+          }
+        } catch(_) {}
         
         // Enhanced Combat System with combos and variety
         this.comboCount = 0;
@@ -1750,11 +2258,11 @@
           this.comboTimer = now;
           
           // Enhanced animation with combo effects
-          const animKey = kind === 'kick' ? 'alex-kick' : 'alex-punch';
+          const animKey = (kind==='kick') ? 'alex-kick' : (kind==='special' ? 'alex-special' : 'alex-punch');
           this.alex.play(animKey);
           
           // Combo-based visual effects
-          const tilt = (kind === 'kick' ? 5.5 : 4) * Math.min(1.2, 1 + this.comboCount * 0.08);
+          const tilt = (kind==='kick' ? 6.5 : kind==='special' ? 7 : 5) * Math.min(1.2, 1 + this.comboCount * 0.08);
           this.tweens.add({ 
             targets: this.alex, 
             angle: (this.alex.flipX ? -tilt : tilt), 
@@ -1765,29 +2273,48 @@
           
           // Enhanced recoil based on combo
           try {
-            const baseRecoil = (kind === 'kick') ? 3.5 : 2.5;
+            const baseRecoil = (kind === 'kick') ? 4.2 : (kind==='punch'? 3.2 : 2.5);
             const recoil = baseRecoil * (1 + this.comboCount * 0.15);
             const worldW = (this._bgNaturalW||800) * (this.bg?.scaleX||1);
             this.alex.x += this.alex.flipX ? recoil : -recoil;
             this.alex.x = Phaser.Math.Clamp(this.alex.x, 16, worldW - 16);
           } catch(_) {}
+
+          // Tiny forward lunge for punch/kick only (special stays put)
+          try {
+            if (kind==='punch' || kind==='kick') {
+              const lunge = (kind==='kick' ? 6 : 4) * (1 + this.comboCount * 0.05);
+              const dir = this.alex.flipX ? -1 : 1;
+              const targetX = Phaser.Math.Clamp(this.alex.x + (lunge * dir), 16, ((this._bgNaturalW||800) * (this.bg?.scaleX||1)) - 16);
+              this.tweens.add({ targets: this.alex, x: targetX, duration: 80, ease: 'quad.out' });
+            }
+          } catch(_) {}
           
           // Enhanced SFX with combo pitch variation
           const pitchVar = 1.0 + (this.comboCount * 0.05);
-          this.playSfx(['sfx_punch1','sfx_punch2'], 0.5 + this.comboCount * 0.1, kind==='kick' ? 0.95 * pitchVar : 1.02 * pitchVar);
+          this.playSfx(['sfx_punch1','sfx_punch2'], 0.55 + this.comboCount * 0.1, kind==='kick' ? 0.9 * pitchVar : 1.05 * pitchVar);
           
           // Enhanced hitbox with combo scaling
-          const baseReach = (kind === 'kick') ? 26 : 22;
+          const baseReach = (kind==='kick') ? 28 : (kind==='special' ? 30 : 24);
           const reach = baseReach * (1 + this.comboCount * 0.08);
-          const baseW = (kind === 'kick') ? 22 : 18;
+          const baseW = (kind==='kick') ? 24 : (kind==='special' ? 16 : 20);
           const w = baseW * (1 + this.comboCount * 0.1);
-          const h = 20 + this.comboCount * 2;
+          const h = 22 + this.comboCount * 2;
           const ox = this.alex.flipX ? -reach : reach;
-          const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, this.alex.y - h - 6, w, h);
+          const pBase = this.baselineYOf(this.alex);
+          // Raise attack box above feet baseline; scale with height so it stays at torso level
+          const pH = Math.max(1, this.alex.displayHeight || this.alex.height || 32);
+          const lift = Math.round(Math.max(12, pH * 0.28));
+          const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - w/2, pBase - lift - h, w, h);
+          // Expose for debug overlay
+          try { this._lastPlayerHitRect = { rect: hitRect, ts: (this.time.now || 0) }; } catch(_) {}
 
       const applyHit = (target, dmg, knock=6) => {
             if (!target || !target.active || target._defeated) return;
-            const tb = target.getBounds();
+            // Require target to be in front of the player (no hitting behind)
+            const facingOk = this.alex.flipX ? (target.x < this.alex.x - 1) : (target.x > this.alex.x + 1);
+            if (!facingOk) return;
+            const tb = this.hurtboxOf(target, (target===this.boss)?'boss':'enemy');
             if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, tb)) {
               const comboDamage = dmg * (1 + this.comboCount * 0.2);
               const comboKnockback = knock * (1 + this.comboCount * 0.15);
@@ -1834,6 +2361,30 @@
                   scaleY: target.scaleY * 1.1,
                   duration: 600, 
                   onComplete: () => {
+                    // Drop 1-3 coins at the enemy feet baseline
+                    try {
+                      const dropCount = Phaser.Math.Between(1, 3);
+                      const role = (target===this.boss)?'boss':'enemy';
+                      const baseY = this.feetYOf(target, role);
+                      if (!this.coins) this.coins = [];
+                      for (let i=0; i<dropCount; i++) {
+                        const dx = (-10 + i*10) + Phaser.Math.Between(-3,3);
+                        const coin = this.add.sprite(target.x + dx, baseY - 6, 'coin_spin_0').setOrigin(0.5, 1).setDepth(3000);
+                        coin.play('coin-spin');
+                        coin.value = 1; // Flat value per coin
+                        coin.setScale((this.bg?.scaleX||1));
+                        // Simple physics for drop/bounce
+                        coin._baseY = baseY - 6;
+                        // Start with a tiny pop upward and outward
+                        const velScale = (this.bg?.scaleX||1);
+                        coin._vx = Phaser.Math.Between(-25, 25) * velScale;
+                        coin._vy = -Phaser.Math.Between(70, 110) * velScale;
+                        coin._g  = 380 * velScale; // gravity
+                        coin._phys = true;
+                        coin._despawnAt = (this.time.now||0) + Phaser.Math.Between(8000, 12000);
+                        this.coins.push(coin);
+                      }
+                    } catch(_) {}
                     if (target === this.boss) {
                       this.showMessage((this.bossName||'Boss') + ' defeated!');
                     } else {
@@ -1849,18 +2400,25 @@
           };
 
           // Combo-based damage scaling
-          const baseDmg = kind === 'kick' ? 16 : 12;
+          const baseDmg = (kind==='kick') ? 18 : (kind==='special' ? 22 : 14);
           const dmg = baseDmg * (1 + this.comboCount * 0.25);
-          this.enemies.forEach(e => applyHit(e, dmg, 5));
-          if (this.boss) applyHit(this.boss, dmg, 8);
+          const knockEnemy = (kind==='kick') ? 7 : (kind==='punch' ? 6 : 5);
+          const knockBoss = (kind==='kick') ? 10 : (kind==='punch' ? 9 : 8);
+          this.enemies.forEach(e => applyHit(e, dmg, knockEnemy));
+          if (this.boss) applyHit(this.boss, dmg, knockBoss);
 
           // Only clear attacking when the specific attack animation completes
-          const ev = `animationcomplete-${kind === 'kick' ? 'alex-kick' : 'alex-punch'}`;
-          this.alex.once(ev, () => { this.isAttacking = false; this.alex.setAngle(0); });
+          const ev = `animationcomplete-${(kind==='kick') ? 'alex-kick' : (kind==='special' ? 'alex-special' : 'alex-punch')}`;
+          this.alex.once(ev, () => {
+            this.isAttacking = false; this.alex.setAngle(0);
+            // Clear debug hitbox shortly after animation completes
+            try { this._lastPlayerHitRect = null; } catch(_) {}
+          });
         };
 
   if (Phaser.Input.Keyboard.JustDown(this.keys.A)) { this.runState.isRunning=false; tryAttack('punch'); }
   if (Phaser.Input.Keyboard.JustDown(this.keys.S)) { this.runState.isRunning=false; tryAttack('kick'); }
+  if (this.keys.Q && Phaser.Input.Keyboard.JustDown(this.keys.Q)) { this.runState.isRunning=false; tryAttack('special'); }
         
     // Keep Alex inside world bounds
   const displayWNow = this._bgNaturalW * this.bg.scaleX;
@@ -1983,8 +2541,12 @@
               // attack hitbox in front of enemy
               const w = enemy.attackWidth, h = enemy.attackHeight;
               const ox = enemy.flipX ? -reach : reach;
-              const hitRect = new Phaser.Geom.Rectangle(enemy.x + ox - w/2, enemy.y - h - 6, w, h);
-              const pb = this.alex.getBounds();
+              const eFeetY = this.feetYOf(enemy, 'enemy');
+              const eBase = this.baselineYOf(enemy);
+              const hitRect = new Phaser.Geom.Rectangle(enemy.x + ox - w/2, eBase - 5 - h, w, h);
+              // Expose for debug overlay
+              enemy._lastAtkRect = hitRect; enemy._lastAtkTs = time;
+              const pb = this.hurtboxOf(this.alex,'player');
               if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
                 hurtPlayer(10, 10, enemy.flipX?-1:1);
               }
@@ -2013,28 +2575,71 @@
           }
           
           const dx = this.alex.x - b.x;
-          const dy = (this.alexBaseY - b.y);
+          // Compare lane alignment using feet position (account for bottom padding)
+          const bFeetY = this.feetYOf(b, 'boss');
+          const dy = (this.alexBaseY - bFeetY);
           
+          // Depth sort by Y with a tie-break favoring the player so she isn't visually covered
+          try {
+            const aY = Math.round(this.alex?.y || 0);
+            const bY = Math.round(b?.y || 0);
+            if (this.alex?.setDepth) this.alex.setDepth(aY + (aY >= bY ? 1 : 0));
+            if (b?.setDepth) b.setDepth(bY + (bY > aY ? 1 : 0));
+          } catch(_) {}
+
           // Set the correct direction the boss is facing
           b.setFlipX(dx < 0);
           
-          const alignedY = Math.abs(dy) <= 12;
+          // Slightly wider tolerance for Necro so she lines up and swings
+          const laneTol = (this.bossAnimPrefix==='boss2') ? 13 : 12;
+          const alignedY = Math.abs(dy) <= laneTol;
           const distX = Math.abs(dx);
           const reach = b.attackReach || 28;
           
           if (distX > reach + 2 || !alignedY) {
-            // Move boss toward player
-            b.x += Math.sign(dx) * (b.speed || 0.8);
+            // Move boss toward player (slightly faster to commit to range), but don't allow overlap
+            const stepX = Math.sign(dx) * ((b.speed || 0.8) * (this.bossAnimPrefix==='boss2' ? 1.15 : 1.0));
+            const futureDist = Math.abs((b.x + stepX) - this.alex.x);
+            const minNoOverlap = Math.max(14, (b.displayWidth ? b.displayWidth * 0.25 : 14));
+            if (futureDist > minNoOverlap) {
+              b.x += stepX;
+            }
 
             // Keep boss within visible bounds
             b.x = Phaser.Math.Clamp(b.x, 40, (this.bg.displayWidth || 800) - 40);
 
-            // Vertical alignment (lane matching)
-            if (!alignedY) b.y += Math.sign(this.alexBaseY - b.y) * 0.6;
+            // Vertical alignment (lane matching) using feet alignment
+            if (!alignedY) {
+              const targetY = this.alexBaseY + (b._footPadScaled||0);
+              // snap when close; otherwise move faster to line up
+              const dyy = targetY - b.y;
+              if (Math.abs(dyy) <= 1) {
+                b.y = Math.round(targetY);
+              } else {
+                b.y += Math.sign(dyy) * (this.bossAnimPrefix==='boss2' ? 1.1 : 0.9);
+              }
+            }
+            // Clamp Y within the playable road band so she never walks off-map
+            b.y = Phaser.Math.Clamp(b.y, this.baseYMin + (b._footPadScaled||0), this.baseYMax + (b._footPadScaled||0));
+            // Re-evaluate clamped y using feet baseline (ensures real feet stay on road)
+            const fy = this.feetYOf(b, 'boss');
+            if (fy < this.baseYMin) b.y += (this.baseYMin - fy);
+            if (fy > this.baseYMax) b.y -= (fy - this.baseYMax);
+            // Maintain a little personal space to avoid standing on top
+            const minSpace = Math.max(10, (b.displayWidth ? b.displayWidth * 0.18 : 10));
+            if (distX < minSpace) {
+              // Instead of always backing off, bias into a small forward micro-step to settle into swing range
+              const bias = (this.bossAnimPrefix==='boss2') ? 0.35 : 0.25;
+              const step = Math.min(1.2, (minSpace - distX) * bias);
+              b.x += Math.sign(dx) * step;
+            } else if (distX < reach * 0.9) {
+              b.x += Math.sign(-dx) * 0.6;
+            }
 
             // Play walk only when not attacking
             try {
-              const cleanedWalk = 'boss-walk';
+              const pref = this.bossAnimPrefix || 'boss';
+              const cleanedWalk = `${pref}-walk`;
               const walkAnim = this.anims.exists(cleanedWalk) ? cleanedWalk : `${b.type}-walk`;
               if (!b._attacking && this.anims.exists(walkAnim)) {
                 if (b.anims?.currentAnim?.key !== walkAnim) b.play(walkAnim);
@@ -2044,30 +2649,90 @@
           } else {
             // In range: idle/attack
             try {
-              const cleanedIdle = 'boss-idle';
+              const pref = this.bossAnimPrefix || 'boss';
+              const cleanedIdle = `${pref}-idle`;
               const idleAnim = this.anims.exists(cleanedIdle) ? cleanedIdle : `${b.type}-idle`;
               if (!b._attacking && this.anims.exists(idleAnim)) {
                 if (b.anims?.currentAnim?.key !== idleAnim) b.play(idleAnim);
               }
             } catch(_) {}
 
+            // Keep a separation even when in range; do not allow overlap
+            const minSpaceInRange = Math.max(14, (b.displayWidth ? b.displayWidth * 0.25 : 14));
+            if (distX < minSpaceInRange) {
+              const repel = Math.min(1.2, (minSpaceInRange - distX) * 0.3);
+              // If attacking, push player back; otherwise back the boss off slightly
+              if (b._attacking) {
+                this.alex.x += (b.flipX ? -repel : repel);
+              } else {
+                b.x += Math.sign(-dx) * repel;
+              }
+            }
+            // Clamp Y again after nudges
+            b.y = Phaser.Math.Clamp(b.y, this.baseYMin + (b._footPadScaled||0), this.baseYMax + (b._footPadScaled||0));
+            const fy2 = this.feetYOf(b, 'boss');
+            if (fy2 < this.baseYMin) b.y += (this.baseYMin - fy2);
+            if (fy2 > this.baseYMax) b.y -= (fy2 - this.baseYMax);
+
             // Attack when cooldown allows and not already attacking
-            if (!b._attacking && time >= (b.attackCooldown || 0)) {
+            // Only attempt an attack when aligned and at a reasonable distance band (not overlapping)
+            // Wider near band for Necro so she actually chooses to swing
+            const nearBandMin = (this.bossAnimPrefix==='boss2') ? Math.max(0, reach * 0.10) : Math.max(8, reach * 0.35);
+            const nearBandMax = (this.bossAnimPrefix==='boss2') ? (reach + 24) : (reach + 4);
+            if (!b._attacking && alignedY && distX >= nearBandMin && distX <= nearBandMax && time >= (b.attackCooldown || 0)) {
               try {
-                if (this.anims.exists('boss-attack')) {
+                const pref = this.bossAnimPrefix || 'boss';
+                const atkKey = `${pref}-attack`;
+                if (this.anims.exists(atkKey)) {
                   b._attacking = true;
-                  b.play('boss-attack');
-                  b.once('animationcomplete-boss-attack', () => { b._attacking = false; });
+                  b._attackHitApplied = false;
+                  b.play(atkKey);
+                  b.once(`animationcomplete-${atkKey}`, () => { b._attacking = false; b._attackHitApplied = false; });
+                  // Tiny micro-advance into range at start of swing without overlapping
+                  const adv = Math.min(2.0, Math.max(0.5, (distX - (reach*0.6)) * 0.05));
+                  const dir = Math.sign(dx);
+                  if (Math.abs((b.x + adv*dir) - this.alex.x) > minNoOverlap) b.x += adv * dir;
+                } else {
+                  // Fallback: flash and briefly pause as a "swing" even without an anim
+                  b._attacking = true; b._attackHitApplied = false;
+                  b.setTint(0xffcccc);
+                  this.time.delayedCall(300, () => { try { b.clearTint(); } catch(_) {} b._attacking=false; b._attackHitApplied=false; });
                 }
               } catch(_) { /* ignore */ }
 
-              const w = b.attackWidth || 22, h = b.attackHeight || 20;
-              const ox = b.flipX ? -reach : reach;
-              const hitRect = new Phaser.Geom.Rectangle(b.x + ox - w/2, b.y - h - 6, w, h);
-              const pb = this.alex.getBounds();
-              if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
-                hurtPlayer(14, 12, b.flipX ? -1 : 1);
-              }
+              // Apply damage only during the swing window (mid animation)
+              const swingDelay = (this.bossAnimPrefix==='boss2') ? 220 : 280; // Necro hits a bit sooner
+              this.time.delayedCall(swingDelay, () => {
+                try {
+                  // Only hit if still in attack animation and not already applied
+                  const pref = this.bossAnimPrefix || 'boss';
+                  const atkKey = `${pref}-attack`;
+                  if (!b || !b.active || b._attackHitApplied) return;
+                  // If the attack animation isn't present, still allow the hit to apply during fallback
+                  if (this.anims.exists(atkKey)) {
+                    if (!b.anims?.currentAnim || b.anims.currentAnim.key !== atkKey) return;
+                  }
+
+                  const w = b.attackWidth || 22, h = b.attackHeight || 20;
+                  const ox = b.flipX ? -reach : reach;
+                  const bFeetY2 = this.feetYOf(b, 'boss');
+                  const bBase = this.baselineYOf(b);
+                  const hitRect = new Phaser.Geom.Rectangle(b.x + ox - w/2, bBase - 6 - h, w, h);
+                  // Expose for debug overlay
+                  b._lastAtkRect = hitRect; b._lastAtkTs = time;
+                  const pb = this.hurtboxOf(this.alex,'player');
+                  const bFeetNow = this.feetYOf(b,'boss');
+                  if (Math.abs(this.alexBaseY - bFeetNow) <= laneTol && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
+                    b._attackHitApplied = true;
+                    // Push player back on successful hit and add a tiny shake
+                    const dir = b.flipX ? -1 : 1;
+                    this.alex.x += dir * 4;
+                    this.cameras.main.shake(90, 0.004);
+                    hurtPlayer(14, 12, dir);
+                  }
+                } catch(_) {}
+              });
+
               b.attackCooldown = time + (b.attackCadence || 900);
             }
           }
@@ -2083,6 +2748,111 @@
         // Update boss health bar if it exists
         if (this.boss && this.boss.updateHealthBar) {
           this.boss.updateHealthBar();
+        }
+
+        // Coin pickups update
+        try {
+          if (!this.coins) this.coins = [];
+          // Rotate/animate and handle pickups/expiry
+          const pb = this.hurtboxOf(this.alex,'player');
+          const now = this.time.now || 0;
+          this.coins = this.coins.filter(coin => {
+            if (!coin || !coin.active) return false;
+            // Physics: gravity and bounce with slight damping
+            try {
+              if (coin._phys) {
+                const dt = (this.game.loop.delta||16) / 1000;
+                coin._vy += (coin._g||360) * dt;
+                coin.x += (coin._vx||0) * dt;
+                coin.y += (coin._vy||0) * dt;
+                const ground = coin._baseY;
+                if (coin.y >= ground) {
+                  coin.y = ground;
+                  // Bounce with damping
+                  coin._vy = -Math.abs(coin._vy) * 0.35;
+                  // Horizontal friction
+                  coin._vx *= 0.86;
+                  // Stop tiny bounces
+                  if (Math.abs(coin._vy) < 18) { coin._vy = 0; coin._phys = false; }
+                }
+              }
+            } catch(_) {}
+            // Blink before despawn
+            if (coin._despawnAt && now > coin._despawnAt - 900) {
+              const phase = ((now/120)|0) % 2; coin.setAlpha(phase?0.4:1);
+            }
+            if (coin._despawnAt && now >= coin._despawnAt) { try { coin.destroy(); } catch(_) {} return false; }
+            // Collect on overlap with player hurtbox
+            try {
+              const cb = new Phaser.Geom.Rectangle(coin.x-6, coin.y-10, 12, 10);
+              if (Phaser.Geom.Intersects.RectangleToRectangle(pb, cb)) {
+                const val = coin.value || 1;
+                this.alex.money = (this.alex.money||0) + val;
+                // Pickup sound (synth fallback)
+                try { this.synth.coin(); } catch(_) { this.playSfx && this.playSfx(['sfx_coin'], 0.6, 1.2); }
+                // Floating text
+                try {
+                  const scale = (this.bg?.scaleX||1);
+                  const txt = this.add.text(coin.x, coin.y-20, `+$${val}`, { fontFamily:'monospace', fontSize:'16px', color:'#ffff66', stroke:'#000', strokeThickness:4, shadow:{ offsetX:0, offsetY:0, color:'#000', blur:0, fill:true } }).setOrigin(0.5);
+                  txt.setScale(scale);
+                  this.tweens.add({ targets: txt, y: txt.y - (20 * scale), alpha:0, duration:800, onComplete:()=>txt.destroy() });
+                } catch(_) {}
+                try { coin.destroy(); } catch(_) {}
+                return false;
+              }
+            } catch(_) {}
+            return true;
+          });
+        } catch(_) {}
+
+        // Debug hitbox overlay drawing
+        if (this.debugHitboxes) {
+          if (!this._hitG || !this._hitG.active) {
+            try { this._hitG && this._hitG.destroy(); } catch(_) {}
+            this._hitG = this.add.graphics().setDepth(5000);
+          }
+          const g = this._hitG; g.clear();
+          // Player hurtbox (in lieu of full sprite bounds)
+          try {
+            const pb = this.hurtboxOf(this.alex,'player');
+            g.lineStyle(1, 0x00ff00, 1); g.strokeRect(pb.x, pb.y, pb.width, pb.height);
+            // Player attack rect (recent)
+            if (this._lastPlayerHitRect && (this.time.now - (this._lastPlayerHitRect.ts||0) < 320)) {
+              const r = this._lastPlayerHitRect.rect; g.lineStyle(1, 0xff0000, 1); g.strokeRect(r.x, r.y, r.width, r.height);
+            }
+          } catch(_) {}
+          // Enemy bounds and last attack
+          try {
+            this.enemies.forEach(e => {
+              if (!e || e._defeated) return;
+              const eb = this.hurtboxOf(e,'enemy'); g.lineStyle(1, 0xffff00, 1); g.strokeRect(eb.x, eb.y, eb.width, eb.height);
+              if (e._lastAtkRect && (time - (e._lastAtkTs||0) < 600)) {
+                const r = e._lastAtkRect; g.lineStyle(1, 0xff9900, 1); g.strokeRect(r.x, r.y, r.width, r.height);
+              }
+            });
+          } catch(_) {}
+          // Boss bounds and last attack
+          try {
+            if (this.boss && !this.boss._defeated) {
+              const bb = this.hurtboxOf(this.boss,'boss'); g.lineStyle(1, 0x00ffff, 1); g.strokeRect(bb.x, bb.y, bb.width, bb.height);
+              if (this.boss._lastAtkRect && (time - (this.boss._lastAtkTs||0) < 700)) {
+                const r = this.boss._lastAtkRect; g.lineStyle(1, 0x00ccff, 1); g.strokeRect(r.x, r.y, r.width, r.height);
+              }
+            }
+          } catch(_) {}
+          // Lane guides: cyan bottom, yellow top
+          try {
+            const { ch } = getSize();
+            const top = Math.round(ch * (this._roadTopFrac || this.ROAD_TOP_PCT));
+            const bot = Math.round(ch * (this._roadBottomFrac || 0.96));
+            g.lineStyle(1, 0x00ffff, 0.6);
+            g.beginPath(); g.moveTo(0, bot + 0.5); g.lineTo(this.bg.displayWidth || 800, bot + 0.5); g.strokePath();
+            g.lineStyle(1, 0xffff00, 0.4);
+            g.beginPath(); g.moveTo(0, top + 0.5); g.lineTo(this.bg.displayWidth || 800, top + 0.5); g.strokePath();
+          } catch(_) {}
+        } else {
+          // Clean up graphics if disabled
+          if (this._hitG) { try { this._hitG.clear(); this._hitG.destroy(); } catch(_) {} this._hitG = null; }
         }
         
   // Update HUD elements and debug display
@@ -2264,18 +3034,51 @@
       const close = document.getElementById('devClose');
       const god = document.getElementById('devGod');
       const boss = document.getElementById('devBoss');
+  const bossType = document.getElementById('devBossType');
+  const hit = document.getElementById('devHit');
       if (!btn || !panel) return;
       const gs = () => (window._BCR && window._BCR.gs) ? window._BCR.gs() : null;
       btn.addEventListener('click', () => {
         const show = panel.style.display !== 'block';
         panel.style.display = show ? 'block' : 'none';
         btn.setAttribute('aria-expanded', String(show));
+        // When opening, sync selector to current boss config
+        if (show && bossType) {
+          try {
+            const s = gs();
+            const val = s?.currentBossConfig?.key || 'boss';
+            bossType.value = val;
+    if (hit) hit.checked = !!s?.debugHitboxes;
+          } catch(_) {}
+        }
       });
       close && close.addEventListener('click', () => {
         panel.style.display = 'none';
         btn.setAttribute('aria-expanded', 'false');
       });
       god && god.addEventListener('change', () => { const s = gs(); if (s && s.setGodMode) s.setGodMode(god.checked); });
+      bossType && bossType.addEventListener('change', async () => {
+        const s = gs(); if (!s) return;
+        try {
+          const choice = bossType.value || 'boss';
+          const cfg = (s.bossConfigs||[]).find(c => c.key === choice) || s.bossConfigs?.[0];
+          if (cfg) {
+            s.currentBossConfig = cfg;
+            s.bossName = cfg.name || (choice==='boss2'?'Test Boss':'Miller');
+            // If boss currently spawned, respawn as new type
+            if (boss && boss.checked) {
+              s.despawnBoss && s.despawnBoss();
+              // Yield a tick to ensure cleanup
+              setTimeout(() => { s.spawnBossNearPlayer && s.spawnBossNearPlayer(); }, 50);
+            }
+          }
+        } catch(_) {}
+      });
+      hit && hit.addEventListener('change', () => {
+        const s = gs(); if (!s) return;
+        s.debugHitboxes = !!hit.checked;
+        if (!s.debugHitboxes) { try { s._hitG?.clear(); s._hitG?.destroy(); } catch(_) {} s._hitG = null; s._lastPlayerHitRect = null; }
+      });
   boss && boss.addEventListener('change', () => { 
         const s = gs(); 
         if (!s) return; 
@@ -2285,41 +3088,27 @@
           try {
             console.log('Boss checkbox checked, attempting to spawn');
             
-            // First make sure the boss texture is preloaded
-            const ensureBossTexture = () => {
-              // Create an image element and load the sprite directly
+            // Determine target boss type
+            const typeSel = document.getElementById('devBossType');
+            const pick = typeSel ? typeSel.value : 'boss';
+            if (pick === 'boss') {
+              // Always clear any existing boss before spawning a new one
+              try { s.despawnBoss && s.despawnBoss(); } catch(_) {}
+              // Preload Miller image for robustness, then spawn
               const img = new Image();
               img.src = `${window.location.origin}/assets/sprites/boss_sprite.png`;
               img.onload = () => {
-                console.log('Boss image loaded successfully');
                 if (s.textures && !s.textures.exists('boss_direct')) {
-                  try {
-                    s.textures.addImage('boss_direct', img);
-                    console.log('Added boss_direct texture');
-                  } catch(e) {
-                    console.error('Failed to add texture:', e);
-                  }
+                  try { s.textures.addImage('boss_direct', img); } catch(e) { console.error('Failed to add texture:', e); }
                 }
-                
-                // Now try to spawn the boss
-                if (s.spawnBossNearPlayer) {
-                  const result = s.spawnBossNearPlayer();
-                  if (!result) {
-                    console.error('Initial boss spawn failed, retrying...');
-                    setTimeout(() => {
-                      if (s.spawnBossNearPlayer) s.spawnBossNearPlayer();
-                    }, 500);
-                  }
-                }
-              };
-              img.onerror = () => {
-                console.error('Failed to load boss image');
-                // Try to spawn anyway with fallbacks
                 if (s.spawnBossNearPlayer) s.spawnBossNearPlayer();
               };
-            };
-            
-            ensureBossTexture();
+              img.onerror = () => { if (s.spawnBossNearPlayer) s.spawnBossNearPlayer(); };
+            } else {
+              // Alt boss relies on scene dynamic loader; just call spawn once
+              try { s.despawnBoss && s.despawnBoss(); } catch(_) {}
+              if (s.spawnBossNearPlayer) s.spawnBossNearPlayer();
+            }
             if (s.showMessage) s.showMessage('Spawning boss...');
             
           } catch(e) {
