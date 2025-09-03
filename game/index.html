@@ -2376,8 +2376,8 @@
                         const pixelScale = (this.bg?.scaleX||1);
                         const alexDispH = Math.max(1, this.alex?.displayHeight || 32);
                         const playerWorldH = alexDispH / pixelScale; // convert to background (world) pixels
-                        // Slightly smaller: about 16% of player height; allow smaller clamp
-                        const coinWorldPx = Phaser.Math.Clamp(Math.round(playerWorldH * 0.16), 6, 10);
+                        // One-notch larger: about 18% of player height; modest clamp
+                        const coinWorldPx = Phaser.Math.Clamp(Math.round(playerWorldH * 0.18), 7, 11);
                         const coinScreenPx = coinWorldPx * pixelScale;
                         try { coin.setDisplaySize(coinScreenPx, coinScreenPx); } catch(_) { coin.setScale(pixelScale * (coinWorldPx / 12)); }
                         // Simple physics for drop/bounce
