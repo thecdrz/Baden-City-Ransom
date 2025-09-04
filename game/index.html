@@ -1720,17 +1720,25 @@
         this.input.gamepad.on('connected', () => showHints());
         this.input.gamepad.on('disconnected', () => hideHints());
         if (this.input.gamepad.total) showHints();
-        // Per-frame poll function
+        // Edge-detected polling to avoid repeats
+        this._padPrev = { a:false,b:false,x:false,start:false };
         this._pollPad = () => {
           const pads = this.input.gamepad?.gamepads || [];
           const p = pads[0]; if (!p) return;
-          // Map standard buttons
+          const now = {
+            a: !!p.buttons?.[0]?.pressed,
+            b: !!p.buttons?.[1]?.pressed,
+            x: !!p.buttons?.[2]?.pressed,
+            start: !!p.buttons?.[9]?.pressed
+          };
+          const just = (k) => now[k] && !this._padPrev[k];
           if (!this.isAttacking) {
-            if (p.buttons[0]?.pressed) this._doPunch && this._doPunch(); // A
-            if (p.buttons[1]?.pressed) this._doKick && this._doKick();   // B
-            if (p.buttons[2]?.pressed) this._doJump && this._doJump();   // X
+            if (just('a')) this._doPunch && this._doPunch();
+            if (just('b')) this._doKick && this._doKick();
+            if (just('x')) this._doJump && this._doJump();
           }
-          if (p.buttons[9]?.pressed) this.enterPause && this.enterPause(); // Start
+          if (just('start')) this.enterPause && this.enterPause();
+          this._padPrev = now;
         };
       } catch(_) {}
       
@@ -2127,6 +2135,7 @@
           this.sound.once('unlocked', startMusic);
           this.input.once('pointerdown', startMusic);
           try { this.input.keyboard?.once('keydown', startMusic); } catch(_) {}
+          try { this.input.gamepad?.once('down', startMusic); } catch(_) {}
         } else {
           startMusic();
         }
@@ -2491,7 +2500,7 @@
         if (Phaser.Input.Keyboard.JustDown(this.cursors.left)) tap('left');
         if (Phaser.Input.Keyboard.JustDown(this.cursors.right)) tap('right');
 
-        // Gamepad axes + d-pad to digital directions
+    // Gamepad axes + d-pad to digital directions
         let padLeft=false, padRight=false, padUp=false, padDown=false;
         try {
           const pads = this.input.gamepad?.gamepads || [];
@@ -2505,7 +2514,7 @@
             padUp = axY < -dead || !!p.buttons?.[12]?.pressed;
             padDown = axY > dead || !!p.buttons?.[13]?.pressed;
             // Optional: treat hard tilt as run intent
-            if (Math.abs(axX) > 0.9) {
+      if (Math.abs(axX) > 0.9) {
               this.runState.isRunning = true;
               this.runState.dir = axX < 0 ? -1 : 1;
             }
@@ -3405,6 +3414,57 @@
         buildUi();
         this.scale.on('resize', buildUi, this);
         try { this.input?.keyboard?.on('keydown', this._kbdHandler); } catch(_) {}
+        // Gamepad init for menu navigation
+        this._padPrev = { up:false, down:false, left:false, right:false, a:false, b:false, start:false };
+        this._padRep = { dir:null, next:0 };
+      }
+      update(time){
+        try {
+          const pads = this.input?.gamepad?.gamepads || [];
+          const p = pads[0]; if (!p) return;
+          const axX = p.axes?.[0]?.getValue?.() ?? 0;
+          const axY = p.axes?.[1]?.getValue?.() ?? 0;
+          const d = 0.35;
+          const now = {
+            up:  axY < -d || !!p.buttons?.[12]?.pressed,
+            down:axY >  d || !!p.buttons?.[13]?.pressed,
+            left: axX < -d || !!p.buttons?.[14]?.pressed,
+            right:axX >  d || !!p.buttons?.[15]?.pressed,
+            a: !!p.buttons?.[0]?.pressed,
+            b: !!p.buttons?.[1]?.pressed,
+            start: !!p.buttons?.[9]?.pressed
+          };
+          const just = (k) => now[k] && !this._padPrev[k];
+          const held = (k) => now[k] && this._padPrev[k];
+          // Up/Down with repeat gate
+          const moveSel = (delta) => {
+            this._menu.idx = (this._menu.idx + this._menu.items.length + delta) % this._menu.items.length; this._updateHighlight();
+          };
+          if (just('up') || just('down')) {
+            moveSel(just('up') ? -1 : +1);
+            this._padRep.dir = just('up') ? 'up' : 'down'; this._padRep.next = time + 280;
+          } else if (held('up') && this._padRep.dir==='up' && time >= this._padRep.next) {
+            moveSel(-1); this._padRep.next = time + 140;
+          } else if (held('down') && this._padRep.dir==='down' && time >= this._padRep.next) {
+            moveSel(+1); this._padRep.next = time + 140;
+          } else if (!now.up && !now.down) {
+            this._padRep.dir = null; // reset when released
+          }
+          // Volume adjust on left/right when on volume item
+          const it = this._menu.items[this._menu.idx];
+          if (it && it._optKey === 'vol') {
+            if (just('left') || (held('left') && time >= (this._volNext||0))) {
+              const gs = this.scene.get('BadenCityRansomGame'); gs?.adjustMusicVolume?.(-0.02); this._volNext = time + (just('left')?200:120);
+            }
+            if (just('right') || (held('right') && time >= (this._volNext||0))) {
+              const gs = this.scene.get('BadenCityRansomGame'); gs?.adjustMusicVolume?.(0.02); this._volNext = time + (just('right')?200:120);
+            }
+          }
+          // Activate / resume
+          if (just('a')) this._activate();
+          if (just('b') || just('start')) this._resume();
+          this._padPrev = now;
+        } catch(_) {}
       }
       shutdown(){ try { this.scale.off('resize', undefined, this); } catch(_) {} try { this.input?.keyboard?.off('keydown', this._kbdHandler); } catch(_) {} }
       destroy(){ try { this.scale && this.scale.off('resize', undefined, this); } catch(_) {} try { this.input?.keyboard?.off('keydown', this._kbdHandler); } catch(_) {} }
@@ -3600,6 +3660,38 @@
           if (ev.code==='ArrowDown'){ sel = (sel + 1) % items.length; updateAll(); }
           if (ev.code==='Enter') attemptBuy();
         });
+        // Gamepad navigation
+        this._padPrev = { up:false, down:false, a:false, b:false, start:false };
+        this._padRep = { dir:null, next:0 };
+        this.update = (time) => {
+          try {
+            const pads = this.input?.gamepad?.gamepads || [];
+            const p = pads[0]; if (!p) return;
+            const axY = p.axes?.[1]?.getValue?.() ?? 0; const d = 0.35;
+            const now = {
+              up:  axY < -d || !!p.buttons?.[12]?.pressed,
+              down:axY >  d || !!p.buttons?.[13]?.pressed,
+              a: !!p.buttons?.[0]?.pressed,
+              b: !!p.buttons?.[1]?.pressed,
+              start: !!p.buttons?.[9]?.pressed
+            };
+            const just = (k) => now[k] && !this._padPrev[k];
+            const held = (k) => now[k] && this._padPrev[k];
+            const moveSel = (delta) => { sel = (sel + items.length + delta) % items.length; updateAll(); };
+            if (just('up') || just('down')) {
+              moveSel(just('up') ? -1 : +1); this._padRep.dir = just('up') ? 'up' : 'down'; this._padRep.next = time + 280;
+            } else if (held('up') && this._padRep.dir==='up' && time >= this._padRep.next) {
+              moveSel(-1); this._padRep.next = time + 140;
+            } else if (held('down') && this._padRep.dir==='down' && time >= this._padRep.next) {
+              moveSel(+1); this._padRep.next = time + 140;
+            } else if (!now.up && !now.down) {
+              this._padRep.dir = null;
+            }
+            if (just('a')) attemptBuy();
+            if (just('b') || just('start')) this._exit();
+            this._padPrev = now;
+          } catch(_) {}
+        };
         // Hints
   this.add.text(px+14, py+panelH-18, 'Arrows: Navigate   Enter: Buy   Esc/E: Exit', { fontFamily:'monospace', fontSize:'13px', color:'#eeeeee', resolution: 2 }).setDepth(4);
 
