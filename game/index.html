@@ -65,6 +65,20 @@
   /* HUD helpers */
   .hudRow { display: flex; justify-content: space-between; width: 100%; }
   .ml20 { margin-left: 20px; }
+  /* Wallet HUD polish */
+  #moneyWrap { display:inline-flex; position:relative; align-items:center; gap:6px; }
+  /* Fixed-width numeric area to prevent HUD jitter when amount changes */
+  #moneyValWrap { display:inline-block; position:relative; min-width: 8ch; text-align: right; font-family: monospace; font-variant-numeric: tabular-nums; }
+  #money { display:inline-block; }
+  .coinIcon { width: 12px; height: 12px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fff58a 0%, #ffcc00 50%, #e6b300 70%, #7a5200 100%);
+    border: 1px solid #5f4a00; box-shadow: 0 0 0 1px #000 inset; image-rendering: pixelated; }
+  #moneyWrap.gainFlash { animation: moneyFlash 450ms ease-out; }
+  @keyframes moneyFlash { 0% { filter: drop-shadow(0 0 0px #000); transform: scale(1.0);} 50% { filter: drop-shadow(0 0 4px #ffd700); transform: scale(1.05);} 100% { filter:none; transform: scale(1.0);} }
+  /* Overlay popup anchored to the right edge of the numeric value */
+  .hudGain { position: absolute; right: 0; bottom: 0; color:#ffff66; font-family: monospace; font-size: 12px; text-shadow: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000; opacity: 0; pointer-events: none; }
+  .hudGain.show { animation: hudGainRise 800ms ease-out forwards; }
+  @keyframes hudGainRise { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-12px); opacity: 0; } }
   /* Dev UI */
   #devBtn { position: fixed; right: 12px; bottom: 12px; z-index: 2000; background:#111; color:#fff; border:1px solid #444; border-radius:8px; padding:8px 10px; opacity:0.7; cursor:pointer; }
   #devBtn:hover { opacity: 1; }
@@ -75,6 +89,11 @@
   /* Dev UI small helpers */
   .dev-justified { display:flex; justify-content: space-between; width:100%; }
   .dev-grow { flex:1; margin-left:8px; }
+  /* Buff HUD */
+  #buffs { font-size: 14px; opacity: 0.9; white-space: nowrap; }
+  #buffIcons { display:inline-flex; align-items:center; gap:10px; margin-left: 10px; }
+  #buffIcons .ico { position: relative; display: inline-flex; align-items:center; justify-content:center; width: 24px; height: 24px; border:1px solid #444; border-radius:5px; background:#111; color:#ffd; font-size: 16px; line-height: 1; box-shadow: 0 0 0 1px #000 inset; }
+  #buffIcons .ico .badge { position: absolute; right: -7px; bottom: -7px; background:#222; color:#fff; font-size: 11px; padding: 0 4px; border:1px solid #555; border-radius:7px; transform: scale(0.95); }
   </style>
 </head>
 <body>
@@ -86,7 +105,9 @@
         <span class="ml20">Health: <span id="health">100</span></span>
       </div>
       <div>
-        <span>Money: $<span id="money">4.20</span></span>
+  <span id="moneyWrap"><span class="coinIcon" aria-hidden="true"></span> Money: $<span id="moneyValWrap"><span id="money">4.20</span></span></span>
+  <span id="buffs" class="ml20" title="Active buffs"></span>
+  <span id="buffIcons" aria-label="Active buff icons"></span>
       </div>
     </div>
   </div>
@@ -116,6 +137,9 @@
   <div class="row"><label><input type="checkbox" id="devHit"> Show hitboxes</label></div>
   <div class="row"><label><input type="checkbox" id="devVerbose"> Verbose logs</label></div>
   <div class="row"><label><input type="checkbox" id="devBossHP"> Show Boss HP</label></div>
+  <div class="row">
+    <button id="devAddMoney" title="Add $5 to wallet (repeatable)">$+5</button>
+  </div>
     <div class="row"><button id="devClose">Close</button></div>
   </div>
 
@@ -185,10 +209,17 @@
     // Optional Title/Splash Scene
     class TitleScene extends Phaser.Scene {
       constructor(){ super({ key: 'TitleScene' }); }
-      preload(){ /* no-op: we'll attach title art dynamically to avoid 404 spam */ }
+      preload(){
+        // Load start screen music here so it's available before Game scene preloads
+        try {
+          const asset = (p) => `${ASSETS_BASE}/${p}`;
+          this.load.audio('startscreen', asset('audio/river_city_ransom_ost_mp3/startscreen.wav'));
+        } catch(_) {}
+      }
       create(){
   const { width:w, height:h } = this.scale.gameSize;
   const ENABLE_TITLE_MASK = false; // disable rounded-corner geometry mask by default
+  this._allowStart = false;
         // CRT-style overlays
         const makeOverlays = () => {
           try {
@@ -245,6 +276,11 @@
             };
             fit(); this.scale.on('resize', fit, this);
             this._titleImg = spr;
+            // Fade-in the title art
+            try { spr.setAlpha(0); this.tweens.add({ targets: spr, alpha: 1, duration: 800, onComplete: () => {
+              // After fully visible, delay then show the prompt and enable start
+              this.time.delayedCall(2000, () => { try { if (this._prompt) { this._prompt.setAlpha(1); this._promptBlink && this._promptBlink.resume && this._promptBlink.resume(); } this._allowStart = true; } catch(_) {} });
+            }}); } catch(_) {}
           };
           const tryNext = (i=0) => {
             if (i >= picks.length) return; // give up silently
@@ -256,8 +292,52 @@
           };
           tryNext(0);
           const prompt = this.add.text(this.scale.width/2, Math.floor(this.scale.height*0.92), 'Press Enter or Click to Start', { fontFamily:'monospace', fontSize:'22px', color:'#ffffff', stroke:'#000', strokeThickness:4 }).setOrigin(0.5).setDepth(4);
-          this.tweens.add({ targets: prompt, alpha: 0.2, yoyo: true, duration: 700, repeat: -1 });
-          const start = () => { try { this.scene.start('StoryScene'); } catch(_) { this.scene.start('BadenCityRansomGame'); } };
+          prompt.setAlpha(0);
+          // Prepare blinking tween but pause until we reveal prompt
+          const blink = this.tweens.add({ targets: prompt, alpha: 0.25, yoyo: true, duration: 800, repeat: -1 });
+          try { blink.pause(); } catch(_) {}
+          this._prompt = prompt; this._promptBlink = blink;
+          // Start screen audio (loop softly) — attempt immediately with unlock retries
+          try {
+            if (this.sound && !this._started) {
+              const savedMute = !!window._BCRSET?.get('musicMute', false);
+              const startAud = this.sound.add('startscreen', { loop: true, volume: 0.6, mute: savedMute });
+              this._startAud = startAud;
+              const playIt = () => { try { this.sound.context?.resume?.(); if (!startAud.isPlaying) startAud.play(); } catch(_) {} };
+              if (this.sound.locked) {
+                this.sound.once('unlocked', playIt);
+                // Aggressively try to resume context a few times in case of silent auto-unlock
+                try {
+                  let attempts = 8;
+                  const tryResume = () => { try { this.sound.context?.resume?.(); playIt(); } catch(_) {} if (--attempts > 0 && this.sound && this.sound.locked) this.time.delayedCall(250, tryResume); };
+                  this.time.delayedCall(0, tryResume);
+                } catch(_) {}
+              } else { playIt(); }
+        // Also start on first key press or pointer, to satisfy gesture requirements
+        try { this.input.keyboard?.once('keydown', playIt); } catch(_) {}
+        try { this.input.once('pointerdown', playIt); } catch(_) {}
+
+              // Allow toggling mute on Title with 'M'
+              try {
+                this.input.keyboard?.on('keydown-M', () => {
+                  const was = !!window._BCRSET?.get('musicMute', false);
+                  const now = !was;
+                  try { window._BCRSET?.set('musicMute', now); } catch(_) {}
+                  try { startAud.setMute(now); } catch(_) {}
+                  try { if (this._prompt) this._prompt.setText((this._prompt.text || 'Press Enter or Click to Start') + (now ? ' (M to unmute)' : '')); } catch(_) {}
+                });
+                // If muted at start, hint on prompt
+                if (savedMute) {
+                  try { if (this._prompt) this._prompt.setText((this._prompt.text || 'Press Enter or Click to Start') + ' (M to unmute)'); } catch(_) {}
+                }
+              } catch(_) {}
+            }
+          } catch(_) {}
+          const start = () => {
+            if (!this._allowStart) return; // guard until fade+delay have passed
+            try { if (this._startAud) { this._startAud.stop(); this._startAud.destroy(); this._startAud = null; } } catch(_) {}
+            try { this.scene.start('StoryScene'); } catch(_) { this.scene.start('BadenCityRansomGame'); }
+          };
           this.input.on('pointerdown', start);
           try { this.input.keyboard.on('keydown', () => start()); } catch(_) {}
           try {
@@ -282,7 +362,9 @@
           if (dlg) dlg.style.display = 'block';
         } catch(_) {}
 
-        const textEl = document.getElementById('dialogue-text');
+  const textEl = document.getElementById('dialogue-text');
+  // Stop any start screen audio if still playing
+  try { const a = this.sound.get('startscreen'); if (a) { a.stop(); a.destroy(); } } catch(_) {}
         const pages = [
           'Baden City is slipping under Miller\'s control…',
           'His gang rules the streets. And he\'s coming for TheGuyWho next.',
@@ -610,6 +692,20 @@
           logAdd('image','downtown', src);
           this.load.image('downtown', src);
         }
+        // Load Baden Cemetery layered assets only if explicitly requested (?map=cemetery)
+        try {
+          const mapParam = (new URLSearchParams(location.search).get('map') || '').toLowerCase();
+          if (mapParam === 'cemetery' || mapParam === 'cem') {
+            const cem = (rel) => asset(`BadenCemetery/${rel}`);
+            this.load.image('cem_bg0', cem('Background_0.png'));
+            this.load.image('cem_bg1', cem('Background_1.png'));
+            this.load.image('cem_grass1', cem('Grass_background_1.png'));
+            this.load.image('cem_grass2', cem('Grass_background_2.png'));
+            this.load.image('cem_tiles', cem('Tiles.png'));
+            this.load.image('cem_brush', cem('brush.png'));
+            this.load.image('cem_salt', cem('Salt.png'));
+          }
+        } catch(_) {}
         
         // Optional: GandalfHardcore layered character parts (compose into one sprite)
         // Disabled by default to avoid 404s if the pack isn't present; enable with ?gh=1
@@ -635,11 +731,21 @@
         // Load authentic River City Ransom music
   this.load.audio('bgm', asset('audio/river_city_ransom_ost_mp3/bgm_anthem.mp3'));
   this.load.audio('street_music', asset('audio/river_city_ransom_ost_mp3/bgm_street.mp3'));
+  // New preferred track for the level
+  try { this.load.audio('contemplation', asset('audio/river_city_ransom_ost_mp3/contemplation.ogg')); } catch(_) {}
+  // Start screen SFX (path corrected; TitleScene also preloads this so it's ready earlier)
+  try { this.load.audio('startscreen', asset('audio/river_city_ransom_ost_mp3/startscreen.wav')); } catch(_) {}
   // Short SFX
   this.load.audio('sfx_punch1', asset('audio/river_city_ransom_ost_mp3/sfx_punch1.mp3'));
   this.load.audio('sfx_punch2', asset('audio/river_city_ransom_ost_mp3/sfx_punch2.mp3'));
   this.load.audio('sfx_jump1',  asset('audio/river_city_ransom_ost_mp3/sfx_jump1.mp3'));
   this.load.audio('sfx_jump2',  asset('audio/river_city_ransom_ost_mp3/sfx_jump2.mp3'));
+  // Shop exteriors and interior
+  try {
+    this.load.image('shop_ext_grocery', asset('sprites/shops/Grocery shop.png'));
+    this.load.image('shop_ext_electronics', asset('sprites/shops/Electronics Shop.png'));
+    this.load.image('shop_ext_icecream', asset('sprites/shops/Ice Cream Shop.png'));
+  } catch(_) {}
       }
       
       create() {
@@ -685,7 +791,53 @@
           const ch = this.scale.height || this.scale.gameSize?.height || canvasWrap?.clientHeight || this.sys.game.config.height || 480;
           return { cw, ch };
         };
-        // Centralized resize application to keep math consistent
+        // Choose map (default to downtown); supports ?map=cemetery to try cemetery
+        try {
+          const m = new URLSearchParams(location.search).get('map');
+          this.mapName = (m ? m : 'downtown').toLowerCase();
+          this.cemeteryActive = (this.mapName === 'cemetery' || this.mapName === 'cem');
+        } catch(_) { this.mapName = 'downtown'; this.cemeteryActive = false; }
+
+        // Cemetery helpers
+        this._recomputeTerrainGates = () => {
+          try {
+            const scaleX = this.bg?.scaleX || 1;
+            this._terrainGates = (this._terrainGatesRaw||[]).map(g => ({ start: g.start * scaleX, end: g.end * scaleX, minJump: g.minJump||-6 }));
+          } catch(_) {}
+        };
+        this._applyTerrainGates = (prevX) => {
+          try {
+            if (!this._terrainGates || !this._terrainGates.length) return;
+            const airborne = (this.alexJumpZ < -6); // require modest jump height
+            if (airborne) return; // freely pass while airborne
+            const x = this.alex?.x || 0;
+            for (const g of this._terrainGates) {
+              if (prevX < g.start && x >= g.start) { this.alex.x = g.start - 1; break; }
+              if (prevX > g.end && x <= g.end) { this.alex.x = g.end + 1; break; }
+            }
+          } catch(_) {}
+        };
+        this._updateCemeteryParallax = () => {
+          try {
+            if (!this.cemeteryActive || !this.cemParallax) return;
+            const camX = this.cameras?.main?.scrollX || 0;
+            this.cemParallax.far0 && (this.cemParallax.far0.tilePositionX = camX * 0.20);
+            this.cemParallax.far1 && (this.cemParallax.far1.tilePositionX = camX * 0.35);
+            this.cemParallax.near && (this.cemParallax.near.tilePositionX = camX * 0.80);
+          } catch(_) {}
+        };
+        this._updateCemeteryOnResize = (w, h) => {
+          try {
+            if (!this.cemeteryActive) return;
+            // TileSprites are screen-space; resize them to fill the view
+            if (this.cemParallax) {
+              ['far0','far1','near'].forEach(k => { const ts = this.cemParallax[k]; if (ts) { ts.width = w; ts.height = h; ts.setSize(w,h); } });
+            }
+            // Gates depend on scale; recompute
+            this._recomputeTerrainGates && this._recomputeTerrainGates();
+          } catch(_) {}
+        };
+  // Centralized resize application to keep math consistent
         const applyResize = (w, h) => {
           if (!w || !h) { const s = getSize(); w = s.cw; h = s.ch; }
           const scale = h / (this._bgCropH || h);
@@ -736,142 +888,210 @@
               }
             } catch(_) { if (this.boss.y > groundY) this.boss.y = groundY; }
           }
+          // Position shop door(s) (if present) at the far (top) side of the road
+          try {
+            if (this.shopDoors && this.shopDoors.length) {
+              const scaleX = this.bg?.scaleX || 1;
+              // Door height approx same scale as player; fallback to a fraction of screen height
+              const alexH = Math.max(32, Math.floor((this.alex?.displayHeight || 0)));
+              // Make doors 25% taller and 50% wider than previous sizing
+              const baseH = (alexH ? Math.floor(alexH * 1.15) : Math.floor(h * 0.24));
+              const doorH = Math.max(48, Math.floor(baseH * 1.25));
+              const doorW = Math.floor((doorH * 0.70) * 1.5); // previous width * 1.5
+              this.shopDoors.forEach(door => {
+                const xWorld = door._shopRef?.x || 260;
+                door.setDisplaySize(doorW, doorH);
+                door.x = Math.floor(xWorld * scaleX);
+                // Anchor to top side (roadTop)
+                door.y = Math.floor(roadTop);
+                door.setOrigin(0.5, 1);
+                // Always render behind the player so Alex never appears behind the door sprite
+                door.setDepth(-100);
+                // Expand the interact radius to match visual width
+                try { if (door._shopRef) door._shopRef.radius = Math.max(door._shopRef.radius||0, Math.round(doorW * 0.6)); } catch(_) {}
+              });
+            }
+            // Place prompt just above the top road line
+            try {
+              if (this.shop?.prompt) {
+                this.shop.prompt.y = Math.max(12, Math.floor(roadTop - 10));
+              }
+            } catch(_) {}
+          } catch(_) {}
+          // Cemetery-specific resize updates
+          try { if (this.cemeteryActive) { const s = getSize(); this._updateCemeteryOnResize && this._updateCemeteryOnResize(s.cw, s.ch); } } catch(_) {}
         };
         
-  // Add background – create CROPPED canvas texture with a safe fallback
-  let useKey = 'downtown';
-  console.log('Starting background creation...');
-  try {
-    const srcTex = this.textures.get('downtown');
-    console.log('Got downtown texture:', !!srcTex);
-    const srcImg = srcTex?.getSourceImage();
-    console.log('Got source image:', !!srcImg);
-    const bgWidth = srcTex?.source?.[0]?.width;
-    const bgHeight = srcTex?.source?.[0]?.height;
-    console.log('Background dimensions:', bgWidth, 'x', bgHeight);
-    if (srcImg && bgWidth && bgHeight) {
-      console.log('Processing background crop...');
-  // Crop to keep the actual play area: trim off the sky and bottom credits.
-  const CROP_TOP_PCT = 0.72;     // where the playfield starts
-  const CROP_BOTTOM_PCT = 0.978; // crop a touch higher to fully remove the purple credit strip
-      const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
-      const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
-      this._bgNaturalW = bgWidth;
-      this._bgCropH = cropH > 0 ? cropH : bgHeight; // guard
-
-      const playKey = 'downtown_play';
-      if (this.textures.exists(playKey)) this.textures.remove(playKey);
-      const playTex = this.textures.createCanvas(playKey, bgWidth, this._bgCropH);
-      const ctx = playTex.getContext();
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(srcImg, 0, cropY, bgWidth, this._bgCropH, 0, 0, bgWidth, this._bgCropH);
-      playTex.refresh();
-      // Detect road (blue) top boundary as a fraction of the cropped texture height
-      const analyzeRoadTop = (ctx, w, h) => {
-        try {
-          const sampleCols = 24;
-          const xs = Array.from({length: sampleCols}, (_, i) => Math.floor((i+0.5) * w / sampleCols));
-          const isBlueish = (r,g,b) => b > g + 20 && b > r + 20 && b > 80; // strong blue dominance
-          for (let y = 0; y < h; y += 2) {
-            let blueHits = 0;
-            for (const x of xs) {
-              const d = ctx.getImageData(x, y, 1, 1).data; // small samples; acceptable at init
-              if (isBlueish(d[0], d[1], d[2])) blueHits++;
+  // Build background depending on selected map
+  if (this.cemeteryActive) {
+    // Cemetery: parallax layers + long ground strip
+    step('bg add cemetery');
+    try {
+      const g1 = this.textures.get('cem_grass1')?.getSourceImage();
+      if (!g1) throw new Error('cem_grass1 missing');
+      const { cw, ch } = getSize();
+      const tileW = g1.width || 512;
+      const tileH = g1.height || ch;
+  // Crop out the heavy canopy to keep the path/road visible
+  // Pick the middle band of the source so the path/road is visible (avoid sky and deep canopy)
+  const CEM_CROP_TOP_PCT = 0.38;   // start ~38% from top
+  const CEM_CROP_BOTTOM_PCT = 0.97; // keep down to ~97%
+  const cropY = Math.floor(tileH * CEM_CROP_TOP_PCT);
+  const cropH = Math.max(8, Math.floor(tileH * (CEM_CROP_BOTTOM_PCT - CEM_CROP_TOP_PCT)));
+  this._bgCropH = cropH;
+      // World width targeting ~3 minutes walk at base speed
+      const pxPerSec = 120; const targetSecs = 180;
+      const scaleForBand = ch / tileH;
+      const targetWorldWidth = pxPerSec * targetSecs;
+      const tilesNeeded = Math.ceil(targetWorldWidth / (tileW * scaleForBand));
+      const TILES = Math.max(3, Math.min(40, tilesNeeded));
+      const longKey = 'cem_long';
+      if (this.textures.exists(longKey)) this.textures.remove(longKey);
+      const longTex = this.textures.createCanvas(longKey, tileW * TILES, cropH);
+      const lctx = longTex.getContext(); lctx.imageSmoothingEnabled = false;
+      for (let i=0;i<TILES;i++) {
+        // Draw the cropped lower slice so trees don't block the lane
+        lctx.drawImage(g1, 0, cropY, tileW, cropH, i*tileW, 0, tileW, cropH);
+      }
+      longTex.refresh();
+      this._bgNaturalW = tileW * TILES;
+  // Road band within the cropped strip (middle-lower portion)
+  this._roadTopFrac = 0.64; this._roadBottomFrac = 0.96;
+  // Base ground image (acts as world bounds anchor)
+  this.bg = this.add.image(0, 0, longKey).setOrigin(0, 0);
+  this._bgKey = longKey;
+      const scale = ch / cropH; this.bg.setScale(scale);
+      const displayW = this._bgNaturalW * scale;
+      const cam = this.cameras.main; cam.setRoundPixels(true); cam.setBounds(0, 0, displayW, ch);
+      // Parallax layers in screen-space using tileSprites
+      this.cemParallax = this.cemParallax || {};
+      const mkTs = (key, depth, y=0, h=ch) => this.add.tileSprite(0,y,cw,h,key).setOrigin(0,0).setScrollFactor(0).setDepth(depth);
+      try { if (this.textures.exists('cem_bg0')) this.cemParallax.far0 = mkTs('cem_bg0', -3000); } catch(_) {}
+      // Disable mid BG1 to avoid duplicated houses if grass1 already includes them
+      // try { if (this.textures.exists('cem_bg1')) this.cemParallax.far1 = mkTs('cem_bg1', -2500); } catch(_) {}
+      // Limit near foliage to the upper portion so it won't cover the road
+      try {
+        if (this.textures.exists('cem_grass2')) {
+          const nearH = Math.floor(ch * 0.35); // only top third so it never covers the road
+          this.cemParallax.near = mkTs('cem_grass2', -50, 0, nearH);
+          this.cemParallax.near.setAlpha(0.90);
+        }
+      } catch(_) {}
+      this._updateCemeteryParallax && this._updateCemeteryParallax();
+      // Create periodic low mounds that require a jump to cross
+      this._terrainGatesRaw = [];
+      for (let i=1; i<TILES; i+=2) {
+        const start = i * tileW + Math.floor(tileW * 0.42);
+        const width = Math.floor(tileW * 0.16);
+        this._terrainGatesRaw.push({ start, end: start + width, minJump: -6 });
+      }
+      this._recomputeTerrainGates && this._recomputeTerrainGates();
+    } catch(e) {
+      console.warn('Cemetery build failed, falling back to downtown:', e?.message||e);
+      this.cemeteryActive = false; this.mapName = 'downtown';
+    }
+  }
+  if (!this.cemeteryActive) {
+    // Downtown classic background flow
+    let useKey = 'downtown';
+    console.log('Starting background creation...');
+    try {
+      const srcTex = this.textures.get('downtown');
+      const srcImg = srcTex?.getSourceImage();
+      const bgWidth = srcTex?.source?.[0]?.width;
+      const bgHeight = srcTex?.source?.[0]?.height;
+      if (srcImg && bgWidth && bgHeight) {
+        // Crop to keep the actual play area: trim off the sky and bottom credits.
+        const CROP_TOP_PCT = 0.72;     // where the playfield starts
+        const CROP_BOTTOM_PCT = 0.978; // crop a touch higher to fully remove the purple credit strip
+        const cropY = Math.floor(bgHeight * CROP_TOP_PCT);
+        const cropH = Math.floor(bgHeight * (CROP_BOTTOM_PCT - CROP_TOP_PCT));
+        this._bgNaturalW = bgWidth;
+        this._bgCropH = cropH > 0 ? cropH : bgHeight; // guard
+        const playKey = 'downtown_play';
+        if (this.textures.exists(playKey)) this.textures.remove(playKey);
+        const playTex = this.textures.createCanvas(playKey, bgWidth, this._bgCropH);
+        const ctx = playTex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(srcImg, 0, cropY, bgWidth, this._bgCropH, 0, 0, bgWidth, this._bgCropH);
+        playTex.refresh();
+        // Blue road band detection
+        const analyzeRoadTop = (ctx, w, h) => {
+          try {
+            const sampleCols = 24;
+            const xs = Array.from({length: sampleCols}, (_, i) => Math.floor((i+0.5) * w / sampleCols));
+            const isBlueish = (r,g,b) => b > g + 20 && b > r + 20 && b > 80;
+            for (let y = 0; y < h; y += 2) {
+              let blueHits = 0;
+              for (const x of xs) { const d = ctx.getImageData(x, y, 1, 1).data; if (isBlueish(d[0], d[1], d[2])) blueHits++; }
+              if (blueHits >= Math.ceil(sampleCols * 0.6)) return y / h;
             }
-            if (blueHits >= Math.ceil(sampleCols * 0.6)) {
-              return y / h; // fraction from top
+          } catch(e) {}
+          return null;
+        };
+        const analyzeRoadBottom = (ctx, w, h) => {
+          try {
+            const sampleCols = 24;
+            const xs = Array.from({length: sampleCols}, (_, i) => Math.floor((i+0.5) * w / sampleCols));
+            const isBlueish = (r,g,b) => b > g + 12 && b > r + 12 && b > 48;
+            for (let y = h - 1; y >= 0; y -= 2) {
+              let blueHits = 0;
+              for (const x of xs) { const d = ctx.getImageData(x, y, 1, 1).data; if (isBlueish(d[0], d[1], d[2])) blueHits++; }
+              if (blueHits >= Math.ceil(sampleCols * 0.35)) return y / h;
             }
-          }
-        } catch (e) { console.warn('Road detection failed', e); }
-        return null;
-      };
-      // Detect bottom boundary by scanning upward
-      const analyzeRoadBottom = (ctx, w, h) => {
-        try {
-          const sampleCols = 24;
-          const xs = Array.from({length: sampleCols}, (_, i) => Math.floor((i+0.5) * w / sampleCols));
-          // Bottom edge can be darker; be more permissive than the top detector
-          const isBlueish = (r,g,b) => b > g + 12 && b > r + 12 && b > 48;
-          for (let y = h - 1; y >= 0; y -= 2) {
-            let blueHits = 0;
-            for (const x of xs) {
-              const d = ctx.getImageData(x, y, 1, 1).data;
-              if (isBlueish(d[0], d[1], d[2])) blueHits++;
-            }
-            // Require a moderate presence of blue so we catch mixed/shaded rows near the edge
-            if (blueHits >= Math.ceil(sampleCols * 0.35)) {
-              return y / h;
-            }
-          }
-        } catch (e) { console.warn('Road bottom detection failed', e); }
-        return null;
-      };
-      const fracTop = analyzeRoadTop(ctx, bgWidth, this._bgCropH);
-      const fracBot = analyzeRoadBottom(ctx, bgWidth, this._bgCropH);
-      this._roadTopFrac = (fracTop != null ? fracTop : 0.65);
-      this._roadBottomFrac = (fracBot != null ? fracBot : 0.96);
-      useKey = playKey;
-    } else {
-      // Fallback to raw image if something’s off
+          } catch(e) {}
+          return null;
+        };
+        const fracTop = analyzeRoadTop(ctx, bgWidth, this._bgCropH);
+        const fracBot = analyzeRoadBottom(ctx, bgWidth, this._bgCropH);
+        this._roadTopFrac = (fracTop != null ? fracTop : 0.65);
+        this._roadBottomFrac = (fracBot != null ? fracBot : 0.96);
+        useKey = playKey;
+      } else {
+        const raw = this.textures.get('downtown');
+        this._bgNaturalW = raw?.source?.[0]?.width || 800;
+        this._bgCropH = raw?.source?.[0]?.height || 480;
+        this._roadTopFrac = 0.65;
+        this._roadBottomFrac = 0.96;
+      }
+    } catch (e) {
       const raw = this.textures.get('downtown');
       this._bgNaturalW = raw?.source?.[0]?.width || 800;
       this._bgCropH = raw?.source?.[0]?.height || 480;
+      useKey = 'downtown';
       this._roadTopFrac = 0.65;
       this._roadBottomFrac = 0.96;
     }
-  } catch (e) {
-    // Fallback to raw image on any unexpected error
-    const raw = this.textures.get('downtown');
-    this._bgNaturalW = raw?.source?.[0]?.width || 800;
-    this._bgCropH = raw?.source?.[0]?.height || 480;
-    useKey = 'downtown';
-    this._roadTopFrac = 0.65;
-    this._roadBottomFrac = 0.96;
-  }
-
-  // Optionally tile the cropped background horizontally to create a long map sized to target minutes
-  try {
-    if (this.textures.exists('downtown_play')) {
-      const src = this.textures.get('downtown_play').getSourceImage();
-      const tileW = this._bgNaturalW; // width of the original background
-      const tileH = this._bgCropH;    // cropped height
-      // Estimate desired world width based on player ground speed (~2 px per frame at 60fps = 120 px/s)
-      const { ch } = getSize();
-      const scaleForBand = ch / tileH;
-      const pxPerSec = 120; // 2 px/frame * 60fps
-      const targetSecs = 180; // ~3 minutes walking time (combat will extend total time)
-      const targetWorldWidth = pxPerSec * targetSecs; // in scaled world px
-      const tilesNeeded = Math.ceil(targetWorldWidth / (tileW * scaleForBand));
-      const TILES = Math.max(3, Math.min(40, tilesNeeded));
-      const longKey = 'downtown_long';
-      if (this.textures.exists(longKey)) this.textures.remove(longKey);
-      const longTex = this.textures.createCanvas(longKey, tileW * TILES, tileH);
-      const lctx = longTex.getContext(); lctx.imageSmoothingEnabled = false;
-      for (let i=0;i<TILES;i++) lctx.drawImage(src, 0, 0, tileW, tileH, i*tileW, 0, tileW, tileH);
-      longTex.refresh();
-      // swap to long map
-      useKey = longKey;
-      this._bgNaturalW = tileW * TILES;
-    }
-  } catch(e) { console.warn('Failed to build long background, using single tile', e); }
-
-  // Use whichever background key we ended up with
+    try {
+      if (this.textures.exists('downtown_play')) {
+        const src = this.textures.get('downtown_play').getSourceImage();
+        const tileW = this._bgNaturalW;
+        const tileH = this._bgCropH;
+        const { ch } = getSize();
+        const scaleForBand = ch / tileH;
+        const pxPerSec = 120; const targetSecs = 180;
+        const targetWorldWidth = pxPerSec * targetSecs;
+        const tilesNeeded = Math.ceil(targetWorldWidth / (tileW * scaleForBand));
+        const TILES = Math.max(3, Math.min(40, tilesNeeded));
+        const longKey = 'downtown_long';
+        if (this.textures.exists(longKey)) this.textures.remove(longKey);
+        const longTex = this.textures.createCanvas(longKey, tileW * TILES, tileH);
+        const lctx = longTex.getContext(); lctx.imageSmoothingEnabled = false;
+        for (let i=0;i<TILES;i++) lctx.drawImage(src, 0, 0, tileW, tileH, i*tileW, 0, tileW, tileH);
+        longTex.refresh();
+        useKey = longKey; this._bgNaturalW = tileW * TILES;
+      }
+    } catch(e) { console.warn('Failed to build long background, using single tile', e); }
   step(`bg add key=${useKey}`);
-  if (!this.textures.exists(useKey)) { throw new Error(`Background texture missing: ${useKey}`); }
+    if (!this.textures.exists(useKey)) { throw new Error(`Background texture missing: ${useKey}`); }
   this.bg = this.add.image(0, 0, useKey).setOrigin(0, 0);
-
-  // Scale to fill the canvas height (80vh) and center horizontally (robust fallbacks)
-  const { cw, ch } = getSize();
-  const scale = (this._bgCropH && this._bgCropH > 0) ? (ch / this._bgCropH) : 1;
-  this.bg.setScale(scale);
-  const displayW = this._bgNaturalW * scale;
-  this.bg.x = 0;
-  this.bg.y = 0;
-
-  // Set up a side-scrolling camera that follows the player
-  const cam = this.cameras.main;
-  cam.setRoundPixels(true);
-  cam.setBounds(0, 0, displayW, ch);
+  this._bgKey = useKey;
+    const { cw, ch } = getSize();
+    const scale = (this._bgCropH && this._bgCropH > 0) ? (ch / this._bgCropH) : 1;
+    this.bg.setScale(scale);
+    const displayW = this._bgNaturalW * scale; this.bg.x = 0; this.bg.y = 0;
+    const cam = this.cameras.main; cam.setRoundPixels(true); cam.setBounds(0, 0, displayW, ch);
+  }
         
   // console log for debugging is noisy on some hosts; keep quiet in prod
         
@@ -933,6 +1153,8 @@
   // Force the classic RCR Alex sheet (no GH composite)
   // Enhanced player creation with texture verification
   const PLAYER_TEX = this._playerTextureKey || 'alex';
+  // Ensure current height available regardless of which background branch executed
+  const { ch } = getSize();
   
   // Create player sprite with better error handling
   try {
@@ -985,6 +1207,8 @@
         // Create diverse enemy gang members from available sprites
   step('spawn enemies');
   this.enemies = [];
+        // Compute display width safely for spawn placement
+        const displayW = Math.max(1, ((this._bgNaturalW||800) * (this.bg?.scaleX||1)));
         
         // Enhanced enemy spawning with variety and different stats
         const enemyConfigs = [
@@ -1486,7 +1710,7 @@
     // Initialize input controls with safety checks
     if (this.input && this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys() || {};
-  this.keys = this.input.keyboard.addKeys('A,S,D,SPACE,Q') || {};
+  this.keys = this.input.keyboard.addKeys('A,S,D,SPACE,Q,E') || {};
       // Gamepad mapping and on-screen hints
       try {
         const dlg = document.getElementById('dialogue');
@@ -1596,15 +1820,18 @@
             
             // Helper function to create boss with a specific texture
             this.createBossWithTexture = (textureKey, animPrefix='boss') => {
-              // Position boss beside the player (~±60px) to avoid overlapping on spawn
+              // Position boss about ~10 feet from player (game scale) to avoid overlap on spawn
               const px = (this.alex?.x || 200);
               const bgW = (this.bg?.displayWidth || this.scale?.width || this.scale?.gameSize?.width || 800);
               const margin = 40;
-              const preferred = px + ((this.alex && this.alex.flipX) ? -60 : 60);
+              // Treat ~10 feet as ~60px at base scale; adjust slightly with background scale
+              const pxPerFoot = 6; // heuristic
+              const offset = Math.max(40, Math.round(pxPerFoot * 10 * (this.bg?.scaleX || 1)));
+              const preferred = px + ((this.alex && this.alex.flipX) ? -offset : offset);
               let bx = Phaser.Math.Clamp(preferred, margin, bgW - margin);
-              // If too close due to bounds, try the opposite side
-              if (Math.abs(bx - px) < 40) {
-                const alt = px + ((this.alex && this.alex.flipX) ? 60 : -60);
+              // If too close due to bounds, try the opposite side with same offset
+              if (Math.abs(bx - px) < Math.min(40, offset*0.9)) {
+                const alt = px + ((this.alex && this.alex.flipX) ? offset : -offset);
                 bx = Phaser.Math.Clamp(alt, margin, bgW - margin);
               }
               
@@ -1831,7 +2058,7 @@
   this.updateDebug = () => {
     const s = [
       `cw:${this.scale.width} ch:${this.scale.height}`,
-      `bgKey:${useKey} bgScale:${this.bg.scaleX.toFixed(2)}`,
+      `bgKey:${this._bgKey || this.bg?.texture?.key || '?'} bgScale:${this.bg?.scaleX?.toFixed ? this.bg.scaleX.toFixed(2) : '1.00'}`,
       `parallax:${Math.round(this._parallaxX)}`,
       `alex:${Math.round(this.alex.x)},${Math.round(this.alex.y)} run:${this.runState?.isRunning?'Y':'N'}`,
       this._playerIsSkeleton ? 'player: skeleton' : `sheet ${cols}x${rows}  map w:${map.walk.row}:${map.walk.from}-${map.walk.to} p:${map.punch.row}:${map.punch.from}-${map.punch.to} k:${map.kick.row}:${map.kick.from}-${map.kick.to} j:${map.jump.row}:${map.jump.from}-${map.jump.to}`
@@ -1883,22 +2110,64 @@
           this.time.delayedCall(16, () => { const s = getSize(); applyResize(s.cw, s.ch); this.updateDebug(); });
           this.time.delayedCall(80, () => { const s = getSize(); applyResize(s.cw, s.ch); this.updateDebug(); });
         } catch(_) {}
-  // Play authentic street music for this outdoor level
+  // Play contemplation track for this level (fallback to street_music)
   step('music');
-  this.sound.stopAll();
+  try { const a = this.sound.get('startscreen'); if (a) { a.stop(); a.destroy(); } } catch(_) {}
   const savedVol = Number(window._BCRSET?.get('musicVol', 0.35));
   const savedMute = !!window._BCRSET?.get('musicMute', false);
-  this.music = this.sound.add('street_music', { loop: true, volume: isFinite(savedVol) ? savedVol : 0.35, mute: savedMute });
+  // Prefer contemplation if it actually loaded; otherwise fall back cleanly
+  let musKey = 'contemplation';
+  try {
+    const hasContemplation = !!this.cache?.audio?.exists?.('contemplation');
+    if (!hasContemplation) musKey = 'street_music';
+  } catch(_) { musKey = 'street_music'; }
+  this.music = this.sound.add(musKey, { loop: true, volume: isFinite(savedVol) ? savedVol : 0.35, mute: savedMute });
         const startMusic = () => { if (!this.music.isPlaying) this.music.play(); };
         if (this.sound.locked) {
           this.sound.once('unlocked', startMusic);
           this.input.once('pointerdown', startMusic);
+          try { this.input.keyboard?.once('keydown', startMusic); } catch(_) {}
         } else {
           startMusic();
         }
   // Auto-pause and resume music based on scene pause/resume
   this.events.on('pause', () => { try { this.music?.pause(); } catch(_) {} });
-  this.events.on('resume', () => { try { this.music?.resume(); } catch(_) {} });
+  this.events.on('resume', () => {
+    try { this.music?.resume(); } catch(_) {}
+    // Do not modify player position when closing the store UI
+  });
+  // Add visible shop doors on the roadside (support 1-2 per level)
+  try {
+    const has = (k) => this.textures.exists(k);
+    this.shops = [
+      { x: 260, radius: 40, texKey: has('shop_ext_electronics') ? 'shop_ext_electronics' : (has('shop_ext_grocery')?'shop_ext_grocery':null) },
+      { x: 680, radius: 40, texKey: has('shop_ext_icecream') ? 'shop_ext_icecream' : (has('shop_ext_grocery')?'shop_ext_grocery':null) },
+    ].filter(s => !!s.texKey);
+    this.shopDoors = [];
+    this.shops.forEach(s => {
+      const door = this.add.image(0,0,s.texKey).setOrigin(0.5,1);
+      door._shopRef = s;
+      // Immediate sizing/positioning so the player never appears behind initially
+      try {
+        const w = this.scale.width || this.scale.gameSize?.width || 800;
+        const h = this.scale.height || this.scale.gameSize?.height || 480;
+        const roadTop = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT));
+        const alexH = Math.max(32, Math.floor((this.alex?.displayHeight || 0)));
+        const baseH = (alexH ? Math.floor(alexH * 1.15) : Math.floor(h * 0.24));
+        const doorH = Math.max(48, Math.floor(baseH * 1.25));
+        const doorW = Math.floor((doorH * 0.70) * 1.5);
+        const scaleX = this.bg?.scaleX || 1;
+        door.setDisplaySize(doorW, doorH);
+        door.x = Math.floor((s.x||260) * scaleX);
+        door.y = Math.floor(roadTop);
+  door.setDepth(-100);
+        try { if (door._shopRef) door._shopRef.radius = Math.max(door._shopRef.radius||0, Math.round(doorW * 0.6)); } catch(_) {}
+      } catch(_) {}
+      this.shopDoors.push(door);
+    });
+    // Keep legacy this.shop for prompt logic centered on first shop
+    if (!this.shop && this.shops[0]) this.shop = { x: this.shops[0].x, radius: this.shops[0].radius, prompt: null, inZone: false };
+  } catch(_) {}
         // Small helper to play short SFX with minimal overlap
         this._sfxGateTs = 0;
         this.playSfx = (keys, volume=0.5, rate=1.0, duckMs=120, duckVol=0.25) => {
@@ -1971,6 +2240,71 @@
         // Function to show messages in dialogue bar
         this.showMessage = (text) => {
           document.getElementById('dialogue-text').innerHTML = text;
+        };
+        // HUD: pulse wallet and show a brief +$ float when money changes
+        this.onMoneyChanged = (delta=0) => {
+          try {
+            const wrap = document.getElementById('moneyWrap');
+            const valWrap = document.getElementById('moneyValWrap') || wrap;
+            if (!wrap) return;
+            // retrigger CSS pulse
+            wrap.classList.remove('gainFlash');
+            void wrap.offsetWidth; // reflow
+            wrap.classList.add('gainFlash');
+            if (delta) {
+              const el = document.createElement('span');
+              el.className = 'hudGain';
+              const sign = delta>0 ? '+' : '-';
+              el.textContent = `${sign}$${Math.abs(delta).toFixed(0)}`;
+              valWrap.appendChild(el);
+              requestAnimationFrame(() => el.classList.add('show'));
+              setTimeout(() => { try { el.remove(); } catch(_) {} }, 900);
+            }
+          } catch(_) {}
+        };
+        // Buff HUD updater: show compact icons only; hide row entirely when no buffs
+    this.updateBuffHUD = () => {
+          try {
+            const el = document.getElementById('buffs'); if (!el) return;
+            const iconRow = document.getElementById('buffIcons');
+      if (iconRow) { while (iconRow.firstChild) iconRow.removeChild(iconRow.firstChild); }
+            const parts = [];
+            const nowMs = this.time?.now || 0;
+            // Speed boost
+            if (this.speedBoostUntil && nowMs < this.speedBoostUntil) {
+              const left = Math.max(0, Math.ceil((this.speedBoostUntil - nowMs)/1000));
+              parts.push(`Speed x1.3 ${left}s`);
+              if (iconRow) {
+                const n = document.createElement('span');
+                n.className = 'ico'; n.title = `Speed Boost x1.3 (${left}s)`;
+                n.textContent = '🏃';
+                iconRow.appendChild(n);
+              }
+            }
+            // Coin purse bonus
+            const cvb = Math.max(0, Math.min(90, Math.round(((this.coinValueBonus||0) * 100))));
+            if (cvb > 0) parts.push(`Coins +${cvb}%`);
+            if (cvb > 0 && iconRow) {
+              const n = document.createElement('span');
+              n.className = 'ico'; n.title = `Coin Value +${cvb}%`;
+              n.textContent = '🪙';
+              const b = document.createElement('span'); b.className='badge'; b.textContent = `+${cvb}%`;
+              n.appendChild(b);
+              iconRow.appendChild(n);
+            }
+            // City map
+            if (this.cityMapOwned) {
+              parts.push('Map');
+              if (iconRow) { const n = document.createElement('span'); n.className='ico'; n.title='City Map (exits visible)'; n.textContent='🗺️'; iconRow.appendChild(n); }
+            }
+            // Hide verbose text and use tooltip on the icon row instead
+            try { el.textContent = ''; el.style.display = 'none'; } catch(_) {}
+            if (iconRow) {
+              const has = iconRow.childElementCount > 0;
+              iconRow.style.display = has ? 'inline-flex' : 'none';
+              iconRow.title = has ? parts.join(' | ') : 'No buffs';
+            }
+          } catch(_) {}
         };
         // Expose simple toggles for PauseOverlay to call
         this.toggleMusicMute = () => {
@@ -2067,6 +2401,16 @@
         } catch(_) {}
         
   this.showMessage('Welcome to Baden City! Fight your way through the gangs!');
+  // Initial Buff HUD render
+  try { this.updateBuffHUD && this.updateBuffHUD(); } catch(_) {}
+  // Setup simple shop state and prompt (hidden until near shop zone)
+  this.shop = { x: 260, radius: 34, prompt: null, inZone: false };
+  try {
+    const py = Math.floor(this.scale.height * 0.90);
+  this.shop.prompt = this.add.text(this.scale.width/2, Math.max(12, Math.floor(this.scale.height * (this._roadTopFrac || this.ROAD_TOP_PCT)) - 10), 'Press E to Enter Shop', {
+      fontFamily:'monospace', fontSize:'18px', color:'#ffffaa', stroke:'#000', strokeThickness:4
+    }).setDepth(5000).setScrollFactor(0).setOrigin(0.5).setVisible(false);
+  } catch(_) {}
   step('ready');
   console.log('Game scene created successfully!');
         } catch (err) {
@@ -2094,6 +2438,11 @@
       }
       
       update(time) {
+  // Ensure safe defaults if create() failed early
+  if (!this.cursors) this.cursors = { left:{isDown:false}, right:{isDown:false}, up:{isDown:false}, down:{isDown:false} };
+  if (!this.keys) this.keys = {};
+  if (!this.runState) this.runState = { isRunning:false, dir:0, lastTap:{ left:0, right:0 }, threshold: 280 };
+  const prevX = this.alex?.x || 0;
         // Pause toggle with enhanced safety checks
         try {
           // Safely check for undefined values with defensive coding
@@ -2164,7 +2513,10 @@
         } catch(_) {}
 
   const baseSpeed = 2;
-        const speed = (this.runState.isRunning ? 3.8 : baseSpeed);
+        // Temporary speed boost support
+        const boostActive = (this.speedBoostUntil && (time < this.speedBoostUntil));
+        const boostMul = boostActive ? 1.3 : 1.0;
+        const speed = (this.runState.isRunning ? 3.8 * boostMul : baseSpeed * boostMul);
 
     if (!this.isAttacking && (this.cursors.left.isDown || padLeft)) {
           this.alex.x -= speed;
@@ -2221,6 +2573,9 @@
             this.alex.play('alex-idle');
           }
         }
+
+  // Update Buff HUD every frame (cheap tiny text update)
+  try { this.updateBuffHUD && this.updateBuffHUD(); } catch(_) {}
 
         // Quick footsteps while running (only when actually moving fast horizontally)
         try {
@@ -2396,8 +2751,10 @@
                       this.showMessage((this.bossName||'Boss') + ' defeated!');
                     } else {
                       // Add money reward
-                      this.alex.money = (this.alex.money || 0) + (5 + this.comboCount * 2);
-                      this.showMessage(`${target.name || 'Enemy'} defeated! +$${5 + this.comboCount * 2}`);
+                      const bounty = (5 + this.comboCount * 2);
+                      this.alex.money = (this.alex.money || 0) + bounty;
+                      try { this.onMoneyChanged && this.onMoneyChanged(+bounty); } catch(_) {}
+                      this.showMessage(`${target.name || 'Enemy'} defeated! +$${bounty}`);
                     }
                     target.destroy();
                   }
@@ -2428,8 +2785,9 @@
   if (this.keys.Q && Phaser.Input.Keyboard.JustDown(this.keys.Q)) { this.runState.isRunning=false; tryAttack('special'); }
         
     // Keep Alex inside world bounds
-  const displayWNow = this._bgNaturalW * this.bg.scaleX;
+  const displayWNow = (this._bgNaturalW||800) * (this.bg?.scaleX||1);
   this.alex.x = Phaser.Math.Clamp(this.alex.x, 16, displayWNow - 16);
+    // Cemetery-only logic disabled unless explicitly in cemetery map
         
   // ... (resize listener moved to create())
         
@@ -2745,6 +3103,37 @@
           }
         }
         
+        // Shop zone proximity + prompt and key to open shop
+        try {
+          // Measure proximity to each shop; pick nearest
+          let nearest = null, bestDist = Infinity;
+          const px = (this.alex?.x||0);
+          const scaleX = this.bg?.scaleX || 1;
+          (this.shops||[]).forEach(s => {
+            const d = Math.abs(px - s.x * scaleX);
+            if (d < bestDist) { bestDist = d; nearest = s; }
+          });
+          const inZone = !!nearest && bestDist <= ((nearest.radius||0) * scaleX);
+          this.shop = this.shop || { prompt:null };
+          this.shop.inZone = inZone;
+          if (this.shop.prompt) {
+            this.shop.prompt.setVisible(inZone && !this.isAttacking);
+            if (nearest) this.shop.prompt.x = Math.floor((nearest.x||px) * scaleX);
+          }
+      if (inZone && this.keys.E && Phaser.Input.Keyboard.JustDown(this.keys.E)) {
+            // Switch to store interior scene
+            try {
+        // Save entry door world X (unscaled) for exit positioning
+  // Launch the store without changing or tracking player position
+  this.scene.launch('StoreScene');
+              this.scene.pause();
+            } catch(_) {
+              // fallback to overlay if StoreScene failed to launch
+              if (!this.scene.isActive('ShopOverlay')) { this.scene.launch('ShopOverlay'); this.scene.pause(); }
+            }
+          }
+        } catch(_) {}
+
         // Update enemy health bars
         this.enemies.forEach(enemy => {
           if (enemy && enemy.updateHealthBar) {
@@ -2796,8 +3185,14 @@
               const ch = Math.max(6, Math.round((coin.displayHeight||12) * 0.85));
               const cb = new Phaser.Geom.Rectangle(coin.x - cw/2, coin.y - ch, cw, ch);
               if (Phaser.Geom.Intersects.RectangleToRectangle(pb, cb)) {
-                const val = coin.value || 1;
+                let val = coin.value || 1;
+                // Apply any store bonus to coin value
+                try {
+                  const bonus = Math.max(0, Math.min(0.9, this.coinValueBonus||0));
+                  if (bonus > 0) val = Math.max(1, Math.round(val * (1 + bonus)));
+                } catch(_) {}
                 this.alex.money = (this.alex.money||0) + val;
+                try { this.onMoneyChanged && this.onMoneyChanged(+val); } catch(_) {}
                 // Pickup sound (synth fallback)
                 try { this.synth.coin(); } catch(_) { this.playSfx && this.playSfx(['sfx_coin'], 0.6, 1.2); }
                 // Floating text
@@ -2879,7 +3274,7 @@
       }
     }
     
-    // Simple overlay scene that pauses the game and listens for resume/mute
+  // Simple overlay scene that pauses the game and listens for resume/mute
     class PauseOverlay extends Phaser.Scene {
       constructor(){ super({ key: 'PauseOverlay' }); }
       create(){
@@ -3015,6 +3410,203 @@
       destroy(){ try { this.scale && this.scale.off('resize', undefined, this); } catch(_) {} try { this.input?.keyboard?.off('keydown', this._kbdHandler); } catch(_) {} }
     }
     
+    // Minimal Shop overlay
+    class ShopOverlay extends Phaser.Scene {
+      constructor(){ super({ key: 'ShopOverlay' }); }
+      create(){
+        const gs = this.scene.get('BadenCityRansomGame');
+        const w = this.scale.width, h = this.scale.height;
+        const mask = this.add.rectangle(0,0,w,h,0x000000,0.55).setOrigin(0,0).setDepth(10000);
+        const panelW = Math.min(420, Math.floor(w*0.9)), panelH = 210;
+        const px = Math.floor((w - panelW)/2), py = Math.floor((h - panelH)/2);
+        const panel = this.add.rectangle(px,py,panelW,panelH,0x112211,0.92).setOrigin(0,0).setDepth(10001)
+          .setStrokeStyle(3, 0xffffff, 0.6);
+        const title = this.add.text(px + panelW/2, py+22, 'Shop', { fontFamily:'monospace', fontSize:'24px', color:'#ffffaa', stroke:'#000', strokeThickness:5 }).setOrigin(0.5).setDepth(10002);
+        const money = () => Number(gs?.alex?.money||0);
+        const line = (i, key, label, cost, hint) => ({ i, key, label, cost, hint });
+        const items = [
+          line(0,'heal','Apple (Heal 30)', 8, '+30 HP now'),
+          line(1,'speed','Sneakers (Speed x1.3, 20s)', 20, 'Run faster briefly'),
+        ];
+        const rowH = 40; const startY = py + 56;
+        const rows = items.map((it, idx) => {
+          const y = startY + idx * rowH;
+          const txt = this.add.text(px+18, y, `${it.label} - $${it.cost}  ${it.hint?`(${it.hint})`:''}`, { fontFamily:'monospace', fontSize:'18px', color:'#ffffff', stroke:'#000', strokeThickness:4 })
+            .setDepth(10002).setInteractive({ useHandCursor:true });
+          txt.on('pointerover', ()=> txt.setTint(0xffffaa));
+          txt.on('pointerout', ()=> txt.clearTint());
+          txt.on('pointerdown', ()=> purchase(it));
+          return txt;
+        });
+        const closeBtn = this.add.text(px+panelW-16, py+panelH-10, 'Close (E/Esc)', { fontFamily:'monospace', fontSize:'14px', color:'#ffffaa', stroke:'#000', strokeThickness:3 })
+          .setDepth(10002).setOrigin(1,1).setInteractive({ useHandCursor:true });
+        closeBtn.on('pointerdown', ()=> this._close());
+        this.input.keyboard?.on('keydown', (ev)=>{ if (ev.code==='Escape' || ev.code==='KeyE') this._close(); });
+        this._close = () => { try { this.scene.stop(); this.scene.resume('BadenCityRansomGame'); } catch(_) {} };
+        const purchase = (it) => {
+          try {
+            if (!gs) return;
+            const have = money();
+            if (have < it.cost) {
+              gs.showMessage && gs.showMessage(`Not enough money for ${it.label}.`);
+              this.sound && this.sound.play && gs.playSfx && gs.playSfx(['sfx_punch2'], 0.45, 0.9);
+              return;
+            }
+            gs.alex.money = Number((have - it.cost).toFixed(2));
+            try { gs.onMoneyChanged && gs.onMoneyChanged(-it.cost); } catch(_) {}
+            try { const m=document.getElementById('money'); if (m) m.textContent = Number(gs.alex.money||0).toFixed(2); } catch(_) {}
+            if (it.key==='heal') {
+              gs.alex.health = Math.min(100, (gs.alex.health||0) + 30);
+              gs.showMessage && gs.showMessage('A tasty apple! +30 HP.');
+            } else if (it.key==='speed') {
+              const now = gs.time.now || performance.now();
+              gs.speedBoostUntil = now + 20000; // 20 seconds
+              gs.showMessage && gs.showMessage('Sneakers on! Speed up for 20s.');
+            }
+            this.sound && this.sound.play && gs.playSfx && gs.playSfx(['sfx_jump1'], 0.6, 1.1);
+          } catch(_) {}
+        };
+      }
+    }
+
+    // Store interior scene with scrolling shop UI
+    class StoreScene extends Phaser.Scene {
+      constructor(){ super({ key: 'StoreScene' }); }
+      create(data){
+        const gs = this.scene.get('BadenCityRansomGame');
+        const w = this.scale.width, h = this.scale.height;
+  // Dim the street as backdrop (no interior art) — lighten slightly for readability
+  const bg = this.add.rectangle(0,0,w,h,0x000000,0.58).setOrigin(0,0).setDepth(1);
+
+        // Polished panel and layout (two-column, highlight, details)
+        const panelW = Math.min(620, Math.floor(w*0.92)), panelH = Math.min(420, Math.floor(h*0.86));
+        const px = Math.floor((w - panelW)/2), py = Math.floor((h - panelH)/2);
+  const panel = this.add.rectangle(px,py,panelW,panelH,0x151e15,0.94).setOrigin(0,0).setDepth(2).setStrokeStyle(2,0xffffff,0.45);
+  const header = this.add.rectangle(px, py, panelW, 40, 0x203020, 0.98).setOrigin(0,0).setDepth(3);
+  this.add.text(px+14, py+20, 'Store', { fontFamily:'monospace', fontSize:'22px', fontStyle:'bold', color:'#ffffdd', stroke:'#000', strokeThickness:5, resolution: 2 }).setOrigin(0,0.5).setDepth(4);
+  const moneyTxt = this.add.text(px+panelW-14, py+20, '', { fontFamily:'monospace', fontSize:'20px', fontStyle:'bold', color:'#e0ffe0', stroke:'#000', strokeThickness:5, resolution: 2 })
+          .setOrigin(1,0.5).setDepth(4);
+        const fmtMoney = () => `$${Number(gs?.alex?.money||0).toFixed(2)}`;
+        const updateMoney = () => moneyTxt.setText(fmtMoney());
+        updateMoney();
+
+        // Items model (add light metadata)
+        const items = [
+          { key:'apple', label:'Apple',      cost:8,  desc:'+30 HP now',          action: () => { gs.alex.health = Math.max(0, Math.min(100, (gs.alex.health||0)+30)); } },
+          { key:'ramen', label:'Ramen',      cost:12, desc:'+50 HP',              action: () => { gs.alex.health = Math.max(0, Math.min(100, (gs.alex.health||0)+50)); } },
+          { key:'sneak', label:'Sneakers',   cost:20, desc:'Speed x1.3 for 20s',  action: () => { const now = gs.time.now||performance.now(); gs.speedBoostUntil = now + 20000; gs.updateBuffHUD && gs.updateBuffHUD(); } },
+          { key:'coinp', label:'Coin Purse', cost:35, desc:'+5% coin value (stack, max +50%)', action: () => { gs.coinValueBonus = Math.min(0.5, (gs.coinValueBonus||0)+0.05); gs.updateBuffHUD && gs.updateBuffHUD(); } },
+          { key:'map',   label:'City Map',   cost:10, desc:'Show exits on street', action: () => { gs.cityMapOwned = true; gs.showMessage && gs.showMessage('Map: exits highlighted.'); gs.updateBuffHUD && gs.updateBuffHUD(); } },
+        ];
+
+        // Left list area
+        const listArea = { x: px+12, y: py+50, w: Math.floor(panelW*0.54), h: panelH - 96 };
+        const listBg = this.add.rectangle(listArea.x, listArea.y, listArea.w, listArea.h, 0x162116, 0.9).setOrigin(0,0).setDepth(3)
+          .setStrokeStyle(1, 0xffffff, 0.3);
+        const rowH = 32; const viewRows = Math.max(4, Math.floor((listArea.h - 10)/rowH));
+        let sel = 0, top = 0;
+        const highlight = this.add.rectangle(0,0,listArea.w-6,rowH-2,0x2b3c2b,0.92).setOrigin(0,0).setDepth(4).setVisible(false);
+        const priceRight = listArea.x + listArea.w - 12;
+        const rowNodes = [];
+
+        const affordable = (it) => (Number(gs?.alex?.money||0) >= Number(it.cost||0));
+    const drawList = () => {
+          // maintain selection within bounds and scroll window
+          sel = Phaser.Math.Clamp(sel, 0, items.length-1);
+          if (sel < top) top = sel;
+          if (sel >= top + viewRows) top = sel - viewRows + 1;
+          // clear old
+          rowNodes.splice(0).forEach(n=>n.destroy());
+          // rows
+          for (let i=0;i<viewRows;i++) {
+            const idx = top + i; if (idx >= items.length) break;
+            const it = items[idx]; const y = listArea.y + 6 + i*rowH;
+      const color = idx===sel ? '#ffffcc' : affordable(it) ? '#f8f8ff' : '#b8b8b8';
+      const name = this.add.text(listArea.x+8, y, it.label, { fontFamily:'monospace', fontSize:'18px', fontStyle: idx===sel ? 'bold' : 'normal', color, stroke:'#000', strokeThickness:4, resolution: 2 }).setDepth(5).setInteractive({ useHandCursor:true });
+      const price = this.add.text(priceRight, y, `$${it.cost}`, { fontFamily:'monospace', fontSize:'18px', fontStyle: idx===sel ? 'bold' : 'normal', color, stroke:'#000', strokeThickness:4, resolution: 2 }).setOrigin(1,0).setDepth(5);
+            name.on('pointerover', ()=>{ sel = idx; updateAll(); });
+            name.on('pointerdown', ()=>{ sel = idx; updateAll(); });
+            rowNodes.push(name, price);
+          }
+          // highlight position
+          if (items[sel]) {
+            highlight.setVisible(true);
+            const hiY = listArea.y + 6 + (sel - top) * rowH - 2;
+            highlight.setPosition(listArea.x+3, hiY);
+          } else {
+            highlight.setVisible(false);
+          }
+          // scroll cues
+          const moreUp = top > 0, moreDown = (top + viewRows) < items.length;
+          // simple triangles
+          rowNodes.push(this.add.text(listArea.x + listArea.w/2, listArea.y - 12, moreUp ? '▲' : ' ', { fontFamily:'monospace', fontSize:'12px', color:'#cccccc' }).setOrigin(0.5,1).setDepth(5));
+          rowNodes.push(this.add.text(listArea.x + listArea.w/2, listArea.y + listArea.h + 2, moreDown ? '▼' : ' ', { fontFamily:'monospace', fontSize:'12px', color:'#cccccc' }).setOrigin(0.5,0).setDepth(5));
+        };
+
+        // Right details area
+        const detArea = { x: listArea.x + listArea.w + 12, y: listArea.y, w: panelW - (listArea.w + 12 + 24), h: listArea.h };
+        const detBg = this.add.rectangle(detArea.x, detArea.y, detArea.w, detArea.h, 0x162116, 0.9).setOrigin(0,0).setDepth(3)
+          .setStrokeStyle(1, 0xffffff, 0.3);
+        const detTitle = this.add.text(detArea.x+10, detArea.y+8, '', { fontFamily:'monospace', fontSize:'19px', fontStyle:'bold', color:'#ffffee', stroke:'#000', strokeThickness:5, resolution: 2 }).setDepth(5);
+        const detDesc  = this.add.text(detArea.x+10, detArea.y+36, '', { fontFamily:'monospace', fontSize:'16px', color:'#eaffea', wordWrap:{ width: detArea.w-20 }, resolution: 2 }).setDepth(5);
+        const feedback = this.add.text(detArea.x+10, detArea.y+detArea.h-48, '', { fontFamily:'monospace', fontSize:'14px', color:'#ffffaa', stroke:'#000', strokeThickness:4, resolution: 2 }).setDepth(5);
+
+        // Buttons row
+        const btnY = py + panelH - 16;
+  const exitBtn = this.add.text(px+panelW-16, btnY, 'Exit', { fontFamily:'monospace', fontSize:'17px', fontStyle:'bold', color:'#ffffee', stroke:'#000', strokeThickness:4, resolution: 2 }).setOrigin(1,1).setDepth(4).setInteractive({ useHandCursor:true });
+  const buyBtn  = this.add.text(px+panelW-100, btnY, 'Buy', { fontFamily:'monospace', fontSize:'17px', fontStyle:'bold', color:'#ffffee', stroke:'#000', strokeThickness:4, resolution: 2 }).setOrigin(1,1).setDepth(4).setInteractive({ useHandCursor:true });
+
+        const updateButtons = () => {
+          const it = items[sel]; const can = !!it && affordable(it);
+          buyBtn.setAlpha(can ? 1 : 0.6);
+          buyBtn.disableInteractive(); if (can) buyBtn.setInteractive({ useHandCursor:true });
+        };
+
+        const updateDetails = () => {
+          const it = items[sel]; if (!it) { detTitle.setText(''); detDesc.setText(''); feedback.setText(''); updateButtons(); return; }
+          detTitle.setText(`${it.label}  —  $${it.cost}`);
+          detDesc.setText(it.desc || '');
+          const have = Number(gs?.alex?.money||0);
+          if (have < it.cost) feedback.setText('Not enough money.'); else feedback.setText('');
+          updateButtons();
+        };
+
+        const updateAll = () => { drawList(); updateDetails(); updateMoney(); };
+        drawList(); updateDetails();
+
+        const attemptBuy = () => {
+          try {
+            const it = items[sel]; if (!it) return;
+            const have = Number(gs?.alex?.money||0);
+            if (have < it.cost) { feedback.setText('Not enough money.'); this.sound && gs.playSfx && gs.playSfx(['sfx_punch2'], 0.45, 0.9); return; }
+            // pay
+            gs.alex.money = Number((have - it.cost).toFixed(2));
+            gs.onMoneyChanged && gs.onMoneyChanged(-it.cost);
+            const mEl = document.getElementById('money'); if (mEl) mEl.textContent = Number(gs.alex.money||0).toFixed(2);
+            // effect
+            it.action && it.action();
+            feedback.setText(`Purchased ${it.label}!`);
+            updateAll();
+            this.sound && gs.playSfx && gs.playSfx(['sfx_jump1'], 0.6, 1.1);
+          } catch(_) {}
+        };
+
+        buyBtn.on('pointerdown', attemptBuy);
+        exitBtn.on('pointerdown', ()=> this._exit());
+        // Keyboard
+        this.input.keyboard?.on('keydown', (ev)=>{
+          if (ev.code==='Escape' || ev.code==='KeyE') return this._exit();
+          if (ev.code==='ArrowUp')  { sel = (sel + items.length - 1) % items.length; updateAll(); }
+          if (ev.code==='ArrowDown'){ sel = (sel + 1) % items.length; updateAll(); }
+          if (ev.code==='Enter') attemptBuy();
+        });
+        // Hints
+  this.add.text(px+14, py+panelH-18, 'Arrows: Navigate   Enter: Buy   Esc/E: Exit', { fontFamily:'monospace', fontSize:'13px', color:'#eeeeee', resolution: 2 }).setDepth(4);
+
+        this._exit = () => { try { this.scene.stop(); this.scene.resume('BadenCityRansomGame'); } catch(_) {} };
+      }
+    }
+    
     // Game configuration with adjusted canvas for bigger UI bars
     const config = {
       type: Phaser.AUTO,
@@ -3023,7 +3615,7 @@
       parent: 'canvasWrap',
       backgroundColor: '#000000',
   resolution: 1,
-  scene: [TitleScene, StoryScene, BadenCityRansomGame, PauseOverlay],
+  scene: [TitleScene, StoryScene, BadenCityRansomGame, PauseOverlay, ShopOverlay, StoreScene],
       render: {
         pixelArt: true,
         antialias: false,
@@ -3053,6 +3645,7 @@
       const boss = document.getElementById('devBoss');
   const bossType = document.getElementById('devBossType');
   const hit = document.getElementById('devHit');
+  const addMoneyBtn = document.getElementById('devAddMoney');
       if (!btn || !panel) return;
       const gs = () => (window._BCR && window._BCR.gs) ? window._BCR.gs() : null;
       btn.addEventListener('click', () => {
@@ -3072,6 +3665,14 @@
       close && close.addEventListener('click', () => {
         panel.style.display = 'none';
         btn.setAttribute('aria-expanded', 'false');
+      });
+      addMoneyBtn && addMoneyBtn.addEventListener('click', () => {
+        const s = gs(); if (!s) return;
+        try {
+          s.alex.money = Number(((s.alex.money||0) + 5).toFixed(2));
+          try { s.onMoneyChanged && s.onMoneyChanged(+5); } catch(_) {}
+          const mEl = document.getElementById('money'); if (mEl) mEl.textContent = Number(s.alex.money||0).toFixed(2);
+        } catch(_) {}
       });
       god && god.addEventListener('change', () => { const s = gs(); if (s && s.setGodMode) s.setGodMode(god.checked); });
       bossType && bossType.addEventListener('change', async () => {
