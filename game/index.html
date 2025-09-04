@@ -2462,7 +2462,7 @@
             const x = (spr.x || 0) - hbW/2;
             // Anchor bottom to true baseline but push box up so sprite feet touch bottom edge
             const baseY = this.baselineYOf(spr);
-            const offsetUp = (role==='boss') ? 0 : Math.round(h * 0.08); // push player/enemy boxes up
+            const offsetUp = (role==='boss') ? 0 : Math.round(h * 0.18); // push player/enemy boxes up more
             const y = baseY - hbH - offsetUp;
             return new Phaser.Geom.Rectangle(Math.round(x), Math.round(y), Math.round(hbW), Math.round(hbH));
           } catch(_) {
