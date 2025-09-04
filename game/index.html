@@ -884,9 +884,10 @@
           // Guarantee a minimum vertical lane size for up/down movement, anchored at ground line
           const laneMax = groundY;
           const minLane = Math.max(56, Math.floor(h * 0.12));
-          let laneMin = roadTop; // include the very first blue row
+          let laneMin = roadTop; // include the very first blue row (no extra offset)
           if ((laneMax - laneMin) < minLane) {
-            laneMin = Math.max(roadTop + 6, laneMax - minLane);
+            // If the lane is too thin, widen downward only; keep access to the top edge
+            laneMin = Math.max(roadTop, laneMax - minLane);
           }
           if (this.alex) {
             this.alex.setScale(alexScale);
@@ -2453,15 +2454,15 @@
           try {
             const w = Math.max(1, spr.displayWidth || spr.width || 16);
             const h = Math.max(1, spr.displayHeight || spr.height || 32);
-            // Boss boxes were visually correct (blue). Keep those ratios; make player/enemy slightly taller/narrower.
-            const widthFrac = (role==='boss') ? 0.46 : 0.44;
-            const heightFrac = (role==='boss') ? 0.55 : 0.56;
+            // Boss boxes were visually correct (blue). For player/enemy, widen slightly and lower bottom by 1px
+            const widthFrac = (role==='boss') ? 0.46 : 0.48;
+            const heightFrac = (role==='boss') ? 0.55 : 0.58;
             const hbW = Math.max(2, w * widthFrac);
             const hbH = Math.max(2, h * heightFrac);
             const x = (spr.x || 0) - hbW/2;
             // Anchor bottom to true baseline (no bias) so it hugs the body consistently
             const baseY = this.baselineYOf(spr);
-            const y = baseY - hbH - 1;
+            const y = baseY - hbH - 0; // sit exactly on baseline
             return new Phaser.Geom.Rectangle(Math.round(x), Math.round(y), Math.round(hbW), Math.round(hbH));
           } catch(_) {
             return new Phaser.Geom.Rectangle((spr?.x||0)-6, (spr?.y||0)-10, 12, 10);
