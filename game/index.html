@@ -2460,9 +2460,10 @@
             const hbW = Math.max(2, w * widthFrac);
             const hbH = Math.max(2, h * heightFrac);
             const x = (spr.x || 0) - hbW/2;
-            // Anchor bottom to true baseline (no bias) so it hugs the body consistently
+            // Anchor bottom to true baseline but push box up so sprite feet touch bottom edge
             const baseY = this.baselineYOf(spr);
-            const y = baseY - hbH - 0; // sit exactly on baseline
+            const offsetUp = (role==='boss') ? 0 : Math.round(h * 0.08); // push player/enemy boxes up
+            const y = baseY - hbH - offsetUp;
             return new Phaser.Geom.Rectangle(Math.round(x), Math.round(y), Math.round(hbW), Math.round(hbH));
           } catch(_) {
             return new Phaser.Geom.Rectangle((spr?.x||0)-6, (spr?.y||0)-10, 12, 10);
