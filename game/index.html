@@ -2983,7 +2983,7 @@
             return;
           }
           
-          const alignedY = distY <= 14; // allow a bit more tolerance so they can get beside you
+          const alignedY = distY <= 20; // increase tolerance for easier alignment
           const reach = enemy.attackReach;
           
           // Decide between approach vs idle/attack
@@ -2994,13 +2994,20 @@
             switch(aiPattern) {
               case 0: // Aggressive direct approach
                 enemy.x += Math.sign(dx) * enemy.speed * 1.1;
-                if (!alignedY) enemy.y += Math.sign(this.alexBaseY - enemy.y) * 0.8;
+                if (!alignedY) {
+                  // Use feet baseline for consistent alignment
+                  const enemyFeetY = this.feetYOf(enemy, 'enemy');
+                  enemy.y += Math.sign(this.alexBaseY - enemyFeetY) * 1.2;
+                }
                 break;
 
               case 1: // Cautious circling
                 if (distX > reach + 20) {
                   enemy.x += Math.sign(dx) * enemy.speed;
-                  if (!alignedY) enemy.y += Math.sign(this.alexBaseY - enemy.y) * 0.6;
+                  if (!alignedY) {
+                    const enemyFeetY = this.feetYOf(enemy, 'enemy');
+                    enemy.y += Math.sign(this.alexBaseY - enemyFeetY) * 0.8;
+                  }
                 } else if (distX > reach + 5) {
                   // Circle around player
                   const circleOffset = Math.sin(time * 0.003) * 15;
@@ -3015,7 +3022,10 @@
                   if (distX > reach + 40) enemy.retreating = false;
                 } else {
                   enemy.x += Math.sign(dx) * enemy.speed * 1.3; // Rush in
-                  if (!alignedY) enemy.y += Math.sign(this.alexBaseY - enemy.y) * 0.7;
+                  if (!alignedY) {
+                    const enemyFeetY = this.feetYOf(enemy, 'enemy');
+                    enemy.y += Math.sign(this.alexBaseY - enemyFeetY) * 1.0;
+                  }
                 }
                 break;
             }
