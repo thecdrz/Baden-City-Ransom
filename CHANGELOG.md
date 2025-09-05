@@ -2,6 +2,19 @@
 
 All notable changes to Baden City Ransom will be documented in this file.
 
+## [v2.2.2] - 2025-09-05
+
+### 🎯 Client Debug & Co‑op Boss Targeting
+
+#### Added
+- Hitbox Tuner now shows the red player attack box on the client (P2) without needing the full Visual Debug overlay
+
+#### Changed
+- Boss (Miller) AI is co‑op aware: selects a target between P1 and P2 based on proximity and lane alignment, and properly damages P2
+
+#### Notes
+- Visual Debug overlay still controls drawing of hurtboxes and enemy/boss debug rects; the red player attack rect is also shown when the tuner is enabled
+
 ## [v2.2.1] - 2025-09-05
 
 ### 🛠️ Hotfix

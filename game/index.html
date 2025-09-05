@@ -1212,6 +1212,8 @@
                       p2.setScale(this.alex.scaleX||1, this.alex.scaleY||1); p2.setTint(0x77ccff); try { p2.play('alex-idle'); } catch(_) {}
                       p2.name='CDRZ'; p2.health=100; p2.money=0.00; p2.buffs={}; this.net.p2 = p2;
                       try { this._computeFootPad && this._computeFootPad(p2); } catch(_) {}
+                      // Client: follow local player (P2) when available
+                      try { if (this.net.role==='client') this.cameras.main.startFollow(p2, true, 1, 1); } catch(_) {}
                     }
                   } catch(_) {}
                 }
@@ -1279,8 +1281,21 @@
                           if (s.p2.anim && this.net.p2.anims?.currentAnim?.key !== s.p2.anim) {
                             this.net.p2.play(s.p2.anim);
                           }
-                          if (typeof s.p2.attacking === 'boolean') this.net.p2._attacking = !!s.p2.attacking;
+                          if (typeof s.p2.attacking === 'boolean') {
+                            const prev = !!this.net.p2._attacking;
+                            this.net.p2._attacking = !!s.p2.attacking;
+                            if (this.net.role==='client' && this.net.p2._attacking && !prev) {
+                              try {
+                                const pitchVar = 0.96 + Math.random() * 0.12;
+                                // Heuristic: use current anim key to pick rate tilt
+                                const isKick = (s.p2.anim||'').includes('kick');
+                                this.playSfx && this.playSfx(['sfx_punch1','sfx_punch2'], 0.48, isKick ? 0.9 * pitchVar : 1.05 * pitchVar);
+                              } catch(_) {}
+                            }
+                          }
                         } catch(_) {}
+                        // Ensure camera follows P2 on client
+                        try { if (this.net.role==='client') this.cameras.main.startFollow(this.net.p2, true, 1, 1); } catch(_) {}
                         // Apply P2 buff data from snapshot
                         if (s.p2.buffs) {
                           this.net.p2.buffs = s.p2.buffs;
@@ -1288,6 +1303,23 @@
                           this.net.p2.coinValueBonus = s.p2.buffs.coinValueBonus;
                           this.net.p2.cityMapOwned = s.p2.buffs.cityMapOwned;
                         }
+                        // If tuner is enabled and P2 is attacking, synthesize a client-side hitbox so the red box appears
+                        try {
+                          if (this.devHitboxTune?.enabled && this.net.p2?._attacking) {
+                            const p2 = this.net.p2;
+                            const hb = this.hurtboxOf(p2,'player');
+                            const handY = Math.round(hb.y + hb.height * 0.45);
+                            const baseReach = 30; // use punch baseline; tuner overrides
+                            let reach = baseReach;
+                            if (this.devHitboxTune?.enabled) reach = this.devHitboxTune.reachPx|0;
+                            const tipX = Math.round(p2.x + (p2.flipX ? -reach : reach));
+                            const devTip = (this.devHitboxTune?.enabled && Number.isFinite(this.devHitboxTune.tipYOffset)) ? (this.devHitboxTune.tipYOffset|0) : -6;
+                            const tipY = handY + devTip;
+                            const w = 12, h = 14;
+                            const hitRect = new Phaser.Geom.Rectangle(tipX - Math.floor(w/2), tipY - Math.floor(h/2), w, h);
+                            this._lastPlayerHitRect = { rect: hitRect, ts: (this.time.now || 0) };
+                          }
+                        } catch(_) {}
                       }
                     }
                     // Boss sync from host -> client
@@ -2475,6 +2507,88 @@
         if (!this.pauseKeys) {
           this.pauseKeys = { esc: null, p: null, m: null };
         }
+        
+        // Developer: Hitbox tuning panel (reach and tip Y-offset)
+        try {
+          // State and defaults
+          const stored = (()=>{ try { return JSON.parse(localStorage.getItem('devHitboxTune')||'null'); } catch(_) { return null; } })();
+          this.devHitboxTune = {
+            enabled: (stored?.enabled ?? true),
+            reachPx: Math.max(8, Math.min(200, stored?.reachPx ?? 104)),
+            tipYOffset: Math.max(-96, Math.min(96, stored?.tipYOffset ?? 48))
+          };
+
+          const saveTune = () => { try { localStorage.setItem('devHitboxTune', JSON.stringify(this.devHitboxTune)); } catch(_) {} };
+
+          // Build lightweight panel
+          const existing = document.getElementById('devHitboxPanel');
+          if (!existing) {
+            const panel = document.createElement('div');
+            panel.id = 'devHitboxPanel';
+            panel.style.position = 'fixed';
+            panel.style.right = '10px';
+            panel.style.bottom = '10px';
+            panel.style.zIndex = '10050';
+            panel.style.background = 'rgba(0,0,0,0.7)';
+            panel.style.color = '#fff';
+            panel.style.font = '12px monospace';
+            panel.style.padding = '8px 10px';
+            panel.style.border = '1px solid #444';
+            panel.style.borderRadius = '6px';
+            panel.style.minWidth = '220px';
+            panel.style.display = this.devHitboxTune.enabled ? 'block' : 'none';
+            panel.innerHTML = `
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong>Hitbox Tuner</strong>
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                  <input id="devHitboxEnable" type="checkbox" ${this.devHitboxTune.enabled?'checked':''} /> enable
+                </label>
+              </div>
+              <div style="margin:4px 0 8px 0;opacity:0.9;">F6 toggles panel</div>
+              <div style="margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;">
+                  <label for="devReach">Reach (px)</label>
+                  <span id="devReachVal">${this.devHitboxTune.reachPx}</span>
+                </div>
+                <input id="devReach" type="range" min="8" max="200" step="1" value="${this.devHitboxTune.reachPx}" style="width:100%" />
+              </div>
+              <div style="margin-bottom:4px;">
+                <div style="display:flex;justify-content:space-between;">
+                  <label for="devTipY">Tip Y offset</label>
+                  <span id="devTipYVal">${this.devHitboxTune.tipYOffset}</span>
+                </div>
+                <input id="devTipY" type="range" min="-96" max="96" step="1" value="${this.devHitboxTune.tipYOffset}" style="width:100%" />
+              </div>
+            `;
+            document.body.appendChild(panel);
+
+            // Wire inputs
+            const en = document.getElementById('devHitboxEnable');
+            const reach = document.getElementById('devReach');
+            const reachVal = document.getElementById('devReachVal');
+            const tip = document.getElementById('devTipY');
+            const tipVal = document.getElementById('devTipYVal');
+            if (en) en.addEventListener('change', ()=>{ this.devHitboxTune.enabled = !!en.checked; saveTune(); });
+            if (reach) reach.addEventListener('input', ()=>{ const v = parseInt(reach.value,10); this.devHitboxTune.reachPx = v; reachVal.textContent = String(v); saveTune(); });
+            if (tip) tip.addEventListener('input', ()=>{ const v = parseInt(tip.value,10); this.devHitboxTune.tipYOffset = v; tipVal.textContent = String(v); saveTune(); });
+
+            // Keyboard toggle: F6
+            if (this.input && this.input.keyboard) {
+              try {
+                this.input.keyboard.on('keydown-F6', ()=>{
+                  const p = document.getElementById('devHitboxPanel');
+                  if (!p) return;
+                  p.style.display = (p.style.display==='none') ? 'block' : 'none';
+                });
+              } catch(_) {}
+            } else {
+              // Fallback toggle via DOM
+              document.addEventListener('keydown', (ev)=>{ if (ev.key==='F6') {
+                const p = document.getElementById('devHitboxPanel'); if (p) p.style.display = (p.style.display==='none') ? 'block' : 'none';
+              }});
+            }
+          }
+        } catch(e) { console.warn('Dev hitbox tuner init failed:', e); }
         // Dev flags and helpers
         this.godMode = false;
         this.setGodMode = (on) => { this.godMode = !!on; this.showMessage(this.godMode ? 'God Mode: ON' : 'God Mode: OFF'); };
@@ -2620,8 +2734,7 @@
               try {
                 // Place so that feet baseline equals player lane Y
                 const pad = (boss._footPadScaled||0);
-                const bias = this.feetBiasFor(boss,'boss');
-                boss.y = Math.round(this.alexBaseY + pad + bias);
+                boss.y = Math.round(this.alexBaseY + pad);
               } catch(_) {}
               
               // Prefer animations by prefix; build if missing
@@ -3281,9 +3394,9 @@
   // Clamp base Y to full lane; alex.y = alexBaseY + jumpZ so feet can reach exact bottom with slack
   this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
 
-  // Real-time alignment: keep enemies and boss at player's lane level
-  (this.enemies||[]).forEach(e => e.y = this.alexBaseY);
-  if (this.boss) this.boss.y = this.alexBaseY + (this.boss._footPadScaled || 0) + this.feetBiasFor(this.boss,'boss');
+  // Real-time alignment: keep enemies and boss at player's lane feet baseline
+  (this.enemies||[]).forEach(e => { try { e.y = Math.round(this.alexBaseY + (e._footPadScaled||0)); } catch(_) {} });
+  if (this.boss) try { this.boss.y = Math.round(this.alexBaseY + (this.boss._footPadScaled || 0)); } catch(_) {}
   } // end local P1 movement gate
 
   // Netplay input/state handling
@@ -3382,15 +3495,23 @@
             try {
               const p2 = this.net.p2; if (!p2 || !p2.active) return;
               p2._attacking = true; p2.play(kind==='kick'?'alex-kick':'alex-punch');
-              // Build P2 attack hitbox (same as P1 but relative to p2)
-              const baseReach = (kind==='kick') ? 28 : 24;
-              const reach = baseReach;
-              const baseW = (kind==='kick') ? 16 : 12;
-              const w = baseW, h = 16;
-              const ox = p2.flipX ? -reach : reach;
-              const pBase = this.baselineYOf(p2);
-              const lift = Math.round((p2.displayHeight||32) * 0.30);
-              const hitRect = new Phaser.Geom.Rectangle(p2.x + ox - Math.round(w*0.35), pBase - lift - h, w, h);
+              // Host: play P2 swing SFX so both peers hear it
+              try {
+                const pitchVar = 0.96 + Math.random() * 0.12;
+                this.playSfx && this.playSfx(['sfx_punch1','sfx_punch2'], 0.5, kind==='kick' ? 0.9 * pitchVar : 1.05 * pitchVar);
+              } catch(_) {}
+              // Build P2 attack hitbox at sword tip using P2 hurtbox hand height
+              const hbP2 = this.hurtboxOf(p2,'player');
+              const handY2 = Math.round(hbP2.y + hbP2.height * 0.45);
+              const baseReach = (kind==='kick') ? 24 : 30;
+              let reach = baseReach;
+              if (this.devHitboxTune?.enabled) reach = this.devHitboxTune.reachPx|0;
+              const tipX2 = Math.round(p2.x + (p2.flipX ? -reach : reach));
+              const devTip = (this.devHitboxTune?.enabled && Number.isFinite(this.devHitboxTune.tipYOffset)) ? (this.devHitboxTune.tipYOffset|0) : (kind==='kick' ? -2 : -6);
+              const tipY2 = handY2 + devTip;
+              const baseW = (kind==='kick') ? 14 : 12;
+              const w = baseW, h = 14;
+              const hitRect = new Phaser.Geom.Rectangle(tipX2 - Math.floor(w/2), tipY2 - Math.floor(h/2), w, h);
               const hitOne = (target) => {
                 if (!target || !target.active || target._defeated) return false;
                 const tb = this.hurtboxOf(target, target===this.boss?'boss':'enemy');
@@ -3551,19 +3672,21 @@
           const pitchVar = 1.0 + (this.comboCount * 0.05);
           this.playSfx(['sfx_punch1','sfx_punch2'], 0.55 + this.comboCount * 0.1, kind==='kick' ? 0.9 * pitchVar : 1.05 * pitchVar);
           
-          // Enhanced hitbox with combo scaling
-          const baseReach = (kind==='kick') ? 28 : (kind==='special' ? 30 : 24);
-          const reach = Math.round(baseReach * (1 + this.comboCount * 0.08));
-          // Sword-sized hitbox: narrower and slightly higher to align with the blade arc
-          const baseW = (kind==='kick') ? 16 : (kind==='special' ? 14 : 12);
-          const w = Math.round(baseW * (1 + this.comboCount * 0.05));
-          const h = Math.round(18 + this.comboCount * 2);
-          const ox = this.alex.flipX ? -reach : reach;
-          const pBase = this.baselineYOf(this.alex);
-          // Lift higher to be on the sword path (roughly chest/shoulder height)
-          const pH = Math.max(1, this.alex.displayHeight || this.alex.height || 32);
-          const lift = Math.round(Math.max(12, pH * 0.35));
-          const hitRect = new Phaser.Geom.Rectangle(this.alex.x + ox - Math.round(w*0.35), pBase - lift - h, w, h);
+          // Enhanced hitbox positioned at sword tip using player's hurtbox hand height
+          const tbSelf = this.hurtboxOf(this.alex,'player');
+          const handY = Math.round(tbSelf.y + tbSelf.height * 0.45);
+          const baseReach = (kind==='kick') ? 24 : (kind==='special' ? 36 : 30);
+          let reach = Math.round(baseReach * (1 + this.comboCount * 0.06));
+          // Dev override: fixed reach if tuner enabled
+          if (this.devHitboxTune?.enabled) reach = this.devHitboxTune.reachPx|0;
+          const tipX = Math.round(this.alex.x + (this.alex.flipX ? -reach : reach));
+          // Dev override: tip Y offset
+          const devTip = (this.devHitboxTune?.enabled && Number.isFinite(this.devHitboxTune.tipYOffset)) ? (this.devHitboxTune.tipYOffset|0) : (kind==='kick' ? -2 : -6);
+          const tipY = handY + devTip;
+          const baseW = (kind==='kick') ? 14 : (kind==='special' ? 14 : 12);
+          const w = Math.round(baseW * (1 + this.comboCount * 0.04));
+          const h = Math.round(14 + this.comboCount * 2);
+          const hitRect = new Phaser.Geom.Rectangle(tipX - Math.floor(w/2), tipY - Math.floor(h/2), w, h);
           // Expose for debug overlay
           try { this._lastPlayerHitRect = { rect: hitRect, ts: (this.time.now || 0) }; } catch(_) {}
 
@@ -3579,10 +3702,24 @@
               
               target.health = Math.max(0, (target.health||1) - comboDamage);
               
-              // Enhanced hit effects
+              // Enhanced hit effects (tint + optional hit animation)
               const hitColor = this.comboCount > 2 ? 0xffaa00 : 0xff0000; // Orange for high combo
               target.setTintFill(hitColor);
               this.time.delayedCall(100, () => target.clearTint());
+
+              // Try to play a role-appropriate hit animation briefly
+              try {
+                const pref = (target===this.boss && this.bossAnimPrefix) ? this.bossAnimPrefix : (target.type || 'enemy1');
+                const hitKey = `${pref}-hit`;
+                const idleKey = `${pref}-idle`;
+                if (this.anims.exists(hitKey)) {
+                  target.play(hitKey);
+                  // Return to idle after a brief moment if still alive
+                  this.time.delayedCall(180, () => {
+                    try { if (target.active && !target._defeated && this.anims.exists(idleKey)) target.play(idleKey); } catch(_) {}
+                  });
+                }
+              } catch(_) {}
               
               // Combo knockback
               target.x += this.alex.flipX ? -comboKnockback : comboKnockback;
@@ -3753,6 +3890,8 @@
             p2.health = Math.max(0, (p2.health||100) - dmg);
             this.net.p2InvulUntil = nowMs + 600;
             p2.setTintFill(0xffff77); this.time.delayedCall(100, () => p2.clearTint());
+            // Play hurt animation if available
+            try { if (this.anims.exists('alex-hurt')) p2.play('alex-hurt'); } catch(_) {}
             p2.x += (dir<0?-1:1) * knock;
             if (p2.health === 0 && !p2._defeated) { p2._defeated = true; p2.setAlpha(0.25); this.time.delayedCall(600, ()=>{ try { p2.destroy(); } catch(_) {} this.net.p2=null; }); }
           } catch(_) {}
@@ -3875,27 +4014,54 @@
               enemy.x += Math.sign(dx) * 0.25;
             } else {
               if (enemy.anims.currentAnim?.key !== `${enemy.type}-idle`) enemy.play(`${enemy.type}-idle`);
-              // attempt attack if cooldown over
-              if (time >= (enemy.attackCooldown||0)) {
-              // Attack hitbox at the hand/weapon height, offset forward by reach
-              const w = Math.max(12, Math.floor(enemy.attackWidth * 1.1)), h = Math.max(12, Math.floor(enemy.attackHeight * 1.1));
-              const ox = enemy.flipX ? -reach : reach;
-              // Use enemy hurtbox to approximate hand/chest height
-              const hbE = this.hurtboxOf(enemy, 'enemy');
-              const handY = Math.round(hbE.y + hbE.height * 0.48); // slightly lower for better overlap
-              const handX = Math.round(enemy.x + ox);
-              const hitRect = new Phaser.Geom.Rectangle(handX - w/2, handY - h/2, w, h);
-              // Expose for debug overlay
-              enemy._lastAtkRect = hitRect; enemy._lastAtkTs = time;
-              const pb = this.hurtboxOf(this.alex,'player');
-              const pb2 = (p2 && p2.active) ? this.hurtboxOf(p2,'player') : null;
-              const dir = enemy.flipX?-1:1;
-              if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
-                hurtPlayer(10, 10, dir);
-              } else if (pb2 && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb2)) {
-                hurtP2(10, 10, dir);
-              }
-              enemy.attackCooldown = time + enemy.attackCadence;
+              // Attempt attack when in range and cooldown over
+              if (!enemy._attacking && time >= (enemy.attackCooldown||0)) {
+                try {
+                  enemy._attacking = true; enemy._attackHitApplied = false;
+                  const atkKey = `${enemy.type}-attack`;
+                  if (this.anims.exists(atkKey)) {
+                    enemy.play(atkKey);
+                    enemy.once(`animationcomplete-${atkKey}`, ()=>{ enemy._attacking=false; enemy._attackHitApplied=false; });
+                  } else {
+                    // Visual fallback telegraph
+                    enemy.setTint(0xffdddd);
+                    this.time.delayedCall(220, ()=>{ try { enemy.clearTint(); } catch(_) {} });
+                  }
+                  // Micro step to commit slightly forward
+                  const minNoOverlap = Math.max(8, (enemy.displayWidth ? enemy.displayWidth * 0.16 : 8));
+                  const nextX = enemy.x + (enemy.flipX?-1:1) * 0.8;
+                  if (Math.abs(nextX - (tgtIsP2 ? (p2?.x||enemy.x) : this.alex.x)) > minNoOverlap) enemy.x = nextX;
+
+                  const swingDelay = 200;
+                  this.time.delayedCall(swingDelay, () => {
+                    try {
+                      if (!enemy || !enemy.active || enemy._attackHitApplied) return;
+                      if (this.anims.exists(atkKey)) {
+                        if (!enemy.anims?.currentAnim || enemy.anims.currentAnim.key !== atkKey) return;
+                      }
+                      const w = Math.max(12, Math.floor(enemy.attackWidth * 1.1)), h = Math.max(12, Math.floor(enemy.attackHeight * 1.1));
+                      const ox = enemy.flipX ? -reach : reach;
+                      // Use enemy hurtbox + target mid-height alignment
+                      const hbE = this.hurtboxOf(enemy, 'enemy');
+                      const handY = Math.round(hbE.y + hbE.height * 0.48);
+                      const handX = Math.round(enemy.x + ox);
+                      const pb = this.hurtboxOf(this.alex,'player');
+                      const pb2 = (p2 && p2.active) ? this.hurtboxOf(p2,'player') : null;
+                      const tgtHb = (tgtIsP2 && pb2) ? pb2 : pb;
+                      const tgtMidY = Math.round(tgtHb.y + tgtHb.height * 0.45);
+                      const yCenter = Math.round((handY*0.5) + (tgtMidY*0.5));
+                      const hitRect = new Phaser.Geom.Rectangle(handX - w/2, yCenter - h/2, w, h);
+                      enemy._lastAtkRect = hitRect; enemy._lastAtkTs = time;
+                      const dir = enemy.flipX?-1:1;
+                      if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
+                        enemy._attackHitApplied = true; hurtPlayer(10, 10, dir);
+                      } else if (pb2 && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb2)) {
+                        enemy._attackHitApplied = true; hurtP2(10, 10, dir);
+                      }
+                    } catch(_) {}
+                  });
+                } catch(_) {}
+                enemy.attackCooldown = time + (enemy.attackCadence||900);
               }
             }
           }
@@ -3934,10 +4100,20 @@
             }
           }
           
-          const dx = this.alex.x - b.x;
+          // Choose target between P1 and P2 (if present) by nearest feet distance
+          const bFeetY_now = this.feetYOf(b, 'boss');
+          const p1FeetX = this.alex.x, p1FeetY = this.alexBaseY;
+          const p2 = (this.net?.p2 && this.net.clientPresent) ? this.net.p2 : null;
+          const p2FeetX = p2 ? p2.x : 0;
+          const p2FeetY = p2 ? (this.net.p2BaseY !== undefined ? this.net.p2BaseY : this.feetYOf(p2,'player')) : 0;
+          const d1 = Math.hypot(p1FeetX - b.x, p1FeetY - bFeetY_now);
+          const d2 = p2 ? Math.hypot(p2FeetX - b.x, p2FeetY - bFeetY_now) : Infinity;
+          const targIsP2 = !!(p2 && d2 <= d1 * 0.98); // small bias to pick P2 when similar
+          const tx = targIsP2 ? p2FeetX : p1FeetX;
+          const ty = targIsP2 ? p2FeetY : p1FeetY;
+          const dx = tx - b.x;
           // Compare lane alignment using feet position (account for bottom padding)
-          const bFeetY = this.feetYOf(b, 'boss');
-          const dy = (this.alexBaseY - bFeetY);
+          const dy = (ty - bFeetY_now);
           
           // Depth sort by Y with a tie-break favoring the player so she isn't visually covered
           try {
@@ -3991,9 +4167,9 @@
             // Keep boss within visible bounds
             b.x = Phaser.Math.Clamp(b.x, 40, (this.bg.displayWidth || 800) - 40);
 
-            // Vertical alignment (lane matching) using feet alignment
+            // Vertical alignment (lane matching) using feet baseline
             if (!alignedY) {
-              const targetY = this.alexBaseY + (b._footPadScaled||0);
+              const targetY = ty + (b._footPadScaled||0);
               // snap when close; otherwise move faster to line up
               const dyy = targetY - b.y;
               if (Math.abs(dyy) <= 1) {
@@ -4030,6 +4206,42 @@
             } catch(_) {}
 
           } else {
+            // If extremely close and not already attacking, force a jab
+            if (!b._attacking && distX < Math.max(6, (b.displayWidth||20)*0.12) && time >= (b.attackCooldown||0)) {
+              b._attacking = true; b._attackHitApplied = false;
+              const pref = this.bossAnimPrefix || 'boss';
+              const atkKey = `${pref}-attack`;
+              if (this.anims.exists(atkKey)) {
+                b.play(atkKey);
+                b.once(`animationcomplete-${atkKey}`, () => { b._attacking = false; b._attackHitApplied = false; });
+              } else {
+                b.setTint(0xffcccc); this.time.delayedCall(220, ()=>{ try { b.clearTint(); } catch(_) {} b._attacking=false; b._attackHitApplied=false; });
+              }
+              // Apply hit shortly after
+              this.time.delayedCall(180, ()=>{
+                try {
+                  if (!b || !b.active || b._attackHitApplied) return;
+                  const w = Math.max(12, Math.floor((b.attackWidth || 22) * 0.95)), h = Math.max(12, Math.floor((b.attackHeight || 20) * 0.95));
+                  const ox = b.flipX ? -reach*0.7 : reach*0.7; // shorter jab
+                  const hbB = this.hurtboxOf(b, 'boss');
+                  const hbT = this.hurtboxOf(targIsP2? p2 : this.alex,'player');
+                  const handY = Math.round(hbB.y + hbB.height * 0.45);
+                  const targetY = Math.round(hbT.y + hbT.height * 0.45);
+                  const yCenter = Math.round((handY*0.5) + (targetY*0.5));
+                  const handX = Math.round(b.x + ox);
+                  const hitRect = new Phaser.Geom.Rectangle(handX - w/2, yCenter - h/2, w, h);
+                  b._lastAtkRect = hitRect; b._lastAtkTs = time;
+                  const pb1 = this.hurtboxOf(this.alex,'player');
+                  const pb2 = p2 ? this.hurtboxOf(p2,'player') : null;
+                  if (!targIsP2 && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb1)) {
+                    b._attackHitApplied = true; const dir = b.flipX ? -1 : 1; hurtPlayer(12, 10, dir);
+                  } else if (targIsP2 && pb2 && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb2)) {
+                    b._attackHitApplied = true; const dir = b.flipX ? -1 : 1; hurtP2(12, 10, dir);
+                  }
+                } catch(_) {}
+              });
+              b.attackCooldown = time + Math.max(400, (b.attackCadence||900) * 0.6);
+            }
             // In range: idle/attack
             try {
               const pref = this.bossAnimPrefix || 'boss';
@@ -4059,10 +4271,12 @@
 
             // Attack when cooldown allows and not already attacking
             // Only attempt an attack when aligned and at a reasonable distance band (not overlapping)
-            // Wider near band for Necro so she actually chooses to swing
-            const nearBandMin = (this.bossAnimPrefix==='boss2') ? Math.max(0, reach * 0.10) : Math.max(8, reach * 0.35);
-            const nearBandMax = (this.bossAnimPrefix==='boss2') ? (reach + 24) : (reach + 4);
+            // Broad near band so boss will swing even at point-blank range
+    const nearBandMin = 0;
+    const nearBandMax = reach + 18;
             if (!b._attacking && alignedY && distX >= nearBandMin && distX <= nearBandMax && time >= (b.attackCooldown || 0)) {
+              // Face the player before starting the swing
+              b.setFlipX(dx < 0);
               try {
                 const pref = this.bossAnimPrefix || 'boss';
                 const atkKey = `${pref}-attack`;
@@ -4075,7 +4289,8 @@
                   const adv = Math.min(2.0, Math.max(0.5, (distX - (reach*0.6)) * 0.05));
                   const dir = Math.sign(dx);
                   const minNoOverlap = Math.max(10, (b.displayWidth ? b.displayWidth * 0.18 : 10));
-                  if (Math.abs((b.x + adv*dir) - this.alex.x) > minNoOverlap) b.x += adv * dir;
+      const tx2 = targIsP2 ? p2FeetX : p1FeetX;
+      if (Math.abs((b.x + adv*dir) - tx2) > minNoOverlap) b.x += adv * dir;
                 } else {
                   // Fallback: flash and briefly pause as a "swing" even without an anim
                   b._attacking = true; b._attackHitApplied = false;
@@ -4099,22 +4314,32 @@
 
                   const w = Math.max(12, Math.floor((b.attackWidth || 22) * 0.95)), h = Math.max(12, Math.floor((b.attackHeight || 20) * 0.95));
                   const ox = b.flipX ? -reach : reach;
-                  // Place rectangle near hand/weapon height using boss hurtbox center
+                  // Place rectangle near hand/weapon height, but ensure vertical alignment to player's lane
                   const hbB = this.hurtboxOf(b, 'boss');
+                  const hbT = this.hurtboxOf(targIsP2? p2 : this.alex,'player');
                   const handY = Math.round(hbB.y + hbB.height * 0.45);
+                  const targetY = Math.round(hbT.y + hbT.height * 0.45);
+                  // Nudge toward the player's mid-height so swings land when lanes match
+                  const yCenter = Math.round((handY*0.5) + (targetY*0.5));
                   const handX = Math.round(b.x + ox);
-                  const hitRect = new Phaser.Geom.Rectangle(handX - w/2, handY - h/2, w, h);
+                  const hitRect = new Phaser.Geom.Rectangle(handX - w/2, yCenter - h/2, w, h);
                   // Expose for debug overlay
                   b._lastAtkRect = hitRect; b._lastAtkTs = time;
-                  const pb = this.hurtboxOf(this.alex,'player');
+                  const pb1 = this.hurtboxOf(this.alex,'player');
+                  const pb2b = p2 ? this.hurtboxOf(p2,'player') : null;
                   const bFeetNow = this.feetYOf(b,'boss');
-                  if (Math.abs(this.alexBaseY - bFeetNow) <= laneTol && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
+                  const laneOkP1 = Math.abs(p1FeetY - bFeetNow) <= laneTol;
+                  const laneOkP2 = p2 ? Math.abs(p2FeetY - bFeetNow) <= laneTol : false;
+                  if (!targIsP2 && laneOkP1 && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb1)) {
                     b._attackHitApplied = true;
-                    // Push player back on successful hit and add a tiny shake
                     const dir = b.flipX ? -1 : 1;
-                    this.alex.x += dir * 4;
-                    this.cameras.main.shake(90, 0.004);
+                    this.alex.x += dir * 4; this.cameras.main.shake(90, 0.004);
                     hurtPlayer(14, 12, dir);
+                  } else if (targIsP2 && laneOkP2 && pb2b && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb2b)) {
+                    b._attackHitApplied = true;
+                    const dir = b.flipX ? -1 : 1;
+                    p2.x += dir * 4; this.cameras.main.shake(90, 0.004);
+                    hurtP2(14, 12, dir);
                   }
                 } catch(_) {}
               });
@@ -4240,55 +4465,62 @@
         } catch(_) {}
 
         // Debug hitbox overlay drawing
-        if (this.debugHitboxes) {
+        // Also show the player's last attack rect when the dev tuner is enabled, even if debug overlay is off
+        if (this.debugHitboxes || (this.devHitboxTune?.enabled && this._lastPlayerHitRect)) {
           if (!this._hitG || !this._hitG.active) {
             try { this._hitG && this._hitG.destroy(); } catch(_) {}
             this._hitG = this.add.graphics().setDepth(5000);
           }
           const g = this._hitG; g.clear();
-          // Player hurtbox (in lieu of full sprite bounds)
+          // Player hurtbox and other overlays only when full debug overlay is on
+          if (this.debugHitboxes) {
+            try {
+              const pb = this.hurtboxOf(this.alex,'player');
+              g.lineStyle(1, 0x00ff00, 1); g.strokeRect(pb.x, pb.y, pb.width, pb.height);
+              // P2
+              if (this.net && this.net.p2) {
+                const p2b = this.hurtboxOf(this.net.p2,'player');
+                g.lineStyle(1, 0x66ccff, 1); g.strokeRect(p2b.x, p2b.y, p2b.width, p2b.height);
+              }
+            } catch(_) {}
+          }
+          // Player attack rect (recent) is always drawn when tuner is enabled or full debug is on
           try {
-            const pb = this.hurtboxOf(this.alex,'player');
-            g.lineStyle(1, 0x00ff00, 1); g.strokeRect(pb.x, pb.y, pb.width, pb.height);
-            // P2
-            if (this.net && this.net.p2) {
-              const p2b = this.hurtboxOf(this.net.p2,'player');
-              g.lineStyle(1, 0x66ccff, 1); g.strokeRect(p2b.x, p2b.y, p2b.width, p2b.height);
-            }
-            // Player attack rect (recent)
             if (this._lastPlayerHitRect && (this.time.now - (this._lastPlayerHitRect.ts||0) < 320)) {
               const r = this._lastPlayerHitRect.rect; g.lineStyle(1, 0xff0000, 1); g.strokeRect(r.x, r.y, r.width, r.height);
             }
           } catch(_) {}
-          // Enemy bounds and last attack
-          try {
-            this.enemies.forEach(e => {
-              if (!e || e._defeated) return;
-              const eb = this.hurtboxOf(e,'enemy'); g.lineStyle(1, 0xffff00, 1); g.strokeRect(eb.x, eb.y, eb.width, eb.height);
-              if (e._lastAtkRect && (time - (e._lastAtkTs||0) < 600)) {
-                const r = e._lastAtkRect; g.lineStyle(1, 0xff9900, 1); g.strokeRect(r.x, r.y, r.width, r.height);
+          if (this.debugHitboxes) {
+            // Enemy bounds and last attack
+            try {
+              this.enemies.forEach(e => {
+                if (!e || e._defeated) return;
+                const eb = this.hurtboxOf(e,'enemy'); g.lineStyle(1, 0xffff00, 1); g.strokeRect(eb.x, eb.y, eb.width, eb.height);
+                if (e._lastAtkRect && (time - (e._lastAtkTs||0) < 600)) {
+                  const r = e._lastAtkRect; g.lineStyle(1, 0xff9900, 1); g.strokeRect(r.x, r.y, r.width, r.height);
+                }
+              });
+            } catch(_) {}
+            // Boss bounds and last attack
+            try {
+              if (this.boss && !this.boss._defeated) {
+                const bb = this.hurtboxOf(this.boss,'boss'); g.lineStyle(1, 0x00ffff, 1); g.strokeRect(bb.x, bb.y, bb.width, bb.height);
+                if (this.boss._lastAtkRect && (time - (this.boss._lastAtkTs||0) < 700)) {
+                  const r = this.boss._lastAtkRect; g.lineStyle(1, 0x00ccff, 1); g.strokeRect(r.x, r.y, r.width, r.height);
+                }
               }
-            });
-          } catch(_) {}
-          // Boss bounds and last attack
-          try {
-            if (this.boss && !this.boss._defeated) {
-              const bb = this.hurtboxOf(this.boss,'boss'); g.lineStyle(1, 0x00ffff, 1); g.strokeRect(bb.x, bb.y, bb.width, bb.height);
-              if (this.boss._lastAtkRect && (time - (this.boss._lastAtkTs||0) < 700)) {
-                const r = this.boss._lastAtkRect; g.lineStyle(1, 0x00ccff, 1); g.strokeRect(r.x, r.y, r.width, r.height);
-              }
-            }
-          } catch(_) {}
-          // Lane guides: cyan bottom, yellow top
-          try {
-            const { ch } = getSize();
-            const top = Math.round(ch * (this._roadTopFrac || this.ROAD_TOP_PCT));
-            const bot = Math.round(ch * (this._roadBottomFrac || 0.96));
-            g.lineStyle(1, 0x00ffff, 0.6);
-            g.beginPath(); g.moveTo(0, bot + 0.5); g.lineTo(this.bg.displayWidth || 800, bot + 0.5); g.strokePath();
-            g.lineStyle(1, 0xffff00, 0.4);
-            g.beginPath(); g.moveTo(0, top + 0.5); g.lineTo(this.bg.displayWidth || 800, top + 0.5); g.strokePath();
-          } catch(_) {}
+            } catch(_) {}
+            // Lane guides: cyan bottom, yellow top
+            try {
+              const { ch } = getSize();
+              const top = Math.round(ch * (this._roadTopFrac || this.ROAD_TOP_PCT));
+              const bot = Math.round(ch * (this._roadBottomFrac || 0.96));
+              g.lineStyle(1, 0x00ffff, 0.6);
+              g.beginPath(); g.moveTo(0, bot + 0.5); g.lineTo(this.bg.displayWidth || 800, bot + 0.5); g.strokePath();
+              g.lineStyle(1, 0xffff00, 0.4);
+              g.beginPath(); g.moveTo(0, top + 0.5); g.lineTo(this.bg.displayWidth || 800, top + 0.5); g.strokePath();
+            } catch(_) {}
+          }
         } else {
           // Clean up graphics if disabled
           if (this._hitG) { try { this._hitG.clear(); this._hitG.destroy(); } catch(_) {} this._hitG = null; }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Release Notes - Baden City Ransom v2.2.1</title>
+  <title>Release Notes - Baden City Ransom v2.2.2</title>
   <style>
     :root { --bg:#0b0d12; --fg:#e7f1ff; --accent:#ffd166; --muted:#9aa3ad; --success:#4caf50; --warning:#ff9800; }
     html, body { height: 100%; }
@@ -51,9 +51,9 @@
 <body>
   <header>
     <h1>Baden City Ransom</h1>
-  <span class="version-badge">v2.2.1</span>
+  <span class="version-badge">v2.2.2</span>
   <p class="date">Released September 5, 2025</p>
-  <p>Hotfix: client-join freeze, AI stability; co‑op sync retained</p>
+  <p>Client red attack box with tuner; boss attacks P2 in co‑op.</p>
   </header>
 
   <main>
@@ -62,14 +62,13 @@
       <p>Co‑op now feels solid: both players see the same attacks in sync, boss visuals show up on clients, and a jump‑related stutter on clients has been fixed.</p>
     </div>
 
-  <h2>🕹️ Co‑op Netplay & Sync</h2>
+  <h2>🕹️ Co‑op & Debug Tuning</h2>
     
-    <h3>Key Fixes</h3>
+    <h3>Key Updates</h3>
     <ul>
-      <li><strong>Attack Sync:</strong> Host snapshots now include P1/P2 animation keys and attacking flags so clients mirror swings</li>
-      <li><strong>Client Stutter Fix:</strong> Jump physics are host‑only; clients follow snapshots to eliminate jitter</li>
-      <li><strong>Authority Cleanup:</strong> Client inputs don’t trigger host player locally; smoother P2 movement and animations</li>
-      <li><strong>Boss Visibility:</strong> Boss state mirrored to clients (visuals only; AI stays host‑side)</li>
+      <li><strong>Client Red Attack Box:</strong> Hitbox Tuner now shows the player red attack rectangle on clients without enabling the full Visual Debug overlay</li>
+      <li><strong>Co‑op Boss Targeting:</strong> Miller picks P1 or P2 based on proximity and lane and damages the chosen player</li>
+      <li><strong>Visual Debug Separation:</strong> Hurtboxes/enemy debug still gated by Visual Debug; tuner-only shows just the red player rect</li>
     </ul>
 
     <h3>Debug & Development</h3>
@@ -81,12 +80,10 @@
 
   <h2>🎨 Visual & UI Improvements</h2>
 
-    <h3>Enhanced Graphics</h3>
+    <h3>Recent</h3>
     <ul>
-  <li><strong>Title Screen:</strong> Scaled up ~15% with safe headroom</li>
-      <li><strong>Sprite Processing:</strong> Added magenta color-key transparency conversion for cleaner sprite rendering</li>
-  <li><strong>Boss Sprites:</strong> 3px bottom padding to prevent feet clipping</li>
-  <li><strong>Fallbacks:</strong> Improved handling of missing textures with robust placeholder systems</li>
+      <li><strong>Co‑op Hotfixes:</strong> Client‑join freeze resolution and AI stability (2.2.1)</li>
+      <li><strong>Earlier:</strong> Title screen scaling and sprite transparency cleanup (2.1.0)</li>
     </ul>
 
   <h2>🐛 Bug Fixes & Stability</h2>
@@ -123,10 +120,7 @@
       <li><strong>Performance Monitoring:</strong> Optimized hit detection calculations for better frame rates</li>
     </ul>
 
-    <div class="warning">
-      <h3>⚠️ Breaking Changes</h3>
-      <p>The combat system has been completely rewritten. If you have any custom modifications to hit detection, they may need to be updated to work with the new distance-based system.</p>
-    </div>
+  <!-- No breaking changes in 2.2.2 -->
 
     <h2>📝 Technical Details</h2>
 
@@ -147,7 +141,7 @@
 
     <div class="highlight">
       <h3>🚀 Play Now</h3>
-      <p>Try synchronized co‑op attacks, smooth animations, and boss visuals on client.</p>
+      <p>Use the tuner to align the sword-tip hitbox visually on both host and client; fight Miller who now targets both players.</p>
       <div style="text-align: center; margin-top: 20px;">
         <a class="btn btn-primary" href="/game/">Launch Game</a>
         <a class="btn" href="/">Back to Home</a>
@@ -168,7 +162,7 @@
   </main>
 
   <footer class="footer">
-    <p>Baden City Ransom v2.2.0 - Built with ❤️ and modern web technology</p>
+    <p>Baden City Ransom v2.2.2 - Built with ❤️ and modern web technology</p>
     <p>
       <a href="https://github.com/thecdrz/Baden-City-Ransom" target="_blank" rel="noopener">GitHub Repository</a> | 
       <a href="https://github.com/thecdrz/Baden-City-Ransom/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Full Changelog</a>
