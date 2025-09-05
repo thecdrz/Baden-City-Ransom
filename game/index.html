@@ -3457,6 +3457,8 @@
           // Client: rely on latest snapshot (already applied) for Y; no local gravity.
           this.alex.y = Math.round(this.alexBaseY + (this.alex._footPadScaled||0) + this.alexJumpZ);
         }
+        // Grounded flag for use below (animations, footsteps) on both host and client
+        const onGround = (this.alexJumpZ === 0);
         
   // Animation handling (host only). On clients, animations mirror snapshot data.
         if (this.net?.role !== 'client') {
@@ -3478,7 +3480,7 @@
   try { this.updateBuffHUD && this.updateBuffHUD(); } catch(_) {}
 
         // Quick footsteps while running (only when actually moving fast horizontally)
-        try {
+  try {
           const leftHeld = (this.cursors.left.isDown || padLeft);
           const rightHeld = (this.cursors.right.isDown || padRight);
           const horizSpeed = Math.abs((leftHeld?1:0) - (rightHeld?1:0)) * (this.runState.isRunning ? 3.8 : 2);
@@ -3745,7 +3747,11 @@
         const hurtP2 = (dmg, knock=8, dir=1) => {
           try {
             const p2 = this.net?.p2; if (!p2 || !p2.active) return;
+            const nowMs = time;
+            this.net.p2InvulUntil = this.net.p2InvulUntil || 0;
+            if (nowMs < this.net.p2InvulUntil) return; // i-frames for P2
             p2.health = Math.max(0, (p2.health||100) - dmg);
+            this.net.p2InvulUntil = nowMs + 600;
             p2.setTintFill(0xffff77); this.time.delayedCall(100, () => p2.clearTint());
             p2.x += (dir<0?-1:1) * knock;
             if (p2.health === 0 && !p2._defeated) { p2._defeated = true; p2.setAlpha(0.25); this.time.delayedCall(600, ()=>{ try { p2.destroy(); } catch(_) {} this.net.p2=null; }); }
@@ -3753,21 +3759,41 @@
         };
         
   if (!this.net || this.net.role === 'host') {
+  // Co-op aware engagement: assign enemies to P1/P2 with attacker limits
+  try {
+    const p2 = this.net?.p2 && this.net.p2.active ? this.net.p2 : null;
+    const enemiesActive = (this.enemies||[]).filter(e => e && e.active && !e._defeated);
+    const feetEnemy = (e) => this.feetYOf(e,'enemy');
+    const distToFeet = (sx, sy, tx, ty) => { const dx = tx - sx, dy = ty - sy; return Math.hypot(dx, dy); };
+    const t1 = { x: this.alex.x, y: this.alexBaseY };
+    const t2 = p2 ? { x: p2.x, y: p2.y } : null;
+    // Decide preferred target per enemy (nearest)
+    enemiesActive.forEach(e => {
+      const d1 = distToFeet(e.x, feetEnemy(e), t1.x, t1.y);
+      const d2 = t2 ? distToFeet(e.x, feetEnemy(e), t2.x, t2.y) : Infinity;
+      e._tgt = (t2 && d2 < d1) ? 'p2' : 'p1';
+      e._dist = Math.min(d1, d2);
+    });
+    // Sort within each target by distance
+    const g1 = enemiesActive.filter(e=>e._tgt==='p1').sort((a,b)=>a._dist-b._dist);
+    const g2 = enemiesActive.filter(e=>e._tgt==='p2').sort((a,b)=>a._dist-b._dist);
+    const maxAtkPerTarget = 2; // cap simultaneous attackers per player
+    g1.forEach((e,i)=> e._engagedAttack = (i < maxAtkPerTarget));
+    g2.forEach((e,i)=> e._engagedAttack = (i < maxAtkPerTarget));
+  } catch(_) {}
+
   this.enemies.forEach((enemy, index) => {
           if (!enemy || enemy._defeated) return;
           
           // Pick nearest target (P1 or P2)
           const p2 = this.net?.p2 && this.net.p2.active ? this.net.p2 : null;
-          const distTo = (sx,sy,tx,ty) => { const dx = tx - sx, dy = ty - sy; return Math.hypot(dx, dy); };
-          const feetEnemy = this.feetYOf(enemy,'enemy');
-          const d1 = distTo(enemy.x, feetEnemy, this.alex.x, this.alexBaseY);
-          const d2 = p2 ? distTo(enemy.x, feetEnemy, p2.x, p2.y) : Infinity;
-          const tgtIsP2 = d2 < d1;
+          const feetEnemyY = this.feetYOf(enemy,'enemy');
+          const tgtIsP2 = (enemy._tgt === 'p2') && !!p2;
           const tgtX = tgtIsP2 ? (p2?.x||this.alex.x) : this.alex.x;
           const tgtY = tgtIsP2 ? (p2?.y||this.alexBaseY) : this.alexBaseY;
           const dx = tgtX - enemy.x;
           // Compare using feet baselines for consistent lane alignment
-          const dy = (tgtY - this.feetYOf(enemy,'enemy'));
+          const dy = (tgtY - feetEnemyY);
           const distX = Math.abs(dx);
           const distY = Math.abs(dy);
           const totalDist = Math.sqrt(dx*dx + dy*dy);
@@ -3787,6 +3813,11 @@
           
           const alignedY = distY <= 20; // increase tolerance for easier alignment
           const reach = enemy.attackReach;
+          // Basic separation from nearby allies to avoid clumping
+          try {
+            const allies = (this.enemies||[]).filter(e=>e&&e!==enemy&&!e._defeated&&e.active && Math.abs(e.x-enemy.x)<18 && Math.abs(this.feetYOf(e,'enemy')-feetEnemyY)<24);
+            if (allies.length>0) enemy.x += (Math.random()<0.5?-1:1) * 0.35;
+          } catch(_) {}
           
           // Decide between approach vs idle/attack
           if (distX > reach + 1 || !alignedY) {
@@ -3833,9 +3864,19 @@
             }
             if (enemy.anims.currentAnim?.key !== `${enemy.type}-walk`) enemy.play(`${enemy.type}-walk`);
           } else {
-            if (enemy.anims.currentAnim?.key !== `${enemy.type}-idle`) enemy.play(`${enemy.type}-idle`);
-            // attempt attack if cooldown over
-            if (time >= (enemy.attackCooldown||0)) {
+            // Non-engaged enemies circle/feint; engaged ones may attack
+            const engaged = !!enemy._engagedAttack;
+            if (!engaged) {
+              // Circle/feint to create space
+              const circleOffset = Math.sin(time * 0.003 + index) * 10;
+              enemy.y += circleOffset * 0.09;
+              if (enemy.anims.currentAnim?.key !== `${enemy.type}-idle`) enemy.play(`${enemy.type}-idle`);
+              // Small lateral shuffle
+              enemy.x += Math.sign(dx) * 0.25;
+            } else {
+              if (enemy.anims.currentAnim?.key !== `${enemy.type}-idle`) enemy.play(`${enemy.type}-idle`);
+              // attempt attack if cooldown over
+              if (time >= (enemy.attackCooldown||0)) {
               // Attack hitbox at the hand/weapon height, offset forward by reach
               const w = Math.max(12, Math.floor(enemy.attackWidth * 1.1)), h = Math.max(12, Math.floor(enemy.attackHeight * 1.1));
               const ox = enemy.flipX ? -reach : reach;
@@ -3855,6 +3896,7 @@
                 hurtP2(10, 10, dir);
               }
               enemy.attackCooldown = time + enemy.attackCadence;
+              }
             }
           }
   });
@@ -4032,6 +4074,7 @@
                   // Tiny micro-advance into range at start of swing without overlapping
                   const adv = Math.min(2.0, Math.max(0.5, (distX - (reach*0.6)) * 0.05));
                   const dir = Math.sign(dx);
+                  const minNoOverlap = Math.max(10, (b.displayWidth ? b.displayWidth * 0.18 : 10));
                   if (Math.abs((b.x + adv*dir) - this.alex.x) > minNoOverlap) b.x += adv * dir;
                 } else {
                   // Fallback: flash and briefly pause as a "swing" even without an anim

@@ -2,6 +2,17 @@
 
 All notable changes to Baden City Ransom will be documented in this file.
 
+## [v2.2.1] - 2025-09-05
+
+### 🛠️ Hotfix
+
+#### Fixed
+- Host freeze when a client joins: undefined `onGround` in update loop now defined for both host and client paths
+- Minor AI stability (brace fix) and ensured boss overlap guard is initialized before use
+
+#### Notes
+- Co‑op AI engagement limits and circling behavior from 2.2.0 remain; this release focuses on stability
+
 ## [v2.1.0] - 2025-09-01
 
 ### 🕹️ Co‑op Netplay & Sync
