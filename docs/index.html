@@ -30,15 +30,15 @@
   <header>
     <h1>Baden City Ransom</h1>
     <p>Retro beat 'em up in Phaser. Best in Chrome/Edge desktop.</p>
-  <p class="banner">🎉 First working combat build — boss fight enabled, hitboxes improved.</p>
+  <p class="banner">🕹️ v2.2.0: Co‑op sync, stutter fix, boss visuals on client. See Release Notes!</p>
   </header>
   <main>
     <div class="grid">
       <div class="card">
         <h3>🎮 Play the Game</h3>
         <div class="body">
-    <p>Experience the improved combat with reliable hit detection, better separation, and clearer debug tools.</p>
-    <p><strong>Latest updates:</strong> Fixed drift, tuned attack windows, added boss HP bar, clarified hitboxes.</p>
+  <p>Experience smooth co‑op: both players see the same attacks, boss visuals show up for all, and jump stutter is gone.</p>
+  <p><strong>Latest updates:</strong> Co‑op net sync, animation mirroring, boss state for clients, jump stutter fix, lobby/flow polish.</p>
           <p class="note">Controls: Arrows move; <span class="kbd">A</span> punch; <span class="kbd">S</span> kick; <span class="kbd">D</span> jump; <span class="kbd">ESC</span>/<span class="kbd">P</span> pause; <span class="kbd">M</span> mute.</p>
         </div>
   <div class="footer"><a class="btn" href="../game/">Launch</a></div>
@@ -47,18 +47,17 @@
       <div class="card">
         <h3>🆕 What’s New</h3>
         <div class="body">
-          <p><strong>Combat System:</strong></p>
+          <p><strong>Co‑op & Visuals:</strong></p>
           <ul>
-            <li>Reliable player vs boss hits (larger reach/boxes and timing windows)</li>
-            <li>Separation fix so the player is never pushed backward</li>
-            <li>Boss HP bar toggle in Dev panel (auto-on when boss spawns)</li>
-            <li>Debug hitbox colors: yellow=player, magenta=boss body, purple=boss attack</li>
+            <li>Both players see the same attacks and animations in sync</li>
+            <li>Boss visuals now show up for clients (AI stays host‑side)</li>
+            <li>Jump stutter on client fixed (host-only jump physics)</li>
+            <li>Lobby, story, and flow polish for 2P co‑op</li>
           </ul>
-          <p><strong>Visual/UX:</strong></p>
+          <p><strong>Combat/UX:</strong></p>
           <ul>
-            <li>Title screen scaled up ~15% with safe headroom</li>
-            <li>Per-frame sprite transparency cleanup for NES-style magenta</li>
-            <li>Fewer 404s via CDN-only engine and simplified asset names</li>
+            <li>Reliable hit detection, separation, and debug tools</li>
+            <li>Title screen scaled up, sprite transparency cleanup</li>
           </ul>
         </div>
         <div class="footer"><a class="btn" href="https://github.com/thecdrz/Baden-City-Ransom/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Full Changelog</a></div>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Release Notes - Baden City Ransom v2.1.0</title>
+  <title>Release Notes - Baden City Ransom v2.2.0</title>
   <style>
     :root { --bg:#0b0d12; --fg:#e7f1ff; --accent:#ffd166; --muted:#9aa3ad; --success:#4caf50; --warning:#ff9800; }
     html, body { height: 100%; }
@@ -51,25 +51,25 @@
 <body>
   <header>
     <h1>Baden City Ransom</h1>
-    <span class="version-badge">v2.1.0</span>
-    <p class="date">Released September 1, 2025</p>
-    <p>Major Combat System Overhaul & UI Improvements</p>
+  <span class="version-badge">v2.2.0</span>
+  <p class="date">Released September 4, 2025</p>
+  <p>Co‑op Netplay Sync, Stutter Fixes, Boss Visibility</p>
   </header>
 
   <main>
     <div class="highlight">
       <h3>🎉 What's New</h3>
-      <p>This release represents a major overhaul of the combat system, fixing critical issues where players couldn't damage each other and implementing comprehensive debugging tools for ongoing development.</p>
+      <p>Co‑op now feels solid: both players see the same attacks in sync, boss visuals show up on clients, and a jump‑related stutter on clients has been fixed.</p>
     </div>
 
-    <h2>🎮 Combat System Overhaul</h2>
+  <h2>🕹️ Co‑op Netplay & Sync</h2>
     
-    <h3>Major Fixes</h3>
+    <h3>Key Fixes</h3>
     <ul>
-      <li><strong>Fixed Hit Detection:</strong> Complete rewrite of combat mechanics using distance-based calculations instead of unreliable rectangle intersection</li>
-      <li><strong>Player vs Boss Combat:</strong> Miller boss now properly damages the player and takes damage from player attacks</li>
-      <li><strong>Character Separation:</strong> Added intelligent separation logic to prevent characters from getting stuck overlapping during fights</li>
-      <li><strong>Enhanced Knockback:</strong> Improved invulnerability frames (extended to 700ms) and knockback mechanics for smoother combat flow</li>
+      <li><strong>Attack Sync:</strong> Host snapshots now include P1/P2 animation keys and attacking flags so clients mirror swings</li>
+      <li><strong>Client Stutter Fix:</strong> Jump physics are host‑only; clients follow snapshots to eliminate jitter</li>
+      <li><strong>Authority Cleanup:</strong> Client inputs don’t trigger host player locally; smoother P2 movement and animations</li>
+      <li><strong>Boss Visibility:</strong> Boss state mirrored to clients (visuals only; AI stays host‑side)</li>
     </ul>
 
     <h3>Debug & Development</h3>
@@ -79,24 +79,24 @@
       <li><strong>Debug Infrastructure:</strong> Enhanced development tools for troubleshooting combat issues</li>
     </ul>
 
-    <h2>🎨 Visual & UI Improvements</h2>
+  <h2>🎨 Visual & UI Improvements</h2>
 
     <h3>Enhanced Graphics</h3>
     <ul>
-      <li><strong>Larger Title Screen:</strong> Increased size by 15% (scale factor 0.99x → 1.14x) for better visibility</li>
+  <li><strong>Title Screen:</strong> Scaled up ~15% with safe headroom</li>
       <li><strong>Sprite Processing:</strong> Added magenta color-key transparency conversion for cleaner sprite rendering</li>
-      <li><strong>Boss Sprite Enhancement:</strong> Added 3px bottom padding to prevent feet clipping and improve visual quality</li>
-      <li><strong>Better Fallbacks:</strong> Improved handling of missing textures with robust placeholder systems</li>
+  <li><strong>Boss Sprites:</strong> 3px bottom padding to prevent feet clipping</li>
+  <li><strong>Fallbacks:</strong> Improved handling of missing textures with robust placeholder systems</li>
     </ul>
 
-    <h2>🐛 Bug Fixes & Stability</h2>
+  <h2>🐛 Bug Fixes & Stability</h2>
 
     <h3>Stability Improvements</h3>
     <ul>
-      <li><strong>Defensive Coding:</strong> Added comprehensive null checks and error handling throughout the codebase</li>
-      <li><strong>Scene Initialization:</strong> Enhanced scene startup with proper verification and fallback systems</li>
-      <li><strong>Pause System:</strong> Fixed null reference errors in pause key handling</li>
-      <li><strong>Animation System:</strong> Improved resilience against missing animation frames</li>
+  <li><strong>Defensive Coding:</strong> Null checks and error handling throughout</li>
+  <li><strong>Scene Initialization:</strong> Better startup with verification and fallback systems</li>
+  <li><strong>Pause System:</strong> Fixed null reference errors in pause key handling</li>
+  <li><strong>Animation System:</strong> Improved resilience against missing animation frames</li>
     </ul>
 
     <h3>Error Handling</h3>
@@ -147,7 +147,7 @@
 
     <div class="highlight">
       <h3>🚀 Play Now</h3>
-      <p>Experience the enhanced combat system and visual improvements!</p>
+      <p>Try synchronized co‑op attacks, smooth animations, and boss visuals on client.</p>
       <div style="text-align: center; margin-top: 20px;">
         <a class="btn btn-primary" href="/game/">Launch Game</a>
         <a class="btn" href="/">Back to Home</a>
@@ -168,7 +168,7 @@
   </main>
 
   <footer class="footer">
-    <p>Baden City Ransom v2.1.0 - Built with ❤️ and modern web technology</p>
+    <p>Baden City Ransom v2.2.0 - Built with ❤️ and modern web technology</p>
     <p>
       <a href="https://github.com/thecdrz/Baden-City-Ransom" target="_blank" rel="noopener">GitHub Repository</a> | 
       <a href="https://github.com/thecdrz/Baden-City-Ransom/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Full Changelog</a>

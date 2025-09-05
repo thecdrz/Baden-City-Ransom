@@ -61,10 +61,169 @@
   /* Hidden on title screen; revealed on game start */
   display: none;
     }
+
+    /* Responsive adjustments for different screen sizes */
+    @media (max-width: 768px) {
+      /* Mobile/tablet adjustments */
+      #hud {
+        font-size: 20px;
+        padding: 0 15px;
+        min-height: 60px; /* Ensure minimum touch target */
+      }
+      
+      #dialogue {
+        font-size: 18px;
+        padding: 10px 15px;
+        min-height: 60px; /* Ensure minimum touch target */
+      }
+      
+      #canvasWrap {
+        height: calc(100vh - 120px); /* Account for fixed min-heights */
+      }
+    }
+
+    @media (max-width: 480px) {
+      /* Small mobile devices */
+      #hud {
+        font-size: 16px;
+        padding: 0 10px;
+        min-height: 50px;
+      }
+      
+      #dialogue {
+        font-size: 14px;
+        padding: 8px 10px;
+        min-height: 50px;
+      }
+      
+      #canvasWrap {
+        height: calc(100vh - 100px);
+      }
+    }
+
+    @media (max-height: 600px) {
+      /* Short screens (landscape mobile, small tablets) */
+      #hud {
+        font-size: 18px;
+        padding: 0 15px;
+        min-height: 45px;
+      }
+      
+      #dialogue {
+        font-size: 16px;
+        padding: 8px 15px;
+        min-height: 45px;
+      }
+      
+      #canvasWrap {
+        height: calc(100vh - 90px);
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 500px) {
+      /* Landscape mobile devices */
+      #hud {
+        font-size: 14px;
+        padding: 0 10px;
+        min-height: 35px;
+      }
+      
+      #dialogue {
+        font-size: 12px;
+        padding: 5px 10px;
+        min-height: 35px;
+      }
+      
+      #canvasWrap {
+        height: calc(100vh - 70px);
+      }
+    }
+
+    /* Ensure layout doesn't break on very large screens */
+    @media (min-width: 1920px) {
+      #hud {
+        font-size: 32px;
+        padding: 0 40px;
+      }
+      
+      #dialogue {
+        font-size: 30px;
+        padding: 20px 40px;
+      }
+    }
+
+    /* Fallback for browsers that don't support calc() or vh units properly */
+    @supports not (height: calc(100vh - 120px)) {
+      #canvasWrap {
+        height: 80vh;
+        min-height: 400px; /* Reasonable fallback */
+      }
+    }
+
+    /* Additional safety for very old browsers or unusual viewport conditions */
+    @media (max-width: 320px) {
+      /* Tiny screens */
+      #hud, #dialogue {
+        font-size: 12px;
+        padding: 5px;
+        min-height: 40px;
+      }
+      
+      #canvasWrap {
+        height: calc(100vh - 80px);
+        min-height: 300px;
+      }
+    }
+
+    /* Handle cases where browser chrome affects viewport height */
+    @media (max-aspect-ratio: 1/1) and (max-height: 600px) {
+      /* Portrait mobile with short height */
+      #hud {
+        min-height: 50px;
+        font-size: 16px;
+      }
+      
+      #dialogue {
+        min-height: 50px;
+        font-size: 14px;
+      }
+      
+      #canvasWrap {
+        height: calc(100vh - 100px);
+      }
+    }
   .playerName { color: #ffff00; }
   /* HUD helpers */
   .hudRow { display: flex; justify-content: space-between; width: 100%; }
   .ml20 { margin-left: 20px; }
+
+  /* Responsive HUD content adjustments */
+  @media (max-width: 768px) {
+    .hudRow {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 5px;
+    }
+    
+    .ml20 {
+      margin-left: 0;
+      margin-top: 5px;
+    }
+    
+    .playerName {
+      font-size: 0.9em;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .hudRow {
+      font-size: 14px;
+    }
+    
+    .playerName {
+      font-size: 0.8em;
+    }
+  }
   /* Wallet HUD polish */
   #moneyWrap { display:inline-flex; position:relative; align-items:center; gap:6px; }
   /* Fixed-width numeric area to prevent HUD jitter when amount changes */
@@ -122,13 +281,24 @@
   <div id="hud">
     <div class="hudRow">
       <div>
-  <span class="playerName">TheGuyWho</span>
+        <span class="playerName" id="p1Name">TheGuyWho</span>
         <span class="ml20">Health: <span id="health">100</span></span>
+        <span class="ml20">Money: $<span id="money">4.20</span></span>
       </div>
       <div>
-  <span id="moneyWrap"><span class="coinIcon" aria-hidden="true"></span> Money: $<span id="moneyValWrap"><span id="money">4.20</span></span></span>
-  <span id="buffs" class="ml20" title="Active buffs"></span>
-  <span id="buffIcons" aria-label="Active buff icons"></span>
+        <span id="buffs" class="ml20" title="Active buffs"></span>
+        <span id="buffIcons" aria-label="Active buff icons"></span>
+      </div>
+    </div>
+    <div class="hudRow" id="p2HudRow" style="display: none;">
+      <div>
+        <span class="playerName" id="p2Name">CDRZ</span>
+        <span class="ml20">Health: <span id="p2Health">100</span></span>
+        <span class="ml20">Money: $<span id="p2Money">0.00</span></span>
+      </div>
+      <div>
+        <span id="p2Buffs" class="ml20" title="P2 Active buffs"></span>
+        <span id="p2BuffIcons" aria-label="P2 Active buff icons"></span>
       </div>
     </div>
   </div>
@@ -190,13 +360,25 @@
         document.head.appendChild(s);
       });
     }
-    // Compute assets base so it works whether served from / (project root) or /game/ (subfolder)
+    // Compute assets base robustly so it works when served from / (project root) or /game/ (subfolder)
+    // Examples:
+    //   http://host/index.html           -> /assets
+    //   http://host/game/index.html      -> /assets
+    //   http://host/prefix/game/index.html -> /prefix/assets
     const ASSETS_BASE = (() => {
       try {
-        // location: .../game/index.html -> parent + '/assets'
+        const path = location.pathname || '/';
+        // If path includes "/game/", prefer the prefix before /game/ and append /assets
+        // This matches this repo layout: assets/ is sibling of game/
+        const idx = path.indexOf('/game/');
+        if (idx >= 0) {
+          const prefix = path.slice(0, idx); // may be '' or '/prefix'
+          return `${prefix || ''}/assets` || '/assets';
+        }
+        // Fallback: use parent directory of current path and append /assets
         const parent = new URL('..', location.href);
         const basePath = parent.pathname.endsWith('/') ? parent.pathname.slice(0, -1) : parent.pathname;
-        return `${basePath}/assets`;
+        return `${basePath || ''}/assets` || '/assets';
       } catch (_) { return '/assets'; }
     })();
     // Fixed URL encoding to handle special characters properly
@@ -241,7 +423,7 @@
       return;
     }
 
-    // Optional Title/Splash Scene
+  // Optional Title/Splash Scene
     class TitleScene extends Phaser.Scene {
       constructor(){ super({ key: 'TitleScene' }); }
       preload(){
@@ -326,8 +508,10 @@
             img.src = url;
           };
           tryNext(0);
+          // Lobby moved to ModeSelectScene; Title only shows splash and prompt.
           const prompt = this.add.text(this.scale.width/2, Math.floor(this.scale.height*0.92), 'Press Enter or Click to Start', { fontFamily:'monospace', fontSize:'22px', color:'#ffffff', stroke:'#000', strokeThickness:4 }).setOrigin(0.5).setDepth(4);
           prompt.setAlpha(0);
+          // Hint removed
           // Prepare blinking tween but pause until we reveal prompt
           const blink = this.tweens.add({ targets: prompt, alpha: 0.25, yoyo: true, duration: 800, repeat: -1 });
           try { blink.pause(); } catch(_) {}
@@ -371,7 +555,7 @@
           const start = () => {
             if (!this._allowStart) return; // guard until fade+delay have passed
             try { if (this._startAud) { this._startAud.stop(); this._startAud.destroy(); this._startAud = null; } } catch(_) {}
-            try { this.scene.start('StoryScene'); } catch(_) { this.scene.start('BadenCityRansomGame'); }
+            try { this.scene.start('ModeSelectScene'); } catch(_) { this.scene.start('ModeSelectScene'); }
           };
           this.input.on('pointerdown', start);
           try { this.input.keyboard.on('keydown', () => start()); } catch(_) {}
@@ -383,6 +567,141 @@
           } catch(_) {}
           makeOverlays();
         } catch(_) {}
+      }
+    }
+
+    // Mode selection: 1-player or 2-player co-op then Host/Join
+    class ModeSelectScene extends Phaser.Scene {
+      constructor(){ super({ key:'ModeSelectScene' }); }
+      create(){
+        const { width:w, height:h } = this.scale;
+        this.cameras.main.setBackgroundColor('#000000');
+        const title = this.add.text(w/2, h*0.25, 'Select Mode', { fontFamily:'monospace', fontSize:'26px', color:'#ffffdd', stroke:'#000', strokeThickness:5 }).setOrigin(0.5);
+        const opts = [
+          { key:'sp', label:'1 Player' },
+          { key:'coop', label:'2 Player Co-op' }
+        ];
+        let idx = 0;
+        const draw = () => {
+          try { this._nodes?.forEach(n => n.destroy()); } catch{}
+          this._nodes = [];
+          const y0 = Math.floor(h*0.42); const line = 40;
+          opts.forEach((o,i)=>{
+            const t = this.add.text(w/2, y0 + i*line, (i===idx?'> ':'  ')+o.label, { fontFamily:'monospace', fontSize:'22px', color: i===idx?'#ffffcc':'#e0e0e0', stroke:'#000', strokeThickness:4 }).setOrigin(0.5);
+            this._nodes.push(t);
+          });
+          const hint = this.add.text(w/2, h*0.86, 'Enter: Select   Esc: Back', { fontFamily:'monospace', fontSize:'14px', color:'#aaaaaa' }).setOrigin(0.5);
+          this._nodes.push(hint);
+        };
+        draw();
+        const doSelect = () => {
+          const choice = opts[idx]?.key;
+          if (choice==='sp') {
+            this.scene.start('StoryScene');
+          } else {
+            this.scene.start('CoopSetupScene');
+          }
+        };
+        this.input.keyboard?.on('keydown', (ev)=>{
+          if (ev.code==='ArrowUp' || ev.code==='KeyW') { idx=(idx+opts.length-1)%opts.length; draw(); }
+          if (ev.code==='ArrowDown' || ev.code==='KeyS') { idx=(idx+1)%opts.length; draw(); }
+          if (ev.code==='Enter' || ev.code==='Space') doSelect();
+          if (ev.code==='Escape') this.scene.start('TitleScene');
+        });
+      }
+    }
+
+    // Co-op setup: Host or Join with room and relay fields
+    class CoopSetupScene extends Phaser.Scene {
+      constructor(){ super({ key:'CoopSetupScene' }); }
+      create(){
+        const { width:w, height:h } = this.scale;
+        this.cameras.main.setBackgroundColor('#000000');
+        const title = this.add.text(w/2, h*0.20, 'Co-op Setup', { fontFamily:'monospace', fontSize:'24px', color:'#ffffdd', stroke:'#000', strokeThickness:5 }).setOrigin(0.5);
+        // Minimal DOM overlay for inputs
+        const wrap = document.getElementById('canvasWrap');
+        const ui = document.createElement('div'); ui.id='coopUI'; ui.style.cssText='position:absolute;left:50%;top:58%;transform:translate(-50%,-50%);display:flex;gap:8px;align-items:center;background:#0e1116cc;color:#e7f1ff;border:1px solid #2b3340;border-radius:10px;padding:10px 12px;z-index:1500;';
+        const mk = (tag, attrs, text) => { const el = document.createElement(tag); Object.assign(el, attrs||{}); if (text) el.textContent = text; return el; };
+        const code = mk('input', { type:'text', value:(Math.random().toString(36).slice(2,6)).toUpperCase() });
+        code.placeholder='ROOM'; code.maxLength=8; code.style.cssText='width:95px;text-transform:uppercase;background:#131a22;color:#e7f1ff;border:1px solid #2b3340;border-radius:6px;padding:4px 6px;';
+        const relay = mk('input', { type:'text', value:`ws://${location.hostname||'localhost'}:3001` });
+        relay.placeholder='ws://host:3001'; relay.style.cssText='width:240px;background:#131a22;color:#e7f1ff;border:1px solid #2b3340;border-radius:6px;padding:4px 6px;';
+        const hostBtn = mk('button', {}, 'Host'); hostBtn.style.cssText='background:#2a7b3f;border:0;color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;';
+        const joinBtn = mk('button', {}, 'Join'); joinBtn.style.cssText='background:#1f6fb2;border:0;color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;';
+        const label1 = mk('span', {}, 'Room:'); const label2 = mk('span', {}, 'Relay:');
+        label1.style.marginRight='4px'; label2.style.marginLeft='8px'; label2.style.marginRight='4px';
+        ui.append(label1, code, label2, relay, hostBtn, joinBtn);
+        wrap && wrap.appendChild(ui);
+        const cleanup = ()=>{ try { ui.remove(); } catch{} };
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+        const go = (role) => {
+          const room = (code.value||'ROOM').replace(/[^A-Z0-9]/gi,'').toUpperCase().slice(0,8) || 'ROOM';
+          const rel = relay.value||'';
+          window._BCR_NET = { role, room, relay: rel };
+          this.scene.start('LobbyScene');
+        };
+        hostBtn.addEventListener('click', ()=>go('host'));
+        joinBtn.addEventListener('click', ()=>go('client'));
+        this.input.keyboard?.on('keydown', (ev)=>{ if (ev.code==='Escape') { cleanup(); this.scene.start('ModeSelectScene'); } });
+      }
+    }
+
+    // Lightweight Lobby for synchronized start
+    class LobbyScene extends Phaser.Scene {
+      constructor(){ super({ key:'LobbyScene' }); }
+      create(){
+        const net = (window._BCR_NET||{});
+        const { width:w, height:h } = this.scale;
+        const panel = this.add.rectangle(Math.floor(w/2), Math.floor(h/2), Math.min(420, Math.floor(w*0.9)), 160, 0x0d1117, 0.92).setDepth(10).setStrokeStyle(2,0xffffff,0.35);
+        const title = this.add.text(panel.x, panel.y-54, 'Lobby', { fontFamily:'monospace', fontSize:'22px', color:'#ffffdd', stroke:'#000', strokeThickness:5 }).setOrigin(0.5).setDepth(11);
+        const info = this.add.text(panel.x, panel.y-20, '', { fontFamily:'monospace', fontSize:'16px', color:'#eaffea', align:'center', wordWrap:{ width: panel.width-20 } }).setOrigin(0.5).setDepth(11);
+        const prompt = this.add.text(panel.x, panel.y+34, '', { fontFamily:'monospace', fontSize:'14px', color:'#ffffaa', stroke:'#000', strokeThickness:3 }).setOrigin(0.5).setDepth(11);
+        const updateInfo = (txt, pr='') => { info.setText(txt); prompt.setText(pr); };
+        // open socket
+  let ws = null; let roomReady = false; let amHost = (net.role==='host');
+        const connect = () => {
+          try {
+            const url = (net.relay || `ws://${location.hostname||'localhost'}:3001`);
+    ws = new WebSocket(url);
+            ws.addEventListener('open', () => {
+              ws.send(JSON.stringify({ t:'join', room: net.room||'ROOM', as: amHost?'host':'client' }));
+              updateInfo(`Room ${net.room||'ROOM'}\nWaiting for ${amHost?'a player to join…':'host…'}`, amHost? 'Leave with Esc' : 'Leave with Esc');
+            });
+            ws.addEventListener('message', (ev) => {
+              let msg=null; try { msg = JSON.parse(ev.data); } catch{}
+              if (!msg || !msg.t) return;
+              if (msg.t==='joined') return;
+              if (amHost) {
+                if (msg.t==='client_join') {
+                  roomReady = true;
+                  updateInfo(`Room ${net.room||'ROOM'}\nCDRZ connected.`, 'Press Enter to start together');
+                }
+              } else {
+                if (msg.t==='host_ready') {
+                  updateInfo(`Room ${net.room||'ROOM'}\nConnected to host.`, 'Waiting for host to start…');
+                } else if (msg.t==='start') {
+                  // synchronized start
+      // Persist connection for later scenes
+      window._BCR_NET = { ...(window._BCR_NET||{}), ws, role: (net.role||'client'), room: (net.room||'ROOM') };
+      this.scene.start('StoryScene');
+                }
+              }
+            });
+            ws.addEventListener('close', () => { updateInfo('Disconnected from relay.', 'Press Esc to go back'); });
+          } catch {
+            updateInfo('Failed to connect to relay.', 'Press Esc to go back');
+          }
+        };
+        connect();
+        this.input.keyboard?.on('keydown', (ev)=>{
+          if (ev.code==='Escape') { try { ws?.close(); } catch{} this.scene.start('TitleScene'); }
+          if (amHost && ev.code==='Enter' && roomReady) {
+            try { ws && ws.send(JSON.stringify({ t:'start' })); } catch{}
+            // Persist connection and presence for later scenes
+            window._BCR_NET = { ...(window._BCR_NET||{}), ws, role: (net.role||'host'), room: (net.room||'ROOM'), clientReady: true };
+    this.scene.start('StoryScene');
+          }
+        });
       }
     }
 
@@ -405,7 +724,15 @@
           'His gang rules the streets. And he\'s coming for TheGuyWho next.',
           'Press Enter to start the fight.'
         ];
-        let page = 0; let typing = false; let timer = null; let shown = '';
+  let page = 0; let typing = false; let timer = null; let shown = '';
+
+  // Net context for synchronized story flow
+  const net = (window._BCR_NET||{});
+  const ws = net.ws || null;
+  // Consider online if a socket exists; it may still be CONNECTING when this scene starts
+  const hasWS = !!ws;
+  const amHost = (net.role === 'host') && hasWS;
+  const isOnline = hasWS;
 
         const play = (k, vol=0.5, rate=1) => {
           try {
@@ -426,42 +753,82 @@
             }
           } catch(_) {}
         };
-        const typePage = () => {
-          if (!textEl) return; typing = true; shown = ''; const full = pages[page] || '';
-          const speed = 26; let i = 0; if (timer) timer.remove();
+        const typePage = (i, onDone) => {
+          page = Math.max(0, Math.min(pages.length-1, i|0));
+          const full = pages[page] || '';
+          typing = true; shown = ''; if (timer) { try { timer.remove(); } catch(_) {} timer = null; }
+          if (textEl) textEl.textContent = '';
+          if (page > 0) play('ui_advance', 0.35, 1.0);
+          const speed = 26; let idx = 0;
           timer = this.time.addEvent({ delay: speed, loop: true, callback: () => {
-            if (i >= full.length) { typing = false; timer.remove(); timer = null; return; }
-            shown += full[i++]; textEl.textContent = shown;
-            if (i % 2 === 0) play('ui_click', 0.28, 1.0);
+            if (idx >= full.length) {
+              typing = false; try { timer.remove(); } catch(_) {} timer = null;
+              if (typeof onDone === 'function') try { onDone(); } catch(_) {}
+              return;
+            }
+            shown += full[idx++]; if (textEl) textEl.textContent = shown;
+            if (idx % 2 === 0) play('ui_click', 0.28, 1.0);
           }});
         };
-        const next = () => {
-          if (typing) { // finish instantly
-            const full = pages[page] || ''; typing = false; if (timer) { timer.remove(); timer=null; }
-            if (textEl) textEl.textContent = full; return;
-          }
-          page++;
-          if (page < pages.length) { play('ui_advance', 0.35, 1.0); typePage(); }
-          else {
-            // Start the actual game
-            play('ui_advance', 0.4, 1.0);
-            this.time.delayedCall(120, () => {
-              try { const dlg = document.getElementById('dialogue'); if (dlg) dlg.style.display = 'none'; } catch(_) {}
-              this.scene.start('BadenCityRansomGame');
-            });
-          }
+
+        const startGame = () => {
+          // Start the actual game
+          play('ui_advance', 0.4, 1.0);
+          this.time.delayedCall(120, () => {
+            try { const dlg = document.getElementById('dialogue'); if (dlg) dlg.style.display = 'none'; } catch(_) {}
+            this.scene.start('BadenCityRansomGame');
+          });
         };
 
-  // Input: Enter / Space / Click to advance (allow multiple clicks)
-  this.input.on('pointerdown', next);
-        try {
-          this.input.keyboard.on('keydown', (ev) => {
-            if (ev && (ev.code === 'Enter' || ev.code === 'Space')) next();
-          });
-        } catch(_) {}
+        // Host schedules auto-advance at 1s intervals and relays to clients
+        const scheduleHost = () => {
+          const waitAfter = 2000; // 2s after each sentence finishes
+          const doPage = (i) => {
+            try { ws && ws.send(JSON.stringify({ t:'story', data:{ action:'set', page: i } })); } catch{}
+            typePage(i, () => {
+              if (i + 1 < pages.length) {
+                this.time.delayedCall(waitAfter, () => doPage(i + 1));
+              } else {
+                this.time.delayedCall(waitAfter, () => {
+                  try { ws && ws.send(JSON.stringify({ t:'story', data:{ action:'startGame' } })); } catch{}
+                  startGame();
+                });
+              }
+            });
+          };
+          doPage(0);
+        };
 
-        // Kick off first page
-        typePage();
+        // Local schedule for offline/single-player
+        const scheduleLocal = () => {
+          const waitAfter = 2000;
+          const doPage = (i) => {
+            typePage(i, () => {
+              if (i + 1 < pages.length) this.time.delayedCall(waitAfter, () => doPage(i + 1));
+              else this.time.delayedCall(waitAfter, () => startGame());
+            });
+          };
+          doPage(0);
+        };
+
+        // Apply remote story actions on clients
+        if (hasWS) {
+          ws.addEventListener('message', (ev) => {
+            let msg = null; try { msg = JSON.parse(ev.data); } catch {}
+            if (!msg || msg.t !== 'story') return;
+      if (amHost) return; // host originated the action; clients apply
+            const d = msg.data || {};
+            if (d.action === 'set' && typeof d.page === 'number') {
+              typePage(d.page);
+            } else if (d.action === 'startGame') {
+              startGame();
+            }
+          });
+          // Client waits for host 'set' to start typing to stay in sync
+        }
+
+  // Auto-advance story in sync (no clicks)
+  if (amHost) scheduleHost(); else if (!hasWS) scheduleLocal();
       }
     }
 
@@ -799,12 +1166,186 @@
   // Ensure camera zoom is neutral (avoid accidental device zoom factors)
   try { this.cameras.main.setZoom(1); } catch(_) {}
   console.log('Initial setup complete, proceeding with scene creation...');
+        // Netplay: simple host/client via WebSocket (host-authoritative)
+        this.net = { role: null, ws: null, room: null, p2: null, lastStateSend: 0, inputSeq: 0, p2Inputs: { up:0,down:0,left:0,right:0,a:0,b:0,x:0 } };
+        // Decide role by URL param ?net=host|client&room=abc, or from Title lobby via window._BCR_NET
+        try {
+          const params = new URLSearchParams(location.search);
+          let want = (params.get('net')||'').toLowerCase();
+          let room = (params.get('room') || '').slice(0,40);
+          let relayOverride = params.get('relay') || '';
+          if (!want && window._BCR_NET?.role) { want = String(window._BCR_NET.role||'').toLowerCase(); }
+          if (!room && window._BCR_NET?.room) { room = String(window._BCR_NET.room||'').slice(0,40); }
+          if (!relayOverride && window._BCR_NET?.relay) { relayOverride = String(window._BCR_NET.relay||''); }
+          if (want === 'host' || want === 'client') {
+            this.net.role = want; this.net.room = room;
+            // Prefer reusing the Lobby WebSocket if available
+            let ws = (window._BCR_NET && window._BCR_NET.ws) ? window._BCR_NET.ws : null;
+            const needNew = !ws || (ws.readyState !== 1 && ws.readyState !== 0);
+            if (needNew) {
+              const host = (location.hostname && location.hostname.length) ? location.hostname : 'localhost';
+              const relayUrl = relayOverride || `ws://${host}:3001`;
+              ws = new WebSocket(relayUrl);
+            }
+            this.net.ws = ws;
+            // If Lobby told us there was a client, pre-mark presence so P2 spawns ASAP
+            if (this.net.role === 'host' && window._BCR_NET?.clientReady) this.net.clientPresent = true;
+            // Set HUD name immediately for client role
+            if (this.net.role === 'client') { try { const p1n=document.getElementById('p1Name'); if (p1n) p1n.textContent='CDRZ'; } catch(_) {}
+            }
+            if (needNew) {
+              ws.addEventListener('open', () => { try { ws.send(JSON.stringify({ t:'join', room, as: want })); this.showMessage && this.showMessage(`Net: ${want} joined ${room}`); } catch(_) {} });
+              ws.addEventListener('error', () => { try { this.showMessage && this.showMessage('Relay connection failed'); } catch(_) {} });
+              ws.addEventListener('close', () => { try { this.net.clientPresent = false; if (this.net.role==='host' && this.net.p2) { this.net.p2.destroy(); this.net.p2=null; } } catch(_) {} });
+            }
+            ws.addEventListener('message', async (ev) => {
+              let msg=null; try { msg = JSON.parse(ev.data); } catch(_) {}
+              if (!msg || !msg.t) return;
+              if (msg.t === 'joined') {
+                if (this.net.role==='client') {
+                  try { const p1n=document.getElementById('p1Name'); if (p1n) p1n.textContent='CDRZ'; } catch(_) {}
+                  // Ensure local CDRZ sprite exists right away
+                  try {
+                    if (!this.net.p2 && this.alex) {
+                      const px = (this.alex.x||200) + 40; const py = (this.alex.y||0);
+                      const p2 = this.add.sprite(px, py, (this._playerTextureKey||'alex')).setOrigin(0.5,1);
+                      p2.setScale(this.alex.scaleX||1, this.alex.scaleY||1); p2.setTint(0x77ccff); try { p2.play('alex-idle'); } catch(_) {}
+                      p2.name='CDRZ'; p2.health=100; p2.money=0.00; p2.buffs={}; this.net.p2 = p2;
+                      try { this._computeFootPad && this._computeFootPad(p2); } catch(_) {}
+                    }
+                  } catch(_) {}
+                }
+                return; // ack
+              }
+              if (this.net.role === 'host') {
+                if (msg.t === 'input' && msg.from === 'p2') {
+                  this.net.p2Inputs = Object.assign(this.net.p2Inputs||{}, msg.data||{});
+                }
+        if (msg.t === 'client_join') {
+                  try { this.net.clientPresent = true; if (!this.net.p2) {
+                    const px = (this.alex?.x||200) + 40; const py = (this.alex?.y||0);
+                    const p2 = this.add.sprite(px, py, (this._playerTextureKey||'alex')).setOrigin(0.5,1);
+                    p2.setScale(this.alex?.scaleX||1, this.alex?.scaleY||1); p2.setTint(0x77ccff); try { p2.play('alex-idle'); } catch(_) {}
+                    p2.name='CDRZ'; this.net.p2 = p2;
+                    // Initialize P2 stats
+                    p2.health = 100;
+                    p2.money = 0.00;
+          p2.buffs = {};
+          try { this._computeFootPad && this._computeFootPad(p2); } catch(_) {}
+                  } this.showMessage && this.showMessage(`Client joined: ${this.net.room}`); } catch(_) {}
+                }
+                if (msg.t === 'client_left') { try { this.net.clientPresent = false; if (this.net.p2) { this.net.p2.destroy(); this.net.p2 = null; } } catch(_) {} }
+              } else { // client
+                if (msg.t === 'state' && msg.data) {
+        // Apply host snapshot to our local view
+                  const s = msg.data;
+                  try {
+                    // Ensure client HUD shows CDRZ as local player name
+                    try { const p1n = document.getElementById('p1Name'); if (p1n) p1n.textContent = 'CDRZ'; } catch(_) {}
+                    if (s.p1) {
+                      this.alex.x = s.p1.x;
+                      this.alexBaseY = s.p1.baseY;
+                      this.alexJumpZ = s.p1.jumpZ||0;
+                      if (s.p1.flipX !== undefined) this.alex.setFlipX(s.p1.flipX);
+                      this.alex.y = Math.round(this.alexBaseY + (this.alex._footPadScaled||0) + this.alexJumpZ);
+                      // Mirror P1 animation from host
+                      try {
+                        if (s.p1.anim && this.alex.anims?.currentAnim?.key !== s.p1.anim) {
+                          this.alex.play(s.p1.anim);
+                        }
+                        if (typeof s.p1.attacking === 'boolean') this.isAttacking = !!s.p1.attacking;
+                      } catch(_) {}
+                    }
+                    if (s.p2) {
+                      if (!this.net.p2) {
+                        const px = (this.alex?.x||200) + 40; const py = (this.alex?.y||0);
+                        const p2 = this.add.sprite(px, py, (this._playerTextureKey||'alex')).setOrigin(0.5,1);
+                        p2.setScale(this.alex?.scaleX||1, this.alex?.scaleY||1); p2.setTint(0x77ccff); try { p2.play('alex-idle'); } catch(_) {}
+                        p2.name='CDRZ'; this.net.p2 = p2;
+                        // Initialize P2 stats
+                        p2.health = 100;
+                        p2.money = 0.00;
+                        p2.buffs = {};
+                        try { this._computeFootPad && this._computeFootPad(p2); } catch(_) {}
+                      }
+                      if (this.net.p2) {
+                        this.net.p2.x = s.p2.x;
+                        this.net.p2BaseY = s.p2.baseY;
+                        this.net.p2JumpZ = s.p2.jumpZ||0;
+                        if (s.p2.flipX !== undefined) this.net.p2.setFlipX(s.p2.flipX);
+                        this.net.p2.y = Math.round(this.net.p2BaseY + (this.net.p2._footPadScaled||0) + this.net.p2JumpZ);
+                        // Mirror P2 animation from host
+                        try {
+                          if (s.p2.anim && this.net.p2.anims?.currentAnim?.key !== s.p2.anim) {
+                            this.net.p2.play(s.p2.anim);
+                          }
+                          if (typeof s.p2.attacking === 'boolean') this.net.p2._attacking = !!s.p2.attacking;
+                        } catch(_) {}
+                        // Apply P2 buff data from snapshot
+                        if (s.p2.buffs) {
+                          this.net.p2.buffs = s.p2.buffs;
+                          this.net.p2.speedBoostUntil = s.p2.buffs.speedBoostUntil;
+                          this.net.p2.coinValueBonus = s.p2.buffs.coinValueBonus;
+                          this.net.p2.cityMapOwned = s.p2.buffs.cityMapOwned;
+                        }
+                      }
+                    }
+                    // Boss sync from host -> client
+                    if (s.boss !== undefined) {
+                      if (s.boss && !this.boss) {
+                        try {
+                          // Pick matching config before spawning
+                          const useKey = s.boss.type || 'boss';
+                          if (Array.isArray(this.bossConfigs)) {
+                            const cfg = this.bossConfigs.find(c => c.key === useKey) || this.bossConfigs[0];
+                            if (cfg) this.currentBossConfig = cfg;
+                          }
+                          // Spawn visuals (no AI on client)
+                          await (this.spawnBossNearPlayer && this.spawnBossNearPlayer());
+                        } catch(_) {}
+                      }
+                      if (s.boss && this.boss) {
+                        try {
+                          this.boss.setVisible(true).setAlpha(1);
+                          this.boss.x = s.boss.x;
+                          this.boss.y = s.boss.y;
+                          if (s.boss.flipX !== undefined) this.boss.setFlipX(!!s.boss.flipX);
+                          if (typeof s.boss.health === 'number') this.boss.health = s.boss.health;
+                          // Ensure foot padding computed (for proper hurtbox/depth)
+                          try { this._computeFootPad && this._computeFootPad(this.boss); } catch(_) {}
+                        } catch(_) {}
+                      } else if (!s.boss && this.boss) {
+                        // Despawn on client if host despawned
+                        try { this.despawnBoss && this.despawnBoss(); } catch(_) { try { this.boss.destroy(); } catch(_) {} this.boss = null; }
+                      }
+                    }
+                  } catch(_) {}
+                }
+              }
+            });
+          }
+        } catch(_) {}
         // Reveal HUD and dialogue now that gameplay begins
         try {
           const hud = document.getElementById('hud');
           const dlg = document.getElementById('dialogue');
           if (hud) hud.style.display = 'flex';
           if (dlg) dlg.style.display = 'block';
+        } catch(_) {}
+
+        // Client-side: ensure a local CDRZ sprite exists even before first snapshot
+        try {
+          this.time.delayedCall(80, () => {
+            try {
+              if (this.net && this.net.role === 'client' && !this.net.p2 && this.alex) {
+                const px = (this.alex.x||200) + 40; const py = (this.alex.y||0);
+                const p2 = this.add.sprite(px, py, (this._playerTextureKey||'alex')).setOrigin(0.5,1);
+                p2.setScale(this.alex.scaleX||1, this.alex.scaleY||1); p2.setTint(0x77ccff); try { p2.play('alex-idle'); } catch(_) {}
+                p2.name='CDRZ'; p2.health=100; p2.money=0.00; p2.buffs={}; this.net.p2 = p2;
+                try { this._computeFootPad && this._computeFootPad(p2); } catch(_) {}
+              }
+            } catch(_) {}
+          });
         } catch(_) {}
         const diag = (msg) => { const d = document.getElementById('dialogue-text'); if (d) d.textContent = String(msg); };
         const step = (name) => diag(`Init: ${name}`);
@@ -863,7 +1404,7 @@
           } catch(_) {}
         };
   // Centralized resize application to keep math consistent
-        const applyResize = (w, h) => {
+  const applyResize = (w, h) => {
           if (!w || !h) { const s = getSize(); w = s.cw; h = s.ch; }
           const scale = h / (this._bgCropH || h);
           if (this.bg) {
@@ -878,9 +1419,9 @@
           const alexScale = pixelScale * (this._playerScaleAdjust || 1.0);
           const enemyScale = pixelScale * (this.ENEMY_SCALE_MULT || 0.8);
           const roadTop = Math.round(h * (this._roadTopFrac || this.ROAD_TOP_PCT));
-          const roadBot = Math.round(h * (this._roadBottomFrac || 0.96));
-          // Allow a tiny safety margin so feet can touch the very last blue row
-          const groundY = Math.min(h - 1, roadBot + 2);
+          const roadBot = Math.round(h * (this._roadBottomFrac || 0.985));
+          // Ground line near bottom of the road (prior behavior)
+          const groundY = Math.min(h - 1, roadBot + 20);
           // Guarantee a minimum vertical lane size for up/down movement, anchored at ground line
           const laneMax = groundY;
           const minLane = Math.max(56, Math.floor(h * 0.12));
@@ -897,21 +1438,29 @@
           this.baseYMin = laneMin;
           this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
           if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
-          if (this.alex) this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
-          (this.enemies||[]).forEach(e=>{ e.setScale(enemyScale); if (e.y > groundY) e.y = groundY; });
-          if (this.boss) {
-            const bossAdj = (this.bossAnimPrefix === 'boss2') ? (this._currentBossScaleAdj || 1.0) : 1.0;
-            this.boss.setScale(enemyScale * bossAdj);
-            // Recompute scaled foot padding (if Necro) and pin feet to road
+          if (this.alex) {
+            try { this._computeFootPad && this._computeFootPad(this.alex); } catch(_) {}
+            this.alex.y = Math.round(this.alexBaseY + (this.alex._footPadScaled||0) + this.alexJumpZ);
+          }
+          if (this.net && this.net.p2) {
             try {
-              if (this.bossAnimPrefix === 'boss2') {
-                const raw = (this.boss._footPadRaw || this._necroFootPadPx || 0);
-                this.boss._footPadScaled = Math.round(raw * (this.boss.scaleY || 1));
-                const bias = this.feetBiasFor(this.boss,'boss');
-                this.boss.y = Math.round(this.alexBaseY + (this.boss._footPadScaled || 0) + bias);
-              } else {
-                if (this.boss.y > groundY) this.boss.y = groundY;
-              }
+              this.net.p2.setScale(alexScale);
+              this._computeFootPad && this._computeFootPad(this.net.p2);
+              const by = (this.net.p2BaseY !== undefined) ? this.net.p2BaseY : (this.net.p2.y||this.alexBaseY);
+              const jz = (this.net.p2JumpZ||0);
+              this.net.p2.y = Math.round(by + (this.net.p2._footPadScaled||0) + jz);
+            } catch(_) {}
+          }
+          (this.enemies||[]).forEach(e=>{ e.setScale(enemyScale); e.y = this.alexBaseY; });
+          if (this.boss) {
+            const bossAdj = (this._currentBossScaleAdj || 1.0);
+            this.boss.setScale(enemyScale * bossAdj);
+            // Recompute scaled foot padding for any boss and pin feet to road baseline
+            try {
+              const raw = (this.boss._footPadRaw || 0);
+              this.boss._footPadScaled = Math.round(raw * (this.boss.scaleY || 1));
+              const bias = this.feetBiasFor(this.boss,'boss');
+              this.boss.y = Math.round(this.alexBaseY + (this.boss._footPadScaled || 0) + bias);
             } catch(_) { if (this.boss.y > groundY) this.boss.y = groundY; }
           }
           // Position shop door(s) (if present) at the far (top) side of the road
@@ -984,7 +1533,7 @@
       longTex.refresh();
       this._bgNaturalW = tileW * TILES;
   // Road band within the cropped strip (middle-lower portion)
-  this._roadTopFrac = 0.64; this._roadBottomFrac = 0.96;
+  this._roadTopFrac = 0.64; this._roadBottomFrac = 0.985;
   // Base ground image (acts as world bounds anchor)
   this.bg = this.add.image(0, 0, longKey).setOrigin(0, 0);
   this._bgKey = longKey;
@@ -1073,14 +1622,14 @@
         const fracTop = analyzeRoadTop(ctx, bgWidth, this._bgCropH);
         const fracBot = analyzeRoadBottom(ctx, bgWidth, this._bgCropH);
         this._roadTopFrac = (fracTop != null ? fracTop : 0.65);
-        this._roadBottomFrac = (fracBot != null ? fracBot : 0.96);
+  this._roadBottomFrac = (fracBot != null ? fracBot : 0.985);
         useKey = playKey;
       } else {
         const raw = this.textures.get('downtown');
         this._bgNaturalW = raw?.source?.[0]?.width || 800;
         this._bgCropH = raw?.source?.[0]?.height || 480;
         this._roadTopFrac = 0.65;
-        this._roadBottomFrac = 0.96;
+  this._roadBottomFrac = 0.985;
       }
     } catch (e) {
       const raw = this.textures.get('downtown');
@@ -1088,7 +1637,7 @@
       this._bgCropH = raw?.source?.[0]?.height || 480;
       useKey = 'downtown';
       this._roadTopFrac = 0.65;
-      this._roadBottomFrac = 0.96;
+  this._roadBottomFrac = 0.985;
     }
     try {
       if (this.textures.exists('downtown_play')) {
@@ -1224,6 +1773,35 @@
   } else {
     this.alex.setScale(playerScale);
   }
+  // Compute transparent foot padding so feet sit on the road and hitboxes align
+  this._computeFootPad = (spr) => {
+    try {
+      const f = spr?.frame;
+      const img = f?.source?.image;
+      if (!img || !f) return;
+      const cv = document.createElement('canvas');
+      cv.width = f.cutWidth; cv.height = f.cutHeight;
+      const cx = cv.getContext('2d', { willReadFrequently: true });
+      cx.clearRect(0,0,cv.width,cv.height);
+      cx.drawImage(img, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight);
+      const data = cx.getImageData(0,0,cv.width,cv.height).data;
+      let bottomAlphaRow = -1;
+      outer: for (let y=cv.height-1; y>=0; y--) {
+        for (let x=0; x<cv.width; x++) {
+          const a = data[(y*cv.width + x)*4 + 3];
+          if (a > 8) { bottomAlphaRow = y; break outer; }
+        }
+      }
+      if (bottomAlphaRow >= 0) {
+        const padPx = (cv.height - 1) - bottomAlphaRow; // rows under visible feet
+        spr._footPadRaw = padPx;
+        spr._footPadScaled = Math.round(padPx * (spr.scaleY || 1));
+      } else {
+        spr._footPadRaw = 0; spr._footPadScaled = 0;
+      }
+    } catch(_) {}
+  };
+  this._computeFootPad(this.alex);
   // Camera follows the player for smooth scrolling
   this.cameras.main.startFollow(this.alex, true, 1, 1);
   // Ensure camera is centered on spawn so the player is on-screen
@@ -1231,6 +1809,8 @@
   // Keep previously computed scale adjust (for skeleton image-based player)
         this.alex.health = 100;
   this.alex.money = 4.20; // New default
+
+  // Netplay: defer P2 creation until a peer connects or state is received
         
         // Create diverse enemy gang members from available sprites
   step('spawn enemies');
@@ -1303,6 +1883,41 @@
             this.enemies.push(enemy);
           }
         });
+        // Fallback: if no enemy textures were available, try to spawn one using the first available enemy sheet
+        if (!this.enemies.length) {
+          try {
+            const candidates = ['enemy1','enemy2','enemy3'];
+            const first = candidates.find(k => this.textures.exists(k));
+            if (first) {
+              const ex = Math.max(420, displayW - 300);
+              const enemy = this.add.sprite(ex, ch - 18, first, 0).setOrigin(0.5, 1);
+              enemy.setScale(playerScale * (this.ENEMY_SCALE_MULT || 0.8));
+              enemy.health = 60; enemy.maxHealth = 60; enemy.type = first; enemy.name = 'Fallback Thug';
+              enemy.aiTimer = 0; enemy.speed = 1.0; enemy.attackCooldown = 0; enemy.attackCadence = 900;
+              enemy.attackReach = 24; enemy.attackWidth = 16; enemy.attackHeight = 14; enemy.lastDirection = 1; enemy.aggroRange = 120;
+              enemy.healthBarBg = this.add.rectangle(0, 0, 32, 4, 0x333333).setOrigin(0.5, 1).setDepth(9999);
+              enemy.healthBar = this.add.rectangle(0, 0, 30, 2, 0xff0000).setOrigin(0.5, 1).setDepth(10000);
+              enemy.updateHealthBar = () => {
+                try {
+                  if (enemy.healthBarBg && enemy.healthBar) {
+                    enemy.healthBarBg.setPosition(enemy.x, enemy.y - enemy.height * enemy.scaleY - 5);
+                    enemy.healthBar.setPosition(enemy.x, enemy.y - enemy.height * enemy.scaleY - 5);
+                    const hp = enemy.health / enemy.maxHealth; enemy.healthBar.width = 30 * hp;
+                    enemy.healthBar.fillColor = hp > 0.7 ? 0x00ff00 : (hp > 0.3 ? 0xffaa00 : 0xff0000);
+                    const show = enemy.health < enemy.maxHealth && enemy.health > 0 && !enemy._defeated;
+                    enemy.healthBarBg.setVisible(show); enemy.healthBar.setVisible(show);
+                  }
+                } catch(_) {}
+              };
+              this.enemies.push(enemy);
+              try { this.showMessage('Spawned a fallback enemy'); } catch(_) {}
+              console.warn('Enemy sprites were not ready; spawned a fallback enemy using', first);
+            } else {
+              console.warn('No enemy sprites loaded; check ASSETS_BASE:', typeof ASSETS_BASE !== 'undefined' ? ASSETS_BASE : '(undefined)');
+              try { this.showMessage('Enemy sprites failed to load'); } catch(_) {}
+            }
+          } catch(_) {}
+        }
   // Enhanced boss spawning (Miller / Nick using Skeleton Crusader variants)
   step('boss (manual spawn)');
   
@@ -1804,8 +2419,10 @@
           };
           const just = (k) => now[k] && !this._padPrev[k];
           if (!this.isAttacking) {
-            if (just('a')) this._doPunch && this._doPunch();
-            if (just('b')) this._doKick && this._doKick();
+            if (this.net?.role !== 'client') {
+              if (just('a')) this._doPunch && this._doPunch();
+              if (just('b')) this._doKick && this._doKick();
+            }
             if (just('x')) this._doJump && this._doJump();
           }
           if (just('start')) this.enterPause && this.enterPause();
@@ -1945,44 +2562,40 @@
               
               // Decide animation prefix early so scale can use it
               this.bossAnimPrefix = animPrefix || 'boss';
-        // Set proper scale to match the game world
-              const enemyScale = this.bg?.scaleX || 1;
-        // Scale Necro to match player's displayed height; default to 1.0 for Miller
-              let scaleAdj = 1.0;
-        if (this.bossAnimPrefix === 'boss2') {
-                try {
-                  const f = this.textures.getFrame(textureKey, 0);
-                  const srcH = Math.max(1, (f?.cutHeight || f?.height || f?.source?.height || 128));
-          const playerH = Math.max(1, this.alex?.displayHeight || 32);
-    const desired = playerH; // same height as player
-      // Adjust so final applied scale (enemyScale * scaleAdj) yields desired height
-    scaleAdj = Phaser.Math.Clamp(desired / (srcH * enemyScale), 0.08, 0.6);
-    } catch(_) { scaleAdj = 0.5; }
-              }
+    // Set proper scale to match the game world
+      const enemyScale = this.bg?.scaleX || 1;
+    // Compute a scale adjustment so boss matches player height regardless of variant
+      let scaleAdj = 1.0;
+      try {
+        const f = this.textures.getFrame(textureKey, 0);
+        const srcH = Math.max(1, (f?.cutHeight || f?.height || f?.source?.height || 128));
+        const playerH = Math.max(1, this.alex?.displayHeight || 32);
+        const desired = playerH; // same height as player
+        // Adjust so final applied scale (enemyScale * scaleAdj) yields desired height
+        scaleAdj = Phaser.Math.Clamp(desired / (srcH * enemyScale), 0.08, 0.6);
+      } catch(_) { scaleAdj = 0.5; }
         boss.setScale(enemyScale * scaleAdj);
-        // Measure transparent padding below the visible feet to keep feet on the road
+        // Measure transparent padding below the visible feet to keep feet on the road (for any boss texture)
         try {
-          if (this.bossAnimPrefix === 'boss2') {
-            const tex = this.textures.get(textureKey);
-            const img = tex?.getSourceImage ? tex.getSourceImage() : null;
-            if (img) {
-              const cv = document.createElement('canvas');
-              cv.width = img.width; cv.height = img.height;
-              const cx = cv.getContext('2d', { willReadFrequently: true });
-              cx.clearRect(0,0,cv.width,cv.height); cx.drawImage(img, 0, 0);
-              const data = cx.getImageData(0,0,cv.width,cv.height).data;
-              let bottomAlphaRow = -1;
-              outer: for (let y=cv.height-1; y>=0; y--) {
-                for (let x=0; x<cv.width; x++) {
-                  const a = data[(y*cv.width + x)*4 + 3];
-                  if (a > 8) { bottomAlphaRow = y; break outer; }
-                }
+          const tex = this.textures.get(textureKey);
+          const img = tex?.getSourceImage ? tex.getSourceImage() : null;
+          if (img) {
+            const cv = document.createElement('canvas');
+            cv.width = img.width; cv.height = img.height;
+            const cx = cv.getContext('2d', { willReadFrequently: true });
+            cx.clearRect(0,0,cv.width,cv.height); cx.drawImage(img, 0, 0);
+            const data = cx.getImageData(0,0,cv.width,cv.height).data;
+            let bottomAlphaRow = -1;
+            outer: for (let y=cv.height-1; y>=0; y--) {
+              for (let x=0; x<cv.width; x++) {
+                const a = data[(y*cv.width + x)*4 + 3];
+                if (a > 8) { bottomAlphaRow = y; break outer; }
               }
-              if (bottomAlphaRow >= 0) {
-                const padPx = (cv.height - 1) - bottomAlphaRow; // transparent rows under silhouette
-                boss._footPadRaw = padPx; // store raw pad for future resizes
-                boss._footPadScaled = Math.round(padPx * (boss.scaleY || 1));
-              }
+            }
+            if (bottomAlphaRow >= 0) {
+              const padPx = (cv.height - 1) - bottomAlphaRow; // transparent rows under silhouette
+              boss._footPadRaw = padPx; // store raw pad for future resizes
+              boss._footPadScaled = Math.round(padPx * (boss.scaleY || 1));
             }
           }
         } catch(_) { boss._footPadScaled = boss._footPadScaled || 0; }
@@ -2059,13 +2672,23 @@
                 const ok = await useCfg.load();
                 if (ok) {
                   if (this.boss && this.boss.active && !this.boss._defeated) { this._bossSpawning = false; return this.boss; }
-                  const firstKey = this._nickFirstFrameKey || 'nick_raw_idle_0_pad';
-                  if (this.textures.exists(firstKey)) { const r = trySpawnWith(firstKey, useCfg.prefix||'boss2'); this._bossSpawning = false; return r; }
-                  const blankKey = 'boss2_blank';
-                  if (!this.textures.exists(blankKey)) {
-                    const t = this.textures.createCanvas(blankKey, 2, 2); const c=t.getContext(); c.clearRect(0,0,2,2); t.refresh();
+                  // Prefer the known first idle frame; if missing, search for any nick idle canvas we created
+                  let firstKey = this._nickFirstFrameKey || 'nick_raw_idle_0_pad';
+                  if (!this.textures.exists(firstKey)) {
+                    try {
+                      const anyNick = (this.textures.getTextureKeys?.() || []).find(k => k.startsWith('nick_raw_idle_'));
+                      if (anyNick) firstKey = anyNick;
+                    } catch(_) {}
                   }
-                  const r = trySpawnWith(blankKey, useCfg.prefix||'boss2'); this._bossSpawning = false; return r;
+                  if (this.textures.exists(firstKey)) {
+                    const r = trySpawnWith(firstKey, useCfg.prefix||'boss2'); this._bossSpawning = false; return r;
+                  }
+                  // Visible fallback instead of a transparent 2x2: try Miller; else enemy1
+                  const millerKey = this._bossFirstFrameKey && this.textures.exists(this._bossFirstFrameKey) ? this._bossFirstFrameKey : (this.textures.exists('boss') ? 'boss' : null);
+                  if (millerKey) { const r = trySpawnWith(millerKey, 'boss'); this._bossSpawning = false; return r; }
+                  if (this.textures.exists('enemy1')) { const r = trySpawnWith('enemy1', 'boss'); this._bossSpawning = false; return r; }
+                  this.showMessage('Nick assets missing (no visible fallback available).');
+                  this._bossSpawning = false; return null;
                 }
                 this.showMessage('Nick assets missing; check Skeleton_Crusader_2 folders');
                 this._bossSpawning = false;
@@ -2110,16 +2733,18 @@
   // Constrain to detected road band at start as well
   const roadTop0 = Math.round(ch * (this._roadTopFrac || this.ROAD_TOP_PCT));
   const roadBot0 = Math.round(ch * (this._roadBottomFrac || 0.985));
-  // Full blue band playable (+2px slack at the bottom)
+  // Full blue band playable (+20px slack at the bottom)
   this.baseYMin = roadTop0;
-  this.baseYMax = Math.min(ch - 1, roadBot0 + 2);
+  this.baseYMax = Math.min(ch - 1, roadBot0 + 20);
   // Place Alex so his body sits properly within his hurtbox and he can reach the bottom edge
   this.alexBaseY = this.baseYMax;
   this.alexJumpZ = 0; // negative while rising
   this.alexVy = 0;
   this.GRAVITY = 0.28; // slightly slower fall for longer airtime
   this.JUMP_VELOCITY = -12.0; // slightly softer takeoff
-  this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
+  this.alex.y = Math.round(this.alexBaseY + (this.alex._footPadScaled||0) + this.alexJumpZ);
+  // Align enemies to player's lane level
+  this.enemies.forEach(e => e.y = this.alexBaseY);
   // Player hurt / invulnerability window
   this.playerInvulUntil = 0; // timestamp in ms
         
@@ -2356,6 +2981,8 @@
       if (iconRow) { while (iconRow.firstChild) iconRow.removeChild(iconRow.firstChild); }
             const parts = [];
             const nowMs = this.time?.now || 0;
+            
+            // P1 buffs
             // Speed boost
             if (this.speedBoostUntil && nowMs < this.speedBoostUntil) {
               const left = Math.max(0, Math.ceil((this.speedBoostUntil - nowMs)/1000));
@@ -2383,6 +3010,39 @@
               parts.push('Map');
               if (iconRow) { const n = document.createElement('span'); n.className='ico'; n.title='City Map (exits visible)'; n.textContent='🗺️'; iconRow.appendChild(n); }
             }
+            
+            // P2 buffs (if P2 is present)
+            const p2 = this.net?.p2;
+            if (p2 && p2.active) {
+              // P2 Speed boost
+              if (p2.speedBoostUntil && nowMs < p2.speedBoostUntil) {
+                const left = Math.max(0, Math.ceil((p2.speedBoostUntil - nowMs)/1000));
+                parts.push(`P2 Speed x1.3 ${left}s`);
+                if (iconRow) {
+                  const n = document.createElement('span');
+                  n.className = 'ico'; n.title = `P2 Speed Boost x1.3 (${left}s)`;
+                  n.textContent = '🏃‍♂️';
+                  iconRow.appendChild(n);
+                }
+              }
+              // P2 Coin purse bonus
+              const p2Cvb = Math.max(0, Math.min(90, Math.round(((p2.coinValueBonus||0) * 100))));
+              if (p2Cvb > 0) parts.push(`P2 Coins +${p2Cvb}%`);
+              if (p2Cvb > 0 && iconRow) {
+                const n = document.createElement('span');
+                n.className = 'ico'; n.title = `P2 Coin Value +${p2Cvb}%`;
+                n.textContent = '🪙‍♂️';
+                const b = document.createElement('span'); b.className='badge'; b.textContent = `+${p2Cvb}%`;
+                n.appendChild(b);
+                iconRow.appendChild(n);
+              }
+              // P2 City map
+              if (p2.cityMapOwned) {
+                parts.push('P2 Map');
+                if (iconRow) { const n = document.createElement('span'); n.className='ico'; n.title='P2 City Map (exits visible)'; n.textContent='🗺️‍♂️'; iconRow.appendChild(n); }
+              }
+            }
+            
             // Hide verbose text and use tooltip on the icon row instead
             try { el.textContent = ''; el.style.display = 'none'; } catch(_) {}
             if (iconRow) {
@@ -2421,15 +3081,11 @@
         };
 
         // Feet baseline helpers so boxes attach to bodies (not to image bottoms or shadows)
-    this.feetBiasFor = (spr, role='enemy') => {
+  this.feetBiasFor = (spr, role='enemy') => {
           try {
             const h = Math.max(1, spr.displayHeight || spr.height || 32);
-      // Keep player feet bias modest so visuals and boxes align more naturally
-      if (role === 'player') return Math.round(Math.max(2, h * 0.10));
-            if (role === 'boss') {
-              // For Necro, use zero extra bias; footPad handles transparency padding
-              return (this.bossAnimPrefix === 'boss2') ? 0 : 0;
-            }
+            if (role === 'player') return Math.round(Math.max(2, h * 0.10));
+            if (role === 'boss') return Math.round(Math.max(1, h * 0.10));
             return Math.round(Math.max(1, h * 0.10));
           } catch(_) { return 4; }
         };
@@ -2449,38 +3105,28 @@
           } catch(_) { return (spr?.y||0); }
         };
 
-    // Tighter hurtbox helper (baseline-anchored so bottom sits on true feet)
-        this.hurtboxOf = (spr, role='enemy') => {
+  // Baseline-anchored hurtbox helper (no upward bias)
+    this.hurtboxOf = (spr, role='enemy') => {
           try {
             const w = Math.max(1, spr.displayWidth || spr.width || 16);
             const h = Math.max(1, spr.displayHeight || spr.height || 32);
-            // Boss boxes were visually correct (blue). For player/enemy, widen slightly and lower bottom by 1px
-            const widthFrac = (role==='boss') ? 0.46 : 0.48;
-            const heightFrac = (role==='boss') ? 0.55 : 0.58;
+      // Simple, slightly inset box; same fractions across roles for consistency
+      const widthFrac = 0.46;
+      const heightFrac = 0.60;
             const hbW = Math.max(2, w * widthFrac);
             const hbH = Math.max(2, h * heightFrac);
             const x = (spr.x || 0) - hbW/2;
             // Anchor bottom to true baseline but push box up so sprite feet touch bottom edge
             const baseY = this.baselineYOf(spr);
-            const offsetUp = (role==='boss') ? 0 : Math.round(h * 0.18); // push player/enemy boxes up more
-            const y = baseY - hbH - offsetUp;
+      const y = baseY - hbH; // no upward offset; bottom sits at feet baseline
             return new Phaser.Geom.Rectangle(Math.round(x), Math.round(y), Math.round(hbW), Math.round(hbH));
           } catch(_) {
             return new Phaser.Geom.Rectangle((spr?.x||0)-6, (spr?.y||0)-10, 12, 10);
           }
         };
 
-        // Auto-pause on window blur or page hidden
-        try {
-          const onBlur = () => { try { this.enterPause && this.enterPause(); } catch(_) {} };
-          const onVis = () => { try { if (document.hidden) this.enterPause && this.enterPause(); } catch(_) {} };
-          window.addEventListener('blur', onBlur);
-          document.addEventListener('visibilitychange', onVis);
-          this.events.once('shutdown', () => {
-            try { window.removeEventListener('blur', onBlur); } catch(_) {}
-            try { document.removeEventListener('visibilitychange', onVis); } catch(_) {}
-          });
-        } catch(_) {}
+  // Disabled auto-pause on blur/visibility to facilitate 2P testing across windows
+  try { if (this.sound) this.sound.pauseOnBlur = false; } catch(_) {}
         
   this.showMessage('Welcome to Baden City! Fight your way through the gangs!');
   // Initial Buff HUD render
@@ -2495,7 +3141,7 @@
   } catch(_) {}
   step('ready');
   console.log('Game scene created successfully!');
-  // Spawn both bosses by default on opposite far sides
+  // Spawn Miller by default; avoid auto-spawning a second Nick as a differently-sized enemy
   ;(async () => {
     try {
       // Ensure boss configs are loaded for both variants
@@ -2504,32 +3150,7 @@
       // Spawn Miller on the right by default
       this.currentBossConfig = this.bossConfigs[0];
       await this.spawnBossNearPlayer('right');
-    // Spawn Nick as a second boss-like enemy on the left using boss2 idle frame
-      try {
-        const firstKey = this._nickFirstFrameKey || 'nick_raw_idle_0_pad';
-        if (this.textures.exists(firstKey)) {
-          const w = (this.bg?.displayWidth || this.scale?.width || 800);
-          const groundY = Number.isFinite(this.baseYMax) ? this.baseYMax : ((this.scale.height || 480) - 18);
-          const b2 = this.add.sprite(40, groundY, firstKey).setOrigin(0.5,1).setDepth(10);
-          // Scale to match player height
-          try {
-            const f = this.textures.getFrame(firstKey, 0);
-            const srcH = Math.max(1, (f?.cutHeight || f?.height || 128));
-      const playerH = Math.max(1, this.alex?.displayHeight || 32);
-            const enemyScale = this.bg?.scaleX || 1;
-            const scaleAdj = Phaser.Math.Clamp(playerH / (srcH * enemyScale), 0.08, 0.6);
-            b2.setScale(enemyScale * scaleAdj * (this.ENEMY_SCALE_MULT || 0.8));
-          } catch(_) {}
-          // Play boss2 idle if exists
-          if (this.anims.exists('boss2-idle')) b2.play('boss2-idle');
-          // Give health/combat like a boss
-          b2.health = 180; b2.type = 'boss2'; b2.speed = 0.95; b2.attackReach = 32; b2.attackWidth = 22; b2.attackHeight = 18; b2.attackCadence = 700; b2.attackCooldown = 0;
-          // Put on far left side
-          b2.x = 40;
-          // Track as an enemy so AI updates apply
-          this.enemies.push(b2);
-        }
-      } catch(_) {}
+  // Optionally, if you want Nick spawned too, call: this.currentBossConfig = this.bossConfigs[1]; await this.spawnBossNearPlayer('left');
     } catch(_) {}
   })();
         } catch (err) {
@@ -2631,6 +3252,8 @@
           }
         } catch(_) {}
 
+  // Disable local P1 movement on client to avoid fighting host snapshots
+  if (this.net?.role !== 'client') {
   const baseSpeed = 2;
         // Temporary speed boost support
         const boostActive = (this.speedBoostUntil && (time < this.speedBoostUntil));
@@ -2647,7 +3270,7 @@
           this.alex.setFlipX(false);
           moving = true;
           if (this.runState.isRunning && this.runState.dir !== 1) this.runState.isRunning = false;
-        } else {
+  } else {
           // No horizontal input: stop running
           this.runState.isRunning = false;
         }
@@ -2658,38 +3281,196 @@
   // Clamp base Y to full lane; alex.y = alexBaseY + jumpZ so feet can reach exact bottom with slack
   this.alexBaseY = Phaser.Math.Clamp(this.alexBaseY, this.baseYMin, this.baseYMax);
 
+  // Real-time alignment: keep enemies and boss at player's lane level
+  (this.enemies||[]).forEach(e => e.y = this.alexBaseY);
+  if (this.boss) this.boss.y = this.alexBaseY + (this.boss._footPadScaled || 0) + this.feetBiasFor(this.boss,'boss');
+  } // end local P1 movement gate
+
+  // Netplay input/state handling
+  try {
+    if (this.net && this.net.role) {
+      const now = this.time.now || 0;
+      if (this.net.role === 'client' && this.net.ws && this.net.ws.readyState === 1) {
+        // Capture our local inputs (P2) and send to host
+        const k = this.cursors || {};
+        const left  = !!k.left?.isDown;
+        const right = !!k.right?.isDown;
+        const up    = !!k.up?.isDown;
+        const down  = !!k.down?.isDown;
+        const a = !!this.keys?.A?.isDown;
+        const b = !!this.keys?.S?.isDown;
+        const x = !!this.keys?.D?.isDown;
+        const payload = { t:'input', data:{ left,right,up,down,a,b,x, seq: ++this.net.inputSeq } };
+        try { this.net.ws.send(JSON.stringify(payload)); } catch(_) {}
+      }
+      if (this.net.role === 'host') {
+        if (!this.net.clientPresent) {
+          // No connected client; do not simulate or broadcast P2
+          this.net.p2 && (this.net.p2.visible = false);
+        } else {
+        // Ensure P2 exists when client is present
+        if (!this.net.p2) {
+          try {
+            const px = (this.alex?.x||200) + 40; const py = (this.alex?.y||0);
+            const p2 = this.add.sprite(px, py, (this._playerTextureKey||'alex')).setOrigin(0.5,1);
+            p2.setScale(this.alex?.scaleX||1, this.alex?.scaleY||1); p2.setTint(0x77ccff); try { p2.play('alex-idle'); } catch(_) {}
+            p2.name='CDRZ'; this.net.p2 = p2; p2.health=100; p2.money=0.00; p2.buffs={};
+            try { this._computeFootPad && this._computeFootPad(p2); } catch(_) {}
+          } catch(_) {}
+        }
+        // Apply P2 inputs on host; move P2 sprite and include in snapshot
+  const i = this.net.p2Inputs || {};
+        this.net._p2Prev = this.net._p2Prev || { a:0, b:0, x:0 };
+        // P2 run state detection
+        this.net.p2RunState = this.net.p2RunState || { isRunning:false, dir:0, lastTap:{ left:0, right:0 }, threshold: 280 };
+        const p2Now = time;
+        const p2Tap = (side) => {
+          const last = this.net.p2RunState.lastTap[side] || 0;
+          const dt = p2Now - last;
+          this.net.p2RunState.lastTap[side] = p2Now;
+          if (dt > 0 && dt < this.net.p2RunState.threshold) {
+            this.net.p2RunState.isRunning = true;
+            this.net.p2RunState.dir = (side==='left'?-1:1);
+          }
+        };
+        if (i.left && !this.net._p2Prev.left) p2Tap('left');
+        if (i.right && !this.net._p2Prev.right) p2Tap('right');
+        // P2 speed calculation using P2's own run state
+  // Normalize P2 speed to match P1 (no background scale multiplier)
+  const p2Speed = (this.net.p2RunState.isRunning ? 3.8 : 2);
+        if (this.net.p2) {
+          if (i.left)  this.net.p2.x -= p2Speed;
+          if (i.right) this.net.p2.x += p2Speed;
+          // Initialize P2 jump variables if not present
+          if (this.net.p2BaseY === undefined) this.net.p2BaseY = this.net.p2.y;
+          if (this.net.p2JumpZ === undefined) this.net.p2JumpZ = 0;
+          if (this.net.p2Vy === undefined) this.net.p2Vy = 0;
+          // Simple lane follow: clamp to same band
+          let p2BaseY = this.net.p2BaseY; // feet origin
+          if (i.up)   p2BaseY -= 1.5;
+          if (i.down) p2BaseY += 1.5;
+          p2BaseY = Phaser.Math.Clamp(p2BaseY, this.baseYMin, this.baseYMax);
+          this.net.p2BaseY = p2BaseY;
+          // P2 jump physics
+          const p2OnGround = this.net.p2JumpZ === 0;
+          if (!p2OnGround || this.net.p2Vy !== 0) {
+            this.net.p2JumpZ += this.net.p2Vy;
+            this.net.p2Vy += this.GRAVITY;
+            if (this.net.p2JumpZ >= 0) { this.net.p2JumpZ = 0; this.net.p2Vy = 0; }
+          }
+          // P2 jump input handling
+          if (i.x && !this.net._p2Prev.x && p2OnGround) {
+            this.net.p2Vy = this.JUMP_VELOCITY;
+            this.playSfx(['sfx_jump1','sfx_jump2'], 0.45, 1.0);
+          }
+          // Update P2 Y position
+          this.net.p2.y = Math.round(this.net.p2BaseY + (this.net.p2._footPadScaled||0) + this.net.p2JumpZ);
+          this.net.p2.x = Phaser.Math.Clamp(this.net.p2.x, 16, (this._bgNaturalW||800) * (this.bg?.scaleX||1) - 16);
+          // P2 facing and locomotion anim
+          if (!this.net.p2._attacking) {
+            const want = (i.left || i.right) ? 'alex-walk' : 'alex-idle';
+            if (this.net.p2.anims?.currentAnim?.key !== want) this.net.p2.play(want);
+            if (i.left) this.net.p2.setFlipX(true);
+            else if (i.right) this.net.p2.setFlipX(false);
+          }
+          // Stop P2 running if no horizontal input
+          if (!i.left && !i.right) this.net.p2RunState.isRunning = false;
+          // Attack edge-detect
+          const pressA = !!i.a && !this.net._p2Prev.a;
+          const pressB = !!i.b && !this.net._p2Prev.b;
+          const doAtk = (kind) => {
+            try {
+              const p2 = this.net.p2; if (!p2 || !p2.active) return;
+              p2._attacking = true; p2.play(kind==='kick'?'alex-kick':'alex-punch');
+              // Build P2 attack hitbox (same as P1 but relative to p2)
+              const baseReach = (kind==='kick') ? 28 : 24;
+              const reach = baseReach;
+              const baseW = (kind==='kick') ? 16 : 12;
+              const w = baseW, h = 16;
+              const ox = p2.flipX ? -reach : reach;
+              const pBase = this.baselineYOf(p2);
+              const lift = Math.round((p2.displayHeight||32) * 0.30);
+              const hitRect = new Phaser.Geom.Rectangle(p2.x + ox - Math.round(w*0.35), pBase - lift - h, w, h);
+              const hitOne = (target) => {
+                if (!target || !target.active || target._defeated) return false;
+                const tb = this.hurtboxOf(target, target===this.boss?'boss':'enemy');
+                if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, tb)) {
+                  target.health = Math.max(0, (target.health||1) - (kind==='kick'?16:12));
+                  target.setTintFill(0xffaaaa); this.time.delayedCall(90, () => target.clearTint());
+                  if (target.health === 0 && !target._defeated) { target._defeated = true; this.time.delayedCall(10, ()=>{ try { target.destroy(); } catch(_) {} }); }
+                  return true;
+                }
+                return false;
+              };
+              this.enemies.forEach(e=>{ hitOne(e); }); if (this.boss) hitOne(this.boss);
+              const ev = `animationcomplete-${kind==='kick'?'alex-kick':'alex-punch'}`;
+              p2.once(ev, () => { p2._attacking = false; });
+            } catch(_) {}
+          };
+          if (pressA) doAtk('punch');
+          if (pressB) doAtk('kick');
+          this.net._p2Prev = { a: !!i.a, b: !!i.b, x: !!i.x, left: !!i.left, right: !!i.right };
+  }
+  // Broadcast snapshot at ~30 Hz
+  if (this.net.clientPresent && (now - (this.net.lastStateSend||0)) >= 33 && this.net.ws && this.net.ws.readyState === 1) {
+          const snap = {
+            p1: { x: Math.round(this.alex.x), baseY: Math.round(this.alexBaseY), jumpZ: Math.round(this.alexJumpZ), flipX: this.alex.flipX, anim: this.alex.anims?.currentAnim?.key || null, attacking: !!this.isAttacking, buffs: this.alex.buffs || {} },
+            p2: this.net.p2 ? { x: Math.round(this.net.p2.x), baseY: Math.round(this.net.p2BaseY||this.net.p2.y), jumpZ: Math.round(this.net.p2JumpZ||0), flipX: this.net.p2.flipX, anim: this.net.p2.anims?.currentAnim?.key || null, attacking: !!this.net.p2._attacking, buffs: this.net.p2.buffs || {} } : null,
+            boss: (this.boss && !this.boss._defeated) ? {
+              x: Math.round(this.boss.x),
+              y: Math.round(this.boss.y),
+              flipX: !!this.boss.flipX,
+              health: Math.round(this.boss.health||0),
+              type: this.currentBossConfig?.key || this.bossAnimPrefix || 'boss'
+            } : null
+          };
+          try { this.net.ws.send(JSON.stringify({ t:'state', data: snap })); } catch(_) {}
+          this.net.lastStateSend = now;
+  }
+  }
+      }
+    }
+  } catch(_) {}
+
     // Gamepad poll
     try { this._pollPad && this._pollPad(); } catch(_) {}
 
-    // Jump with D if not already airborne
-        const onGround = this.alexJumpZ === 0;
-  if (!this.isAttacking && Phaser.Input.Keyboard.JustDown(this.keys.D) && onGround) { this._doJump && this._doJump(); }
-        // Apply jump gravity to jump height only
-        const wasAir = !onGround || this.alexVy !== 0;
-        if (!onGround || this.alexVy !== 0) {
-          this.alexJumpZ += this.alexVy;
-          this.alexVy += this.GRAVITY;
-          if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
-        }
-        // Compose final render Y
-        this.alex.y = Math.round(this.alexBaseY + this.alexJumpZ);
-        // Landing detect: transitioning from air to ground this frame
-        const nowOnGround = (this.alexJumpZ === 0 && this.alexVy === 0);
-        if (wasAir && nowOnGround) {
-          this.synth.thump(95, 0.1, 0.18);
+    // Jump and gravity: host-only. Clients mirror host snapshots to avoid stutter.
+        if (this.net?.role !== 'client') {
+          const onGround = this.alexJumpZ === 0;
+          if (!this.isAttacking && Phaser.Input.Keyboard.JustDown(this.keys.D) && onGround) { this._doJump && this._doJump(); }
+          // Apply jump gravity to jump height only
+          const wasAir = !onGround || this.alexVy !== 0;
+          if (!onGround || this.alexVy !== 0) {
+            this.alexJumpZ += this.alexVy;
+            this.alexVy += this.GRAVITY;
+            if (this.alexJumpZ >= 0) { this.alexJumpZ = 0; this.alexVy = 0; }
+          }
+          // Compose final render Y
+          this.alex.y = Math.round(this.alexBaseY + (this.alex._footPadScaled||0) + this.alexJumpZ);
+          // Landing detect: transitioning from air to ground this frame
+          const nowOnGround = (this.alexJumpZ === 0 && this.alexVy === 0);
+          if (wasAir && nowOnGround) {
+            this.synth.thump(95, 0.1, 0.18);
+          }
+        } else {
+          // Client: rely on latest snapshot (already applied) for Y; no local gravity.
+          this.alex.y = Math.round(this.alexBaseY + (this.alex._footPadScaled||0) + this.alexJumpZ);
         }
         
-  // Animation handling
-        if (!onGround && !this.isAttacking) {
-          if (this.alex.anims.currentAnim?.key !== 'alex-jump') {
-            this.alex.play('alex-jump');
-          }
-        } else if (moving && !this.isAttacking) {
-          const want = this.runState.isRunning ? 'alex-run' : 'alex-walk';
-          if (this.alex.anims.currentAnim?.key !== want) this.alex.play(want);
-        } else if (!this.isAttacking) {
-          if (this.alex.anims.currentAnim?.key !== 'alex-idle') {
-            this.alex.play('alex-idle');
+  // Animation handling (host only). On clients, animations mirror snapshot data.
+        if (this.net?.role !== 'client') {
+          if (!onGround && !this.isAttacking) {
+            if (this.alex.anims.currentAnim?.key !== 'alex-jump') {
+              this.alex.play('alex-jump');
+            }
+          } else if (moving && !this.isAttacking) {
+            const want = this.runState.isRunning ? 'alex-run' : 'alex-walk';
+            if (this.alex.anims.currentAnim?.key !== want) this.alex.play(want);
+          } else if (!this.isAttacking) {
+            if (this.alex.anims.currentAnim?.key !== 'alex-idle') {
+              this.alex.play('alex-idle');
+            }
           }
         }
 
@@ -2900,9 +3681,11 @@
           });
         };
 
-  if (Phaser.Input.Keyboard.JustDown(this.keys.A)) { this.runState.isRunning=false; tryAttack('punch'); }
-  if (Phaser.Input.Keyboard.JustDown(this.keys.S)) { this.runState.isRunning=false; tryAttack('kick'); }
-  if (this.keys.Q && Phaser.Input.Keyboard.JustDown(this.keys.Q)) { this.runState.isRunning=false; tryAttack('special'); }
+  if (this.net?.role !== 'client') {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.A)) { this.runState.isRunning=false; tryAttack('punch'); }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.S)) { this.runState.isRunning=false; tryAttack('kick'); }
+    if (this.keys.Q && Phaser.Input.Keyboard.JustDown(this.keys.Q)) { this.runState.isRunning=false; tryAttack('special'); }
+  }
         
     // Keep Alex inside world bounds
   const displayWNow = (this._bgNaturalW||800) * (this.bg?.scaleX||1);
@@ -2912,7 +3695,7 @@
   // ... (resize listener moved to create())
         
         // Enhanced multi-enemy AI system with varied behaviors
-        const hurtPlayer = (dmg, knock=8, dir=1) => {
+  const hurtPlayer = (dmg, knock=8, dir=1) => {
           if (this.godMode) return; // ignore damage in God Mode
           const nowMs = time;
           if (nowMs < this.playerInvulUntil) return; // i-frames
@@ -2947,7 +3730,7 @@
                 this.alexBaseY = this.baseYMax;
                 this.alexJumpZ = 0; this.alexVy = 0;
                 this.alex.x = Phaser.Math.Clamp((this.cameras.main.scrollX||0) + 120, 16, worldW - 16);
-                this.alex.y = Math.round(this.alexBaseY);
+                this.alex.y = Math.round(this.alexBaseY + (this.alex._footPadScaled||0));
                 // Set longer i-frames and blink
                 const now2 = this.time.now || (nowMs+1);
                 const INV_MS = 2000;
@@ -2959,13 +3742,32 @@
             } catch(_) {}
           }
         };
+        const hurtP2 = (dmg, knock=8, dir=1) => {
+          try {
+            const p2 = this.net?.p2; if (!p2 || !p2.active) return;
+            p2.health = Math.max(0, (p2.health||100) - dmg);
+            p2.setTintFill(0xffff77); this.time.delayedCall(100, () => p2.clearTint());
+            p2.x += (dir<0?-1:1) * knock;
+            if (p2.health === 0 && !p2._defeated) { p2._defeated = true; p2.setAlpha(0.25); this.time.delayedCall(600, ()=>{ try { p2.destroy(); } catch(_) {} this.net.p2=null; }); }
+          } catch(_) {}
+        };
         
-        this.enemies.forEach((enemy, index) => {
+  if (!this.net || this.net.role === 'host') {
+  this.enemies.forEach((enemy, index) => {
           if (!enemy || enemy._defeated) return;
           
-          const dx = this.alex.x - enemy.x;
+          // Pick nearest target (P1 or P2)
+          const p2 = this.net?.p2 && this.net.p2.active ? this.net.p2 : null;
+          const distTo = (sx,sy,tx,ty) => { const dx = tx - sx, dy = ty - sy; return Math.hypot(dx, dy); };
+          const feetEnemy = this.feetYOf(enemy,'enemy');
+          const d1 = distTo(enemy.x, feetEnemy, this.alex.x, this.alexBaseY);
+          const d2 = p2 ? distTo(enemy.x, feetEnemy, p2.x, p2.y) : Infinity;
+          const tgtIsP2 = d2 < d1;
+          const tgtX = tgtIsP2 ? (p2?.x||this.alex.x) : this.alex.x;
+          const tgtY = tgtIsP2 ? (p2?.y||this.alexBaseY) : this.alexBaseY;
+          const dx = tgtX - enemy.x;
           // Compare using feet baselines for consistent lane alignment
-          const dy = (this.alexBaseY - this.feetYOf(enemy,'enemy'));
+          const dy = (tgtY - this.feetYOf(enemy,'enemy'));
           const distX = Math.abs(dx);
           const distY = Math.abs(dy);
           const totalDist = Math.sqrt(dx*dx + dy*dy);
@@ -3002,11 +3804,11 @@
                 break;
 
               case 1: // Cautious circling
-                if (distX > reach + 20) {
+        if (distX > reach + 20) {
                   enemy.x += Math.sign(dx) * enemy.speed;
                   if (!alignedY) {
                     const enemyFeetY = this.feetYOf(enemy, 'enemy');
-                    enemy.y += Math.sign(this.alexBaseY - enemyFeetY) * 0.8;
+          enemy.y += Math.sign(tgtY - enemyFeetY) * 0.8;
                   }
                 } else if (distX > reach + 5) {
                   // Circle around player
@@ -3024,7 +3826,7 @@
                   enemy.x += Math.sign(dx) * enemy.speed * 1.3; // Rush in
                   if (!alignedY) {
                     const enemyFeetY = this.feetYOf(enemy, 'enemy');
-                    enemy.y += Math.sign(this.alexBaseY - enemyFeetY) * 1.0;
+                    enemy.y += Math.sign(tgtY - enemyFeetY) * 1.0;
                   }
                 }
                 break;
@@ -3034,23 +3836,44 @@
             if (enemy.anims.currentAnim?.key !== `${enemy.type}-idle`) enemy.play(`${enemy.type}-idle`);
             // attempt attack if cooldown over
             if (time >= (enemy.attackCooldown||0)) {
-              // attack hitbox in front of enemy
-              const w = Math.max(10, Math.floor(enemy.attackWidth * 0.9)), h = Math.max(10, Math.floor(enemy.attackHeight * 0.9));
+              // Attack hitbox at the hand/weapon height, offset forward by reach
+              const w = Math.max(12, Math.floor(enemy.attackWidth * 1.1)), h = Math.max(12, Math.floor(enemy.attackHeight * 1.1));
               const ox = enemy.flipX ? -reach : reach;
-              const eBase = this.baselineYOf(enemy);
-              const hitRect = new Phaser.Geom.Rectangle(enemy.x + ox - w/2, eBase - 7 - h, w, h);
+              // Use enemy hurtbox to approximate hand/chest height
+              const hbE = this.hurtboxOf(enemy, 'enemy');
+              const handY = Math.round(hbE.y + hbE.height * 0.48); // slightly lower for better overlap
+              const handX = Math.round(enemy.x + ox);
+              const hitRect = new Phaser.Geom.Rectangle(handX - w/2, handY - h/2, w, h);
               // Expose for debug overlay
               enemy._lastAtkRect = hitRect; enemy._lastAtkTs = time;
               const pb = this.hurtboxOf(this.alex,'player');
+              const pb2 = (p2 && p2.active) ? this.hurtboxOf(p2,'player') : null;
+              const dir = enemy.flipX?-1:1;
               if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
-                hurtPlayer(10, 10, enemy.flipX?-1:1);
+                hurtPlayer(10, 10, dir);
+              } else if (pb2 && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb2)) {
+                hurtP2(10, 10, dir);
               }
               enemy.attackCooldown = time + enemy.attackCadence;
             }
           }
-        });
+  });
+  }
         // Boss AI (Miller) – completely rewritten for maximum stability
   if (this.boss && !this.boss._defeated) {
+          if (this.net && this.net.role !== 'host') {
+            // Client: only do depth sorting; AI is host-authoritative
+            try {
+              const aY = Math.round(this.alex?.y || 0);
+              const bY = Math.round(this.boss?.y || 0);
+              const p2 = this.net?.p2;
+              const p2Y = p2 ? Math.round(p2.y || 0) : Infinity;
+              const sprites = [ { obj:this.alex, y:aY }, { obj:this.boss, y:bY } ];
+              if (p2 && p2.active) sprites.push({ obj:p2, y:p2Y });
+              sprites.sort((a,b)=>b.y-a.y);
+              sprites.forEach((s,i)=>{ let d=s.y; if (i>0 && s.y===sprites[i-1].y) d+=0.1*i; s.obj.setDepth(d); });
+            } catch(_) {}
+          } else {
           const b = this.boss;
           
           // Fix potential issues with boss sprite visibility
@@ -3078,8 +3901,31 @@
           try {
             const aY = Math.round(this.alex?.y || 0);
             const bY = Math.round(b?.y || 0);
-            if (this.alex?.setDepth) this.alex.setDepth(aY + (aY >= bY ? 1 : 0));
-            if (b?.setDepth) b.setDepth(bY + (bY > aY ? 1 : 0));
+            const p2 = this.net?.p2;
+            const p2Y = p2 ? Math.round(p2.y || 0) : Infinity;
+            
+            // Sort all three sprites by Y position (higher Y = lower on screen = appears in front)
+            const sprites = [
+              { obj: this.alex, y: aY, name: 'alex' },
+              { obj: b, y: bY, name: 'boss' }
+            ];
+            
+            if (p2 && p2.active) {
+              sprites.push({ obj: p2, y: p2Y, name: 'p2' });
+            }
+            
+            // Sort by Y descending (higher Y values appear in front)
+            sprites.sort((a, b) => b.y - a.y);
+            
+            // Assign depths with tie-breaking
+            sprites.forEach((sprite, index) => {
+              let depth = sprite.y;
+              // Add small offset to prevent exact ties
+              if (index > 0 && sprite.y === sprites[index - 1].y) {
+                depth += 0.1 * index;
+              }
+              sprite.obj.setDepth(depth);
+            });
           } catch(_) {}
 
           // Set the correct direction the boss is facing
@@ -3210,9 +4056,11 @@
 
                   const w = Math.max(12, Math.floor((b.attackWidth || 22) * 0.95)), h = Math.max(12, Math.floor((b.attackHeight || 20) * 0.95));
                   const ox = b.flipX ? -reach : reach;
-                  const bFeetY2 = this.feetYOf(b, 'boss');
-                  const bBase = this.baselineYOf(b);
-                  const hitRect = new Phaser.Geom.Rectangle(b.x + ox - w/2, bBase - 8 - h, w, h);
+                  // Place rectangle near hand/weapon height using boss hurtbox center
+                  const hbB = this.hurtboxOf(b, 'boss');
+                  const handY = Math.round(hbB.y + hbB.height * 0.45);
+                  const handX = Math.round(b.x + ox);
+                  const hitRect = new Phaser.Geom.Rectangle(handX - w/2, handY - h/2, w, h);
                   // Expose for debug overlay
                   b._lastAtkRect = hitRect; b._lastAtkTs = time;
                   const pb = this.hurtboxOf(this.alex,'player');
@@ -3231,6 +4079,7 @@
               b.attackCooldown = time + (b.attackCadence || 900);
             }
           }
+          } // end host-only boss AI
         }
         
         // Shop zone proximity + prompt and key to open shop
@@ -3358,6 +4207,11 @@
           try {
             const pb = this.hurtboxOf(this.alex,'player');
             g.lineStyle(1, 0x00ff00, 1); g.strokeRect(pb.x, pb.y, pb.width, pb.height);
+            // P2
+            if (this.net && this.net.p2) {
+              const p2b = this.hurtboxOf(this.net.p2,'player');
+              g.lineStyle(1, 0x66ccff, 1); g.strokeRect(p2b.x, p2b.y, p2b.width, p2b.height);
+            }
             // Player attack rect (recent)
             if (this._lastPlayerHitRect && (this.time.now - (this._lastPlayerHitRect.ts||0) < 320)) {
               const r = this._lastPlayerHitRect.rect; g.lineStyle(1, 0xff0000, 1); g.strokeRect(r.x, r.y, r.width, r.height);
@@ -3401,6 +4255,30 @@
   if (this.updateDebug) this.updateDebug();
         document.getElementById('health').innerHTML = this.alex.health;
   document.getElementById('money').innerHTML = Number(this.alex.money||0).toFixed(2);
+  
+  // Update P2 HUD if present
+  if (this.net && this.net.p2 && this.net.p2.active) {
+    // Initialize P2 stats if not present
+    if (this.net.p2.health === undefined) this.net.p2.health = 100;
+    if (this.net.p2.money === undefined) this.net.p2.money = 0.00;
+    if (this.net.p2.name === undefined) this.net.p2.name = 'CDRZ';
+    
+    // Show P2 HUD row
+    const p2HudRow = document.getElementById('p2HudRow');
+    if (p2HudRow) p2HudRow.style.display = 'flex';
+    
+    // Update P2 elements
+    const p2HealthEl = document.getElementById('p2Health');
+    const p2MoneyEl = document.getElementById('p2Money');
+    const p2NameEl = document.getElementById('p2Name');
+    if (p2HealthEl) p2HealthEl.innerHTML = this.net.p2.health;
+    if (p2MoneyEl) p2MoneyEl.innerHTML = Number(this.net.p2.money||0).toFixed(2);
+    if (p2NameEl) p2NameEl.innerHTML = this.net.p2.name;
+  } else {
+    // Hide P2 HUD when not present
+    const p2HudRow = document.getElementById('p2HudRow');
+    if (p2HudRow) p2HudRow.style.display = 'none';
+  }
       }
     }
     
@@ -3655,6 +4533,12 @@
           { key:'sneak', label:'Sneakers',   cost:20, desc:'Speed x1.3 for 20s',  action: () => { const now = gs.time.now||performance.now(); gs.speedBoostUntil = now + 20000; gs.updateBuffHUD && gs.updateBuffHUD(); } },
           { key:'coinp', label:'Coin Purse', cost:35, desc:'+5% coin value (stack, max +50%)', action: () => { gs.coinValueBonus = Math.min(0.5, (gs.coinValueBonus||0)+0.05); gs.updateBuffHUD && gs.updateBuffHUD(); } },
           { key:'map',   label:'City Map',   cost:10, desc:'Show exits on street', action: () => { gs.cityMapOwned = true; gs.showMessage && gs.showMessage('Map: exits highlighted.'); gs.updateBuffHUD && gs.updateBuffHUD(); } },
+          // P2 items (only available when P2 is present)
+          { key:'p2_apple', label:'Apple (P2)',      cost:8,  desc:'+30 HP for P2',          action: () => { if (gs.net?.p2) { gs.net.p2.health = Math.max(0, Math.min(100, (gs.net.p2.health||0)+30)); gs.updateBuffHUD && gs.updateBuffHUD(); } } },
+          { key:'p2_ramen', label:'Ramen (P2)',      cost:12, desc:'+50 HP for P2',          action: () => { if (gs.net?.p2) { gs.net.p2.health = Math.max(0, Math.min(100, (gs.net.p2.health||0)+50)); gs.updateBuffHUD && gs.updateBuffHUD(); } } },
+          { key:'p2_sneak', label:'Sneakers (P2)',   cost:20, desc:'Speed x1.3 for P2 (20s)', action: () => { if (gs.net?.p2) { const now = gs.time.now||performance.now(); gs.net.p2.speedBoostUntil = now + 20000; gs.updateBuffHUD && gs.updateBuffHUD(); } } },
+          { key:'p2_coinp', label:'Coin Purse (P2)', cost:35, desc:'+5% coin value for P2',   action: () => { if (gs.net?.p2) { gs.net.p2.coinValueBonus = Math.min(0.5, (gs.net.p2.coinValueBonus||0)+0.05); gs.updateBuffHUD && gs.updateBuffHUD(); } } },
+          { key:'p2_map',   label:'City Map (P2)',   cost:10, desc:'Show exits for P2',       action: () => { if (gs.net?.p2) { gs.net.p2.cityMapOwned = true; gs.showMessage && gs.showMessage('P2 Map: exits highlighted.'); gs.updateBuffHUD && gs.updateBuffHUD(); } } },
         ];
 
         // Left list area
@@ -3667,18 +4551,33 @@
         const priceRight = listArea.x + listArea.w - 12;
         const rowNodes = [];
 
-        const affordable = (it) => (Number(gs?.alex?.money||0) >= Number(it.cost||0));
+        const affordable = (it) => {
+          const hasMoney = Number(gs?.alex?.money||0) >= Number(it.cost||0);
+          // P2 items only available when P2 is present
+          if (it.key?.startsWith('p2_')) {
+            return hasMoney && gs?.net?.p2 && gs.net.p2.active;
+          }
+          return hasMoney;
+        };
     const drawList = () => {
+          // Filter items based on P2 availability
+          const availableItems = items.filter(it => {
+            if (it.key?.startsWith('p2_')) {
+              return gs?.net?.p2 && gs.net.p2.active;
+            }
+            return true;
+          });
+          
           // maintain selection within bounds and scroll window
-          sel = Phaser.Math.Clamp(sel, 0, items.length-1);
+          sel = Phaser.Math.Clamp(sel, 0, availableItems.length-1);
           if (sel < top) top = sel;
           if (sel >= top + viewRows) top = sel - viewRows + 1;
           // clear old
           rowNodes.splice(0).forEach(n=>n.destroy());
           // rows
           for (let i=0;i<viewRows;i++) {
-            const idx = top + i; if (idx >= items.length) break;
-            const it = items[idx]; const y = listArea.y + 6 + i*rowH;
+            const idx = top + i; if (idx >= availableItems.length) break;
+            const it = availableItems[idx]; const y = listArea.y + 6 + i*rowH;
       const color = idx===sel ? '#ffffcc' : affordable(it) ? '#f8f8ff' : '#b8b8b8';
       const name = this.add.text(listArea.x+8, y, it.label, { fontFamily:'monospace', fontSize:'18px', fontStyle: idx===sel ? 'bold' : 'normal', color, stroke:'#000', strokeThickness:4, resolution: 2 }).setDepth(5).setInteractive({ useHandCursor:true });
       const price = this.add.text(priceRight, y, `$${it.cost}`, { fontFamily:'monospace', fontSize:'18px', fontStyle: idx===sel ? 'bold' : 'normal', color, stroke:'#000', strokeThickness:4, resolution: 2 }).setOrigin(1,0).setDepth(5);
@@ -3687,7 +4586,7 @@
             rowNodes.push(name, price);
           }
           // highlight position
-          if (items[sel]) {
+          if (availableItems[sel]) {
             highlight.setVisible(true);
             const hiY = listArea.y + 6 + (sel - top) * rowH - 2;
             highlight.setPosition(listArea.x+3, hiY);
@@ -3695,7 +4594,7 @@
             highlight.setVisible(false);
           }
           // scroll cues
-          const moreUp = top > 0, moreDown = (top + viewRows) < items.length;
+          const moreUp = top > 0, moreDown = (top + viewRows) < availableItems.length;
           // simple triangles
           rowNodes.push(this.add.text(listArea.x + listArea.w/2, listArea.y - 12, moreUp ? '▲' : ' ', { fontFamily:'monospace', fontSize:'12px', color:'#cccccc' }).setOrigin(0.5,1).setDepth(5));
           rowNodes.push(this.add.text(listArea.x + listArea.w/2, listArea.y + listArea.h + 2, moreDown ? '▼' : ' ', { fontFamily:'monospace', fontSize:'12px', color:'#cccccc' }).setOrigin(0.5,0).setDepth(5));
@@ -3715,13 +4614,25 @@
   const buyBtn  = this.add.text(px+panelW-100, btnY, 'Buy', { fontFamily:'monospace', fontSize:'17px', fontStyle:'bold', color:'#ffffee', stroke:'#000', strokeThickness:4, resolution: 2 }).setOrigin(1,1).setDepth(4).setInteractive({ useHandCursor:true });
 
         const updateButtons = () => {
-          const it = items[sel]; const can = !!it && affordable(it);
+          const availableItems = items.filter(it => {
+            if (it.key?.startsWith('p2_')) {
+              return gs?.net?.p2 && gs.net.p2.active;
+            }
+            return true;
+          });
+          const it = availableItems[sel]; const can = !!it && affordable(it);
           buyBtn.setAlpha(can ? 1 : 0.6);
           buyBtn.disableInteractive(); if (can) buyBtn.setInteractive({ useHandCursor:true });
         };
 
         const updateDetails = () => {
-          const it = items[sel]; if (!it) { detTitle.setText(''); detDesc.setText(''); feedback.setText(''); updateButtons(); return; }
+          const availableItems = items.filter(it => {
+            if (it.key?.startsWith('p2_')) {
+              return gs?.net?.p2 && gs.net.p2.active;
+            }
+            return true;
+          });
+          const it = availableItems[sel]; if (!it) { detTitle.setText(''); detDesc.setText(''); feedback.setText(''); updateButtons(); return; }
           detTitle.setText(`${it.label}  —  $${it.cost}`);
           detDesc.setText(it.desc || '');
           const have = Number(gs?.alex?.money||0);
@@ -3729,12 +4640,30 @@
           updateButtons();
         };
 
-        const updateAll = () => { drawList(); updateDetails(); updateMoney(); };
+        const updateAll = () => { 
+          const availableItems = items.filter(it => {
+            if (it.key?.startsWith('p2_')) {
+              return gs?.net?.p2 && gs.net.p2.active;
+            }
+            return true;
+          });
+          // Reset selection if it's out of bounds after filtering
+          if (sel >= availableItems.length) {
+            sel = Math.max(0, availableItems.length - 1);
+          }
+          drawList(); updateDetails(); updateMoney(); 
+        };
         drawList(); updateDetails();
 
         const attemptBuy = () => {
+          const availableItems = items.filter(it => {
+            if (it.key?.startsWith('p2_')) {
+              return gs?.net?.p2 && gs.net.p2.active;
+            }
+            return true;
+          });
           try {
-            const it = items[sel]; if (!it) return;
+            const it = availableItems[sel]; if (!it) return;
             const have = Number(gs?.alex?.money||0);
             if (have < it.cost) { feedback.setText('Not enough money.'); this.sound && gs.playSfx && gs.playSfx(['sfx_punch2'], 0.45, 0.9); return; }
             // pay
@@ -3754,8 +4683,14 @@
         // Keyboard
         this.input.keyboard?.on('keydown', (ev)=>{
           if (ev.code==='Escape' || ev.code==='KeyE') return this._exit();
-          if (ev.code==='ArrowUp')  { sel = (sel + items.length - 1) % items.length; updateAll(); }
-          if (ev.code==='ArrowDown'){ sel = (sel + 1) % items.length; updateAll(); }
+          const availableItems = items.filter(it => {
+            if (it.key?.startsWith('p2_')) {
+              return gs?.net?.p2 && gs.net.p2.active;
+            }
+            return true;
+          });
+          if (ev.code==='ArrowUp')  { sel = (sel + availableItems.length - 1) % availableItems.length; updateAll(); }
+          if (ev.code==='ArrowDown'){ sel = (sel + 1) % availableItems.length; updateAll(); }
           if (ev.code==='Enter') attemptBuy();
         });
         // Gamepad navigation
@@ -3775,7 +4710,15 @@
             };
             const just = (k) => now[k] && !this._padPrev[k];
             const held = (k) => now[k] && this._padPrev[k];
-            const moveSel = (delta) => { sel = (sel + items.length + delta) % items.length; updateAll(); };
+            const moveSel = (delta) => { 
+              const availableItems = items.filter(it => {
+                if (it.key?.startsWith('p2_')) {
+                  return gs?.net?.p2 && gs.net.p2.active;
+                }
+                return true;
+              });
+              sel = (sel + availableItems.length + delta) % availableItems.length; updateAll(); 
+            };
             if (just('up') || just('down')) {
               moveSel(just('up') ? -1 : +1); this._padRep.dir = just('up') ? 'up' : 'down'; this._padRep.next = time + 280;
             } else if (held('up') && this._padRep.dir==='up' && time >= this._padRep.next) {
@@ -3798,15 +4741,23 @@
     }
     
     // Game configuration with adjusted canvas for bigger UI bars
+    // Renderer: default to Canvas to avoid WebGL context loss on some GPUs; allow ?renderer=webgl|canvas|auto
+    let RENDER_TYPE = Phaser.CANVAS;
+    try {
+      const rv = new URLSearchParams(location.search).get('renderer');
+      if (rv === 'webgl') RENDER_TYPE = Phaser.WEBGL;
+      else if (rv === 'auto') RENDER_TYPE = Phaser.AUTO;
+      else RENDER_TYPE = Phaser.CANVAS;
+    } catch(_) { RENDER_TYPE = Phaser.CANVAS; }
     const config = {
-      type: Phaser.AUTO,
+      type: RENDER_TYPE,
       width: 800,
       height: 480, // 80% of a 600 reference height
       parent: 'canvasWrap',
       backgroundColor: '#000000',
-  resolution: 1,
-  input: { gamepad: true },
-  scene: [TitleScene, StoryScene, BadenCityRansomGame, PauseOverlay, ShopOverlay, StoreScene],
+      resolution: 1,
+      input: { gamepad: true },
+  scene: [TitleScene, ModeSelectScene, CoopSetupScene, LobbyScene, StoryScene, BadenCityRansomGame, PauseOverlay, ShopOverlay, StoreScene],
       render: {
         pixelArt: true,
         antialias: false,
@@ -3821,6 +4772,13 @@
     
   console.log('Starting authentic Baden City Ransom...');
     const game = new Phaser.Game(config);
+    // If running with WebGL, prevent default on context lost so Phaser can try restoring
+    try {
+      if (game && game.canvas) {
+        game.canvas.addEventListener('webglcontextlost', (e) => { try { e.preventDefault(); console.warn('WebGL context lost; attempting restore...'); } catch(_) {} }, false);
+        game.canvas.addEventListener('webglcontextrestored', () => { try { console.warn('WebGL context restored'); } catch(_) {} }, false);
+      }
+    } catch(_) {}
   // Expose helpers for Dev UI
   window._BCR = { game, gs: () => { try { return game.scene.getScene('BadenCityRansomGame'); } catch(_) { return null; } } };
     

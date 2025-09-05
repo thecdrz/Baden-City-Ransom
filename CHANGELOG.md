@@ -4,6 +4,24 @@ All notable changes to Baden City Ransom will be documented in this file.
 
 ## [v2.1.0] - 2025-09-01
 
+### 🕹️ Co‑op Netplay & Sync
+
+#### Added
+- Host snapshots now include P1/P2 animation keys and attacking flags
+- Clients mirror host animations for both players, keeping swings in sync
+- Boss metadata in snapshots so clients always render the active boss
+
+#### Fixed
+- Client inputs no longer trigger host player actions locally (authority cleanup)
+- CDRZ sprint speed normalized; smoother walk/run animation switching
+- TheGuyWho stutter on client during CDRZ jump: gated client-side jump physics and animation; clients follow host snapshots to avoid conflicts
+- Depth sorting and feet alignment polished across spawn/resize/respawn
+
+#### Flow
+- Non‑autostart co‑op: 1P/2P select, Host/Join, lobby start signal
+- Story scene synchronized: host-timed typewriter with matching audio clicks
+
+
 ### 🎮 Major Combat System Overhaul
 
 #### Added
