@@ -1638,6 +1638,19 @@
           } catch(e) {}
           return null;
         };
+          // Lightweight hit-spark visual cue
+          this.showHitSpark = (x, y, color = 0xfff2a8, duration = 180, size = 10) => {
+            try {
+              const g = this.add.graphics().setDepth(5000).setScrollFactor(1);
+              g.lineStyle(2, color, 1);
+              const s = size;
+              // small cross + ring
+              g.strokeCircle(0, 0, Math.max(2, Math.floor(s * 0.5)));
+              g.beginPath(); g.moveTo(-s, 0); g.lineTo(s, 0); g.moveTo(0, -s); g.lineTo(0, s); g.strokePath();
+              g.x = Math.round(x); g.y = Math.round(y);
+              this.tweens.add({ targets: g, alpha: 0, scale: 1.6, duration, onComplete: () => { try { g.destroy(); } catch(_) {} } });
+            } catch(_) {}
+          };
         const analyzeRoadBottom = (ctx, w, h) => {
           try {
             const sampleCols = 24;
@@ -3682,7 +3695,7 @@
           const tipX = Math.round(this.alex.x + (this.alex.flipX ? -reach : reach));
           // Dev override: tip Y offset
           const devTip = (this.devHitboxTune?.enabled && Number.isFinite(this.devHitboxTune.tipYOffset)) ? (this.devHitboxTune.tipYOffset|0) : (kind==='kick' ? -2 : -6);
-          const tipY = handY + devTip;
+          const tipY = handY + devTip; // base; will be blended toward target per-hit below
           const baseW = (kind==='kick') ? 14 : (kind==='special' ? 14 : 12);
           const w = Math.round(baseW * (1 + this.comboCount * 0.04));
           const h = Math.round(14 + this.comboCount * 2);
@@ -3690,13 +3703,20 @@
           // Expose for debug overlay
           try { this._lastPlayerHitRect = { rect: hitRect, ts: (this.time.now || 0) }; } catch(_) {}
 
-      const applyHit = (target, dmg, knock=6) => {
+  const applyHit = (target, dmg, knock=6) => {
             if (!target || !target.active || target._defeated) return;
             // Require target to be in front of the player (no hitting behind)
             const facingOk = this.alex.flipX ? (target.x < this.alex.x - 1) : (target.x > this.alex.x + 1);
             if (!facingOk) return;
-            const tb = this.hurtboxOf(target, (target===this.boss)?'boss':'enemy');
-            if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, tb)) {
+    const tb = this.hurtboxOf(target, (target===this.boss)?'boss':'enemy');
+    // Blend our hit Y toward target mid-height so tall/short targets connect reliably
+    const tgtMidY = Math.round(tb.y + tb.height * 0.45);
+    const tipYBlended = Math.round((handY * 0.5) + (tgtMidY * 0.5));
+    const localTipY = tipYBlended; // devTip already included in handY via tipY base above
+    const localRect = new Phaser.Geom.Rectangle(tipX - Math.floor(w/2), localTipY - Math.floor(h/2), w, h);
+    // Update last player hit rect for overlay/debug
+    try { this._lastPlayerHitRect = { rect: localRect, ts: (this.time.now || 0) }; } catch(_) {}
+    if (Phaser.Geom.Intersects.RectangleToRectangle(localRect, tb)) {
               const comboDamage = dmg * (1 + this.comboCount * 0.2);
               const comboKnockback = knock * (1 + this.comboCount * 0.15);
               
@@ -3706,6 +3726,13 @@
               const hitColor = this.comboCount > 2 ? 0xffaa00 : 0xff0000; // Orange for high combo
               target.setTintFill(hitColor);
               this.time.delayedCall(100, () => target.clearTint());
+
+              // Hit spark at impact
+              try {
+        const cx = Math.round(Phaser.Math.Clamp(tipX, tb.x, tb.x + tb.width));
+        const cy = Math.round(Phaser.Math.Clamp(localTipY, tb.y, tb.y + tb.height));
+                this.showHitSpark && this.showHitSpark(cx, cy, 0xfff2a8, 150, 9);
+              } catch(_) {}
 
               // Try to play a role-appropriate hit animation briefly
               try {
@@ -3832,6 +3859,19 @@
     // Cemetery-only logic disabled unless explicitly in cemetery map
         
   // ... (resize listener moved to create())
+        // Ensure hit-spark helper exists even if background setup path skipped
+        if (!this.showHitSpark) {
+          this.showHitSpark = (x, y, color = 0xfff2a8, duration = 180, size = 10) => {
+            try {
+              const g = this.add.graphics().setDepth(5000).setScrollFactor(1);
+              g.lineStyle(2, color, 1);
+              const s = size; g.strokeCircle(0, 0, Math.max(2, Math.floor(s * 0.5)));
+              g.beginPath(); g.moveTo(-s, 0); g.lineTo(s, 0); g.moveTo(0, -s); g.lineTo(0, s); g.strokePath();
+              g.x = Math.round(x); g.y = Math.round(y);
+              this.tweens.add({ targets: g, alpha: 0, scale: 1.6, duration, onComplete: () => { try { g.destroy(); } catch(_) {} } });
+            } catch(_) {}
+          };
+        }
         
         // Enhanced multi-enemy AI system with varied behaviors
   const hurtPlayer = (dmg, knock=8, dir=1) => {
@@ -3846,6 +3886,13 @@
           this.playerInvulUntil = nowMs + 600; // 600ms i-frames
           this.alex.setTintFill(0xffff77);
           this.time.delayedCall(100, () => this.alex.clearTint());
+          // Hit spark near player's upper torso
+          try {
+            const hb = this.hurtboxOf(this.alex,'player');
+            const cx = Math.round(hb.x + hb.width * 0.55);
+            const cy = Math.round(hb.y + hb.height * 0.35);
+            this.showHitSpark && this.showHitSpark(cx, cy, 0xffe680, 160, 8);
+          } catch(_) {}
           
           // Play hurt animation if available
           if (this.alex.anims.exists('alex-hurt')) {
@@ -3890,6 +3937,13 @@
             p2.health = Math.max(0, (p2.health||100) - dmg);
             this.net.p2InvulUntil = nowMs + 600;
             p2.setTintFill(0xffff77); this.time.delayedCall(100, () => p2.clearTint());
+            // Hit spark for P2
+            try {
+              const hb = this.hurtboxOf(p2,'player');
+              const cx = Math.round(hb.x + hb.width * 0.45);
+              const cy = Math.round(hb.y + hb.height * 0.35);
+              this.showHitSpark && this.showHitSpark(cx, cy, 0xcde6ff, 160, 8);
+            } catch(_) {}
             // Play hurt animation if available
             try { if (this.anims.exists('alex-hurt')) p2.play('alex-hurt'); } catch(_) {}
             p2.x += (dir<0?-1:1) * knock;
@@ -4025,7 +4079,7 @@
                   } else {
                     // Visual fallback telegraph
                     enemy.setTint(0xffdddd);
-                    this.time.delayedCall(220, ()=>{ try { enemy.clearTint(); } catch(_) {} });
+                    this.time.delayedCall(220, ()=>{ try { enemy.clearTint(); } catch(_) {} enemy._attacking=false; enemy._attackHitApplied=false; });
                   }
                   // Micro step to commit slightly forward
                   const minNoOverlap = Math.max(8, (enemy.displayWidth ? enemy.displayWidth * 0.16 : 8));
@@ -4054,9 +4108,13 @@
                       enemy._lastAtkRect = hitRect; enemy._lastAtkTs = time;
                       const dir = enemy.flipX?-1:1;
                       if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb)) {
-                        enemy._attackHitApplied = true; hurtPlayer(10, 10, dir);
+                        enemy._attackHitApplied = true;
+                        try { const cx = Math.round(Phaser.Math.Clamp(handX, pb.x, pb.x + pb.width)); const cy = Math.round(Phaser.Math.Clamp(yCenter, pb.y, pb.y + pb.height)); this.showHitSpark && this.showHitSpark(cx, cy, 0xffc080, 150, 9); } catch(_) {}
+                        hurtPlayer(10, 10, dir);
                       } else if (pb2 && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb2)) {
-                        enemy._attackHitApplied = true; hurtP2(10, 10, dir);
+                        enemy._attackHitApplied = true;
+                        try { const cx = Math.round(Phaser.Math.Clamp(handX, pb2.x, pb2.x + pb2.width)); const cy = Math.round(Phaser.Math.Clamp(yCenter, pb2.y, pb2.y + pb2.height)); this.showHitSpark && this.showHitSpark(cx, cy, 0xffc080, 150, 9); } catch(_) {}
+                        hurtP2(10, 10, dir);
                       }
                     } catch(_) {}
                   });
@@ -4234,8 +4292,12 @@
                   const pb1 = this.hurtboxOf(this.alex,'player');
                   const pb2 = p2 ? this.hurtboxOf(p2,'player') : null;
                   if (!targIsP2 && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb1)) {
+                    // Impact spark clamped inside target hurtbox
+                    try { const cx = Math.round(Phaser.Math.Clamp(handX, pb1.x, pb1.x + pb1.width)); const cy = Math.round(Phaser.Math.Clamp(yCenter, pb1.y, pb1.y + pb1.height)); this.showHitSpark && this.showHitSpark(cx, cy, 0xffc080, 150, 9); } catch(_) {}
                     b._attackHitApplied = true; const dir = b.flipX ? -1 : 1; hurtPlayer(12, 10, dir);
                   } else if (targIsP2 && pb2 && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb2)) {
+                    // Impact spark clamped inside P2 hurtbox
+                    try { const cx = Math.round(Phaser.Math.Clamp(handX, pb2.x, pb2.x + pb2.width)); const cy = Math.round(Phaser.Math.Clamp(yCenter, pb2.y, pb2.y + pb2.height)); this.showHitSpark && this.showHitSpark(cx, cy, 0xffc080, 150, 9); } catch(_) {}
                     b._attackHitApplied = true; const dir = b.flipX ? -1 : 1; hurtP2(12, 10, dir);
                   }
                 } catch(_) {}
@@ -4331,11 +4393,15 @@
                   const laneOkP1 = Math.abs(p1FeetY - bFeetNow) <= laneTol;
                   const laneOkP2 = p2 ? Math.abs(p2FeetY - bFeetNow) <= laneTol : false;
                   if (!targIsP2 && laneOkP1 && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb1)) {
+                    // Impact spark for P1 hit
+                    try { const cx = Math.round(Phaser.Math.Clamp(handX, pb1.x, pb1.x + pb1.width)); const cy = Math.round(Phaser.Math.Clamp(yCenter, pb1.y, pb1.y + pb1.height)); this.showHitSpark && this.showHitSpark(cx, cy, 0xffc080, 150, 9); } catch(_) {}
                     b._attackHitApplied = true;
                     const dir = b.flipX ? -1 : 1;
                     this.alex.x += dir * 4; this.cameras.main.shake(90, 0.004);
                     hurtPlayer(14, 12, dir);
                   } else if (targIsP2 && laneOkP2 && pb2b && Phaser.Geom.Intersects.RectangleToRectangle(hitRect, pb2b)) {
+                    // Impact spark for P2 hit
+                    try { const cx = Math.round(Phaser.Math.Clamp(handX, pb2b.x, pb2b.x + pb2b.width)); const cy = Math.round(Phaser.Math.Clamp(yCenter, pb2b.y, pb2b.y + pb2b.height)); this.showHitSpark && this.showHitSpark(cx, cy, 0xffc080, 150, 9); } catch(_) {}
                     b._attackHitApplied = true;
                     const dir = b.flipX ? -1 : 1;
                     p2.x += dir * 4; this.cameras.main.shake(90, 0.004);

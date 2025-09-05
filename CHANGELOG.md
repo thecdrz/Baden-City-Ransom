@@ -2,6 +2,17 @@
 
 All notable changes to Baden City Ransom will be documented in this file.
 
+## [v2.2.3] - 2025-09-05
+
+### ✨ Combat Feedback Polish
+
+#### Added
+- New hit sparks now appear when the boss lands a hit (both jab and main swing windows)
+- Unified visual damage cues across players, enemies, and boss for clearer impact feedback
+
+#### Notes
+- Spark color and size are tuned for readability and can be adjusted later via the tuner if desired
+
 ## [v2.2.2] - 2025-09-05
 
 ### 🎯 Client Debug & Co‑op Boss Targeting
